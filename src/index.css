@@ -1,0 +1,76 @@
+@import url('https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400..800;1,400..800&family=Playfair+Display:ital,wght@0,400..900;1,400..900&family=Lora:ital,wght@0,400..700;1,400..700&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "EB Garamond", "Lora", "Georgia", serif;
+  --font-display: "Playfair Display", "Georgia", serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+
+  /* Premium Mint and Emerald Accents */
+  --color-mint-50: #fbfaf4;
+  --color-mint-100: #f6f3e6;
+  --color-mint-200: #ebdcc2;
+  --color-mint-500: #109b6c;
+  --color-mint-600: #05885c;
+  --color-mint-700: #046b49;
+  
+  /* Slate Canvas Colors updated to classical warm stone & antique ink tints */
+  --color-slate-50: #fdfbf7;
+  --color-slate-100: #f6f3ec;
+  --color-slate-200: #eae4d8;
+  --color-slate-300: #dcd4c3;
+  --color-slate-400: #b5a993;
+  --color-slate-700: #5c5545;
+  --color-slate-800: #3c372c;
+  --color-slate-900: #221f19;
+}
+
+@layer base {
+  body {
+    @apply font-sans antialiased text-stone-900 bg-[#fbf9f4];
+  }
+  
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-display tracking-tight text-stone-950 font-bold;
+  }
+}
+
+/* Beautiful custom scrollbars for smooth dashboard experience */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  @apply bg-slate-200 rounded-full hover:bg-slate-300 transition-colors;
+}
+
+/* Print simulation styling for POS receipt preview */
+@media print {
+  /* Hide the root app container during printing when a temporary print container is active */
+  body.printing-active #root {
+    display: none !important;
+  }
+
+  /* Make sure our print targets are positioned beautifully at top-left */
+  #invoice-receipt-theme, #superadmin-invoice-print, #print-temporary-container {
+    position: absolute !important;
+    left: 0 !important;
+    top: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    border: none !important;
+    background: white !important;
+    color: black !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  /* Explicitly hide any other modal close buttons, action panels, or background details */
+  .no-print, button, nav, header {
+    display: none !important;
+  }
+}

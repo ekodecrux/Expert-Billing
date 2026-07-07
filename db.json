@@ -1,0 +1,384 @@
+{
+  "products": [
+    {
+      "id": "PROD-F01",
+      "name": "Golden Delicious Apples (Imported)",
+      "barcode": "8901031200051",
+      "category": "Fresh Fruits & Vegetables",
+      "sku": "FRT-APP-GD",
+      "purchasePrice": 120,
+      "price": 180,
+      "gstRate": 5,
+      "unit": "Kg",
+      "stock": 75,
+      "minStockAlert": 20,
+      "batchNumber": "B-APL-05A",
+      "expiryDate": "2026-06-15",
+      "supplierName": "Organica Green Farm Producers"
+    },
+    {
+      "id": "PROD-F02",
+      "name": "Organic Cavendish Bananas",
+      "barcode": "8901031200068",
+      "category": "Fresh Fruits & Vegetables",
+      "sku": "FRT-BAN-OC",
+      "purchasePrice": 35,
+      "price": 60,
+      "gstRate": 0,
+      "unit": "Kg",
+      "stock": 12,
+      "minStockAlert": 25,
+      "batchNumber": "B-BAN-08V",
+      "expiryDate": "2026-05-28",
+      "supplierName": "Organica Green Farm Producers"
+    },
+    {
+      "id": "PROD-D01",
+      "name": "Classic Salted Butter 500g",
+      "barcode": "8901262010115",
+      "category": "Dairy & Eggs",
+      "sku": "DRY-BUT-AM",
+      "purchasePrice": 210,
+      "price": 260,
+      "gstRate": 12,
+      "unit": "Pieces",
+      "stock": 48,
+      "minStockAlert": 15,
+      "batchNumber": "MFT-BUT-C6",
+      "expiryDate": "2026-08-10",
+      "supplierName": "Supreme Agro Foods Ltd."
+    },
+    {
+      "id": "PROD-D02",
+      "name": "Full Cream Milk 1L Tetra",
+      "barcode": "8901262020213",
+      "category": "Dairy & Eggs",
+      "sku": "DRY-MLK-FC",
+      "purchasePrice": 62,
+      "price": 78,
+      "gstRate": 5,
+      "unit": "Pieces",
+      "stock": 9,
+      "minStockAlert": 30,
+      "batchNumber": "MFT-MLK-M1",
+      "expiryDate": "2026-06-03",
+      "supplierName": "Supreme Agro Foods Ltd."
+    },
+    {
+      "id": "PROD-G01",
+      "name": "Basmati Premium Rice 5Kg",
+      "barcode": "8902511000122",
+      "category": "Grains & Grocery",
+      "sku": "GRN-BAS-R5",
+      "purchasePrice": 480,
+      "price": 650,
+      "gstRate": 5,
+      "unit": "Pieces",
+      "stock": 120,
+      "minStockAlert": 30,
+      "batchNumber": "B-BAS-09",
+      "expiryDate": "2027-12-31",
+      "supplierName": "Apex Retail Supplies"
+    },
+    {
+      "id": "PROD-G02",
+      "name": "Whole Wheat Atta 10Kg",
+      "barcode": "8901725181222",
+      "category": "Grains & Grocery",
+      "sku": "GRN-ATT-W10",
+      "purchasePrice": 320,
+      "price": 440,
+      "gstRate": 0,
+      "unit": "Pieces",
+      "stock": 85,
+      "minStockAlert": 25,
+      "batchNumber": "B-ATT-242",
+      "expiryDate": "2026-11-20",
+      "supplierName": "Apex Retail Supplies"
+    },
+    {
+      "id": "PROD-B01",
+      "name": "Fizzy Cola Zero Sugar 330ml Can",
+      "barcode": "5449000133335",
+      "category": "Beverages",
+      "sku": "BEV-COL-ZC",
+      "purchasePrice": 18,
+      "price": 40,
+      "gstRate": 18,
+      "unit": "Pieces",
+      "stock": 450,
+      "minStockAlert": 100,
+      "batchNumber": "B-COL-990",
+      "expiryDate": "2026-12-05",
+      "supplierName": "Apex Retail Supplies"
+    },
+    {
+      "id": "PROD-B02",
+      "name": "Premium Roasted Coffee Beans 250g",
+      "barcode": "8906044675543",
+      "category": "Beverages",
+      "sku": "BEV-COF-PR",
+      "purchasePrice": 280,
+      "price": 499,
+      "gstRate": 18,
+      "unit": "Pieces",
+      "stock": 35,
+      "minStockAlert": 10,
+      "batchNumber": "B-CFB-A1",
+      "expiryDate": "2026-05-30",
+      "supplierName": "Apex Retail Supplies"
+    },
+    {
+      "id": "PROD-S01",
+      "name": "Crisp Potato Wafers (Classic Salted)",
+      "barcode": "8901491101830",
+      "category": "Snacks & Sweets",
+      "sku": "SNC-POT-CS",
+      "purchasePrice": 12,
+      "price": 20,
+      "gstRate": 18,
+      "unit": "Pieces",
+      "stock": 280,
+      "minStockAlert": 50,
+      "batchNumber": "B-POT-88",
+      "expiryDate": "2026-09-18",
+      "supplierName": "Apex Retail Supplies"
+    },
+    {
+      "id": "PROD-H01",
+      "name": "Multipurpose Glass Cleaner Spray 500ml",
+      "barcode": "8901248102322",
+      "category": "Household",
+      "sku": "HSD-GLS-CL",
+      "purchasePrice": 55,
+      "price": 95,
+      "gstRate": 18,
+      "unit": "Pieces",
+      "stock": 40,
+      "minStockAlert": 12,
+      "batchNumber": "B-HSD-312",
+      "expiryDate": "2028-04-12",
+      "supplierName": "Zenith Household Brands"
+    }
+  ],
+  "suppliers": [
+    {
+      "id": "S1",
+      "name": "Supreme Agro Foods Ltd.",
+      "contact": "Rajesh Kumar",
+      "phone": "9876543210",
+      "email": "sales@supremeagro.com",
+      "gstin": "07AAAAA1111A1Z1"
+    },
+    {
+      "id": "S2",
+      "name": "Apex Retail Supplies",
+      "contact": "Lydia Reynolds",
+      "phone": "8765432109",
+      "email": "orders@apexretail.com",
+      "gstin": "08BBBBB2222B2Z2"
+    },
+    {
+      "id": "S3",
+      "name": "Organica Green Farm Producers",
+      "contact": "Sandeep Patil",
+      "phone": "7654321098",
+      "email": "fresh@organicafarm.org",
+      "gstin": "09CCCCC3333C3Z3"
+    },
+    {
+      "id": "S4",
+      "name": "Zenith Household Brands",
+      "contact": "Sarah Jenkins",
+      "phone": "6543210987",
+      "email": " zenithcontacts@gmail.com",
+      "gstin": "10DDDDD4444D4Z4"
+    }
+  ],
+  "customers": [
+    {
+      "id": "CUST-01",
+      "name": "Ananya Sharma",
+      "phone": "9810234567",
+      "email": "ananya@gmail.com",
+      "loyaltyPoints": 485,
+      "creditBalance": 120,
+      "createdAt": "2026-01-15T12:00:00Z"
+    },
+    {
+      "id": "CUST-02",
+      "name": "Vikram Malhotra",
+      "phone": "9920198754",
+      "email": "vikram.m@yahoo.com",
+      "loyaltyPoints": 1250,
+      "creditBalance": 0,
+      "createdAt": "2026-02-10T15:20:00Z"
+    },
+    {
+      "id": "CUST-03",
+      "name": "Sunita Deshmukh",
+      "phone": "9830561234",
+      "email": "sunita.d@outlook.com",
+      "loyaltyPoints": 180,
+      "creditBalance": 500,
+      "createdAt": "2026-03-24T09:30:00Z"
+    },
+    {
+      "id": "CUST-04",
+      "name": "Rahul Verma",
+      "phone": "9510111222",
+      "email": "rahul@verma.net",
+      "loyaltyPoints": 50,
+      "creditBalance": 0,
+      "createdAt": "2026-05-01T17:45:00Z"
+    }
+  ],
+  "invoices": [
+    {
+      "id": "EAS-20260521-1042",
+      "date": "2026-05-21",
+      "time": "14:24",
+      "customerId": "CUST-01",
+      "customerName": "Ananya Sharma",
+      "customerPhone": "9810234567",
+      "items": [
+        {
+          "productId": "PROD-F01",
+          "name": "Golden Delicious Apples (Imported)",
+          "barcode": "8901031200051",
+          "price": 180,
+          "quantity": 2,
+          "unit": "Kg",
+          "gstRate": 5,
+          "gstAmount": 18,
+          "subtotal": 360
+        },
+        {
+          "productId": "PROD-D01",
+          "name": "Classic Salted Butter 500g",
+          "barcode": "8901262010115",
+          "price": 260,
+          "quantity": 1,
+          "unit": "Pieces",
+          "gstRate": 12,
+          "gstAmount": 31.2,
+          "subtotal": 260
+        },
+        {
+          "productId": "PROD-S01",
+          "name": "Crisp Potato Wafers (Classic Salted)",
+          "barcode": "8901491101830",
+          "price": 20,
+          "quantity": 5,
+          "unit": "Pieces",
+          "gstRate": 18,
+          "gstAmount": 18,
+          "subtotal": 100
+        }
+      ],
+      "subtotal": 720,
+      "taxAmount": 67.2,
+      "discountPercent": 5,
+      "discountAmount": 36,
+      "couponCode": "WELCOME5",
+      "grandTotal": 684,
+      "paymentMode": "UPI",
+      "cashierName": "Arundhati Roy",
+      "storeBranchId": "B1",
+      "status": "PAID"
+    },
+    {
+      "id": "EAS-20260521-1899",
+      "date": "2026-05-21",
+      "time": "18:45",
+      "customerId": "CUST-02",
+      "customerName": "Vikram Malhotra",
+      "customerPhone": "9920198754",
+      "items": [
+        {
+          "productId": "PROD-G01",
+          "name": "Basmati Premium Rice 5Kg",
+          "barcode": "8902511000122",
+          "price": 650,
+          "quantity": 2,
+          "unit": "Pieces",
+          "gstRate": 5,
+          "gstAmount": 65,
+          "subtotal": 1300
+        },
+        {
+          "productId": "PROD-H01",
+          "name": "Multipurpose Glass Cleaner Spray 500ml",
+          "barcode": "8901248102322",
+          "price": 95,
+          "quantity": 1,
+          "unit": "Pieces",
+          "gstRate": 18,
+          "gstAmount": 17.1,
+          "subtotal": 95
+        }
+      ],
+      "subtotal": 1395,
+      "taxAmount": 82.1,
+      "discountPercent": 0,
+      "discountAmount": 0,
+      "grandTotal": 1395,
+      "paymentMode": "CARD",
+      "cashierName": "Samarjeet Sen",
+      "storeBranchId": "B1",
+      "status": "PAID"
+    }
+  ],
+  "branches": [
+    {
+      "id": "B1",
+      "name": "Downtown Smart Hypermarket",
+      "address": "G-10, Central Plaza, Main Avenue",
+      "city": "New Delhi",
+      "phone": "011-23456789"
+    }
+  ],
+  "expenses": [
+    {
+      "id": "EXP-01",
+      "date": "2026-05-18",
+      "category": "Utility (Electricity)",
+      "amount": 14500,
+      "description": "Monthly warehouse air cooling bill",
+      "approvedBy": "Admin",
+      "storeBranchId": "B1"
+    },
+    {
+      "id": "EXP-02",
+      "date": "2026-05-20",
+      "category": "Store Branding",
+      "amount": 3500,
+      "description": "New LED signboards and display posters printing",
+      "approvedBy": "Manager B1",
+      "storeBranchId": "B1"
+    },
+    {
+      "id": "EXP-03",
+      "date": "2026-05-21",
+      "category": "Logistics",
+      "amount": 2400,
+      "description": "Supplier freight charges for fresh vegetables delivery",
+      "approvedBy": "Store Keeper",
+      "storeBranchId": "B1"
+    }
+  ],
+  "adjustments": [
+    {
+      "id": "ADJ-01",
+      "date": "2026-05-19",
+      "productId": "PROD-F01",
+      "productName": "Golden Delicious Apples (Imported)",
+      "previousStock": 80,
+      "newStock": 75,
+      "reason": "Discarded bruised fruits",
+      "adjustedBy": "Store Keeper"
+    }
+  ],
+  "cashSessions": [],
+  "transfers": []
+}
