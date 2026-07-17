@@ -4943,6 +4943,11 @@ export default function SuperAdminConsole({
                   : selectedPrinterLayout === "thermal-80mm"
                   ? "✓ Formats receipt margins precisely for 3-inch roll POS thermal printers."
                   : "✓ Formats receipt compact margins precisely for portable 2-inch mini thermal printers."}
+                {typeof window !== "undefined" && window.self !== window.top && (
+                  <span className="block mt-1 text-amber-600 font-bold">
+                    ℹ️ Sandbox Mode: Browser print popups are restricted in iframe previews. Clicking 'Print Invoice' automatically downloads a high-fidelity print-ready PDF formatted exactly to your selection! For physical paper printing, please click 'Open in New Tab' on the top right.
+                  </span>
+                )}
               </p>
             </div>
 
@@ -5044,7 +5049,7 @@ export default function SuperAdminConsole({
               <button
                 onClick={async () => {
                   triggerNotification(`Compiling high-fidelity PDF copy of ${selectedInvoice.id} and launching local downloader...`, "success");
-                  const success = await saveElementAsPDF("superadmin-invoice-print", `Invoice-${selectedInvoice.id}.pdf`);
+                  const success = await saveElementAsPDF("superadmin-invoice-print", `Invoice-${selectedInvoice.id}.pdf`, selectedPrinterLayout);
                   if (success) {
                     triggerNotification(`PDF copy of ${selectedInvoice.id} downloaded successfully.`, "success");
                   } else {

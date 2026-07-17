@@ -224,13 +224,22 @@ export async function printElementById(
   elementId: string, 
   layoutProfile: "standard-a4" | "thermal-80mm" | "thermal-58mm" = "standard-a4"
 ): Promise<boolean> {
-  const element = document.getElementById(elementId);
+  // Wait/poll for the element to exist in the DOM (up to 1500ms, checking every 50ms)
+  let element = document.getElementById(elementId);
+  if (!element) {
+    for (let i = 0; i < 30; i++) {
+      await new Promise(resolve => setTimeout(resolve, 50));
+      element = document.getElementById(elementId);
+      if (element) break;
+    }
+  }
+
   if (!element) {
     console.error(`Element with id ${elementId} not found.`);
     return false;
   }
 
-  // Gather stylesheet markup to pass into the popup window for exact layout replication
+  // Gather stylesheet markup to pass into the print layout
   const stylesHtml = Array.from(document.querySelectorAll("style, link[rel='stylesheet']"))
     .map(style => style.outerHTML)
     .join("\n");
@@ -325,8 +334,6 @@ export async function printElementById(
     `;
   }
 
-  let printSuccess = false;
-
   // Add printing-active class to body
   document.body.classList.add("printing-active");
 
@@ -379,6 +386,10 @@ export async function printElementById(
 
   document.body.appendChild(tempContainer);
 
+  // Allow browser layout and rendering to settle down before triggering print dialog
+  await new Promise<void>((resolve) => setTimeout(resolve, 350));
+
+  let printSuccess = false;
   try {
     window.print();
     printSuccess = true;
@@ -386,11 +397,12 @@ export async function printElementById(
     console.warn("In-page browser printing failed or was blocked by sandbox security. Instantly triggering high-fidelity PDF compile...", error);
     // Fallback: Direct high-fidelity PDF compile and downloader
     const filename = `Print-${elementId}-${new Date().toISOString().slice(0, 10)}.pdf`;
-    printSuccess = await saveElementAsPDF(elementId, filename);
+    printSuccess = await saveElementAsPDF(elementId, filename, layoutProfile);
   }
 
-  // Clean up our temporary DOM nodes and styles safely
-  setTimeout(() => {
+  // Defer cleanup of DOM nodes and print styles so the browser print preview
+  // has ample time to spool the layout and content.
+  const cleanup = () => {
     document.body.classList.remove("printing-active");
     if (document.body.contains(tempContainer)) {
       document.body.removeChild(tempContainer);
@@ -399,12 +411,20 @@ export async function printElementById(
     if (styleEl) {
       styleEl.remove();
     }
-  }, 1000);
+  };
+
+  window.addEventListener("afterprint", cleanup, { once: true });
+  // Safe 2.5 second fallback cleanup
+  setTimeout(cleanup, 2500);
 
   return printSuccess;
 }
 
-export async function saveElementAsPDF(elementId: string, filename: string): Promise<boolean> {
+export async function saveElementAsPDF(
+  elementId: string, 
+  filename: string,
+  layoutProfile: "standard-a4" | "thermal-80mm" | "thermal-58mm" = "standard-a4"
+): Promise<boolean> {
   const element = document.getElementById(elementId);
   if (!element) {
     console.error(`Element with id ${elementId} not found.`);
@@ -418,11 +438,92 @@ export async function saveElementAsPDF(elementId: string, filename: string): Pro
       logging: false,
       backgroundColor: "#ffffff",
       onclone: (clonedDoc) => {
-        // Ensure any styling adjustment for printable clone is handled here if needed
         const el = clonedDoc.getElementById(elementId);
         if (el) {
-          el.style.maxHeight = "none"; // Let the full table expand so it is captured fully
-          el.style.overflow = "visible";
+          try {
+            el.style.maxHeight = "none"; // Let the full table expand so it is captured fully
+            el.style.overflow = "visible";
+
+            if (layoutProfile === "standard-a4") {
+              el.style.width = "800px";
+              el.style.padding = "40px";
+              el.style.boxSizing = "border-box";
+              el.style.fontFamily = "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
+              el.style.backgroundColor = "#ffffff";
+              el.style.color = "#000000";
+              el.style.borderRadius = "0";
+              el.style.border = "none";
+              el.style.boxShadow = "none";
+            } else if (layoutProfile === "thermal-80mm") {
+              el.style.width = "340px";
+              el.style.padding = "12px";
+              el.style.boxSizing = "border-box";
+              el.style.backgroundColor = "#ffffff";
+              el.style.color = "#000000";
+              el.style.borderRadius = "0";
+              el.style.border = "none";
+              el.style.boxShadow = "none";
+
+              const allText = el.querySelectorAll("*");
+              allText.forEach(node => {
+                try {
+                  const htmlNode = node as HTMLElement;
+                  if (htmlNode && htmlNode.style) {
+                    htmlNode.style.fontFamily = "monospace";
+                    htmlNode.style.fontSize = "12px";
+                  }
+                } catch (e) {
+                  // Ignore style application errors for non-stylable nodes
+                }
+              });
+              const headings = el.querySelectorAll("h4");
+              headings.forEach(node => {
+                try {
+                  const htmlNode = node as HTMLElement;
+                  if (htmlNode && htmlNode.style) {
+                    htmlNode.style.fontSize = "14px";
+                  }
+                } catch (e) {
+                  // Ignore style application errors
+                }
+              });
+            } else if (layoutProfile === "thermal-58mm") {
+              el.style.width = "240px";
+              el.style.padding = "4px";
+              el.style.boxSizing = "border-box";
+              el.style.backgroundColor = "#ffffff";
+              el.style.color = "#000000";
+              el.style.borderRadius = "0";
+              el.style.border = "none";
+              el.style.boxShadow = "none";
+
+              const allText = el.querySelectorAll("*");
+              allText.forEach(node => {
+                try {
+                  const htmlNode = node as HTMLElement;
+                  if (htmlNode && htmlNode.style) {
+                    htmlNode.style.fontFamily = "monospace";
+                    htmlNode.style.fontSize = "10px";
+                  }
+                } catch (e) {
+                  // Ignore style application errors
+                }
+              });
+              const headings = el.querySelectorAll("h4");
+              headings.forEach(node => {
+                try {
+                  const htmlNode = node as HTMLElement;
+                  if (htmlNode && htmlNode.style) {
+                    htmlNode.style.fontSize = "11px";
+                  }
+                } catch (e) {
+                  // Ignore style application errors
+                }
+              });
+            }
+          } catch (err) {
+            console.warn("Safe override style adjustment error:", err);
+          }
         }
       }
     });
