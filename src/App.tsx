@@ -3518,17 +3518,17 @@ export default function App() {
                   {/* Manual Billing Inputs */}
                   <div className="space-y-1.5">
                     <div>
-                      <span className="text-[8.5px] text-slate-500 font-bold block mb-0.5">CUSTOMER NAME:</span>
+                      <span className={`text-[8.5px] font-bold block mb-0.5 ${bgMode.textMuted || "text-slate-500"}`}>CUSTOMER NAME:</span>
                       <input
                         type="text"
                         value={billingCustomerName}
                         onChange={(e) => setBillingCustomerName(e.target.value)}
                         placeholder="Regular Customer/Loyalty Guest"
-                        className="w-full text-xs font-semibold border border-slate-200 rounded p-1 block bg-white h-7 focus:ring-1 focus:ring-emerald-500/50"
+                        className={`w-full text-xs font-semibold border rounded p-1 block h-7 focus:ring-1 focus:ring-emerald-500/50 ${bgMode.inputBg} ${bgMode.border}`}
                       />
                     </div>
                     <div>
-                      <span className="text-[8.5px] text-slate-500 font-bold block mb-0.5">MOBILE NUMBER:</span>
+                      <span className={`text-[8.5px] font-bold block mb-0.5 ${bgMode.textMuted || "text-slate-500"}`}>MOBILE NUMBER:</span>
                       <input
                         type="text"
                         value={billingCustomerPhone}
@@ -3551,13 +3551,13 @@ export default function App() {
                           }
                         }}
                         placeholder="Customer Mobile No."
-                        className="w-full text-xs font-mono font-bold border border-slate-200 rounded p-1 block bg-white h-7 focus:ring-1 focus:ring-emerald-500/50"
+                        className={`w-full text-xs font-mono font-bold border rounded p-1 block h-7 focus:ring-1 focus:ring-emerald-500/50 ${bgMode.inputBg} ${bgMode.border}`}
                       />
                     </div>
                   </div>
 
                   {selectedCustomer && (
-                    <div className="p-1 px-2 bg-emerald-50 border border-emerald-200/50 rounded text-[9px] text-emerald-800 flex justify-between items-center font-mono">
+                    <div className="p-1 px-2 bg-emerald-500/10 border border-emerald-500/30 rounded text-[9px] text-emerald-500 flex justify-between items-center font-mono">
                       <span>Points: <b>{selectedCustomer.loyaltyPoints}</b></span>
                       <span>Credit: <b>₹{selectedCustomer.creditBalance}</b></span>
                     </div>
@@ -3568,10 +3568,10 @@ export default function App() {
                 <div className="flex-1 overflow-y-auto p-4 space-y-3">
                   {cartItems.length > 0 ? (
                     cartItems.map((item) => (
-                      <div key={item.productId} className="flex justify-between items-start border-b border-slate-100 pb-2 gap-2">
+                      <div key={item.productId} className={`flex justify-between items-start border-b pb-2 gap-2 ${bgMode.border}`}>
                         <div className="flex-1">
-                          <p className="text-xs font-bold text-slate-800 leading-tight">{item.name}</p>
-                          <div className="flex justify-between items-center text-[10px] text-slate-400 font-mono mt-1">
+                          <p className={`text-xs font-bold leading-tight ${bgMode.textHeading}`}>{item.name}</p>
+                          <div className={`flex justify-between items-center text-[10px] font-mono mt-1 ${bgMode.text || "text-slate-400"}`}>
                             <span>₹{item.price.toFixed(2)} / {item.unit}</span>
                             <span>{item.gstRate}% Tax</span>
                           </div>
@@ -3580,14 +3580,14 @@ export default function App() {
                           <div className="flex items-center gap-2 mt-1.5">
                             <button
                               onClick={() => handleUpdateCartQuantity(item.productId, -1)}
-                              className="w-4 h-4 bg-slate-100 text-slate-700 rounded flex items-center justify-center font-bold text-xs"
+                              className={`w-5 h-5 rounded flex items-center justify-center font-bold text-xs transition-colors cursor-pointer border ${bgMode.inputBg} ${bgMode.border} hover:opacity-80`}
                             >
                               -
                             </button>
-                            <span className="text-xs font-bold font-mono text-slate-800">{item.quantity}</span>
+                            <span className={`text-xs font-bold font-mono ${bgMode.textHeading}`}>{item.quantity}</span>
                             <button
                               onClick={() => handleUpdateCartQuantity(item.productId, 1)}
-                              className="w-4 h-4 bg-slate-100 text-slate-700 rounded flex items-center justify-center font-bold text-xs"
+                              className={`w-5 h-5 rounded flex items-center justify-center font-bold text-xs transition-colors cursor-pointer border ${bgMode.inputBg} ${bgMode.border} hover:opacity-80`}
                             >
                               +
                             </button>
@@ -3595,12 +3595,12 @@ export default function App() {
                         </div>
 
                         <div className="text-right flex flex-col items-end">
-                          <span className="text-xs font-bold font-mono text-slate-800">
+                          <span className={`text-xs font-bold font-mono ${bgMode.textHeading}`}>
                             ₹{(item.price * item.quantity).toFixed(2)}
                           </span>
                           <button
                             onClick={() => handleRemoveFromCart(item.productId)}
-                            className="text-slate-300 hover:text-rose-500 mt-1.5"
+                            className="text-slate-400 hover:text-rose-500 mt-2 transition-colors cursor-pointer"
                           >
                             <Trash2 className="w-3.5 h-3.5" />
                           </button>
@@ -3608,93 +3608,93 @@ export default function App() {
                       </div>
                     ))
                   ) : (
-                    <div className="flex flex-col items-center justify-center h-full text-slate-400 text-xs py-12 space-y-2 text-center">
-                      <ShoppingCart className="w-10 h-10 text-slate-300 stroke-1" />
+                    <div className={`flex flex-col items-center justify-center h-full text-xs py-12 space-y-2 text-center ${bgMode.text || "text-slate-400"}`}>
+                      <ShoppingCart className="w-10 h-10 stroke-1 opacity-60" />
                       <span>Shopping cart empty.<br />Click catalog products or scan barcode to checkout items.</span>
                     </div>
                   )}
                 </div>
 
                 {/* Coupon handling entry */}
-                <div className="p-3 bg-slate-50 border-t border-slate-200 space-y-2">
+                <div className={`p-3 border-t space-y-2 ${bgMode.innerCard} ${bgMode.border}`}>
                   <div className="flex gap-2">
                     <input
                       type="text"
                       placeholder="Coupon (e.g. WELCOME5)"
                       value={couponCode}
                       onChange={(e) => setCouponCode(e.target.value)}
-                      className="flex-1 text-xs border border-slate-200 rounded px-2 py-1 outline-none uppercase font-mono"
+                      className={`flex-1 text-xs border rounded px-2 py-1 outline-none uppercase font-mono ${bgMode.inputBg} ${bgMode.border}`}
                     />
                     <button
                       onClick={handleApplyCoupon}
-                      className="px-3 py-1 bg-slate-900 text-white rounded text-xs font-bold font-display"
+                      className="px-3 py-1 bg-slate-950 text-white rounded text-xs font-bold font-display hover:bg-slate-800 transition-colors cursor-pointer"
                     >
                       Apply
                     </button>
                   </div>
-                  <div className="flex justify-between text-[10px] text-slate-400 font-mono">
+                  <div className={`flex justify-between text-[10px] font-mono ${bgMode.text || "text-slate-400"}`}>
                     <span>Try: <b>WELCOME5</b> (5% off) </span>
                     <span><b>FESTIVE10</b> (10% off)</span>
                   </div>
                 </div>
 
                 {/* Financial Summary */}
-                <div className="p-4 border-t border-slate-200 bg-slate-50/50 space-y-2 font-mono text-xs">
-                  <div className="flex justify-between text-slate-500">
+                <div className={`p-4 border-t space-y-2 font-mono text-xs ${bgMode.innerCard} ${bgMode.border}`}>
+                  <div className={`flex justify-between ${bgMode.text}`}>
                     <span>Cart Subtotal</span>
                     <span>₹{subTotalAmount.toFixed(2)}</span>
                   </div>
-                  <div className="flex justify-between text-slate-500">
+                  <div className={`flex justify-between ${bgMode.text}`}>
                     <span>Estimated GST ({taxAmountOfCart > 0 ? "Inclusive" : "0%"})</span>
                     <span>₹{taxAmountOfCart.toFixed(2)}</span>
                   </div>
                   {appliedDiscountPercent > 0 && (
-                    <div className="flex justify-between text-emerald-600 font-bold">
+                    <div className="flex justify-between text-emerald-500 font-bold">
                       <span>Discount ({appliedDiscountPercent}%)</span>
                       <span>-₹{discountAmount.toFixed(2)}</span>
                     </div>
                   )}
 
-                  <div className="border-t border-dashed border-slate-300 pt-2 flex justify-between items-center">
-                    <p className="text-slate-600 font-sans font-bold">TOTAL PAYABLE</p>
-                    <p className="text-lg font-black font-mono text-slate-900">₹{grandTotalAmount.toFixed(2)}</p>
+                  <div className={`border-t border-dashed pt-2 flex justify-between items-center ${bgMode.border}`}>
+                    <p className={`font-sans font-bold ${bgMode.textHeading}`}>TOTAL PAYABLE</p>
+                    <p className={`text-lg font-black font-mono ${bgMode.textHeading}`}>₹{grandTotalAmount.toFixed(2)}</p>
                   </div>
                 </div>
 
                 {/* Checkout selection & Cash trigger */}
-                <div className="p-4 bg-slate-100 border-t border-slate-200 space-y-3">
-                  <div className="grid grid-cols-3 gap-1">
+                <div className={`p-4 border-t space-y-3 ${bgMode.innerCard} ${bgMode.border}`}>
+                  <div className="grid grid-cols-4 gap-1">
                     {Object.values(PaymentMode).map((mode) => (
                       <button
                         key={mode}
                         onClick={() => setPaymentMode(mode)}
-                        className={`py-1 rounded text-[10px] font-bold border transition-colors cursor-pointer ${
+                        className={`py-1 rounded text-[9px] font-bold border transition-all cursor-pointer ${
                           paymentMode === mode
-                            ? `${currentTheme.bg} text-white border-transparent shadow`
-                            : "bg-white text-slate-600 border-slate-200 hover:border-slate-300"
+                            ? `${currentTheme.bg} text-white border-transparent shadow-md`
+                            : `border-slate-350 ${bgMode.inputBg} ${bgMode.text} hover:opacity-95`
                         }`}
                       >
-                        {mode}
+                        {mode.replace("_", " ")}
                       </button>
                     ))}
                   </div>
 
                   {/* Cash payment drawer change calculation */}
                   {paymentMode === PaymentMode.CASH && (
-                    <div className="bg-white p-2.5 rounded border border-slate-200 space-y-2">
+                    <div className={`p-2.5 rounded border space-y-2 ${bgMode.innerCard} ${bgMode.border}`}>
                       <div className="flex justify-between items-center">
-                        <label className="text-[10px] font-mono font-bold text-slate-500">CASH RECEIVED</label>
-                        <span className="text-[10px] text-slate-400 font-mono">Target: ₹{grandTotalAmount.toFixed(2)}</span>
+                        <label className={`text-[10px] font-mono font-bold ${bgMode.text || "text-slate-400"}`}>CASH RECEIVED</label>
+                        <span className={`text-[10px] font-mono ${bgMode.text || "text-slate-400"}`}>Target: ₹{grandTotalAmount.toFixed(2)}</span>
                       </div>
                       <input
                         type="number"
-                        placeholder="Amt cash given (e.g. 500, 1000)"
+                        placeholder="Amt cash given"
                         value={cashReceived}
                         onChange={(e) => setCashReceived(e.target.value)}
-                        className="w-full text-xs font-mono font-bold border border-slate-200 rounded p-1 text-slate-800"
+                        className={`w-full text-xs font-mono font-bold border rounded p-1 ${bgMode.inputBg} ${bgMode.border}`}
                       />
                       {Number(cashReceived) >= grandTotalAmount && (
-                        <div className={`flex justify-between items-center text-[11px] font-mono ${currentTheme.textAccentDark} ${currentTheme.bgLight} p-1.5 rounded border border-dashed`}>
+                        <div className={`flex justify-between items-center text-[10px] font-mono ${currentTheme.textAccentDark} ${currentTheme.bgLight} p-1.5 rounded border border-dashed`}>
                           <span>CHANGE RE-DELIVERED:</span>
                           <span className="font-bold font-mono">
                             ₹{(Number(cashReceived) - grandTotalAmount).toFixed(2)}
@@ -3714,7 +3714,7 @@ export default function App() {
                     Checkout Store Invoice
                   </button>
                   
-                  <p className="text-[10px] text-center text-slate-400 font-mono">
+                  <p className={`text-[10px] text-center font-mono ${bgMode.textMuted || "text-slate-400"}`}>
                     ✓ Instant SMS &amp; GST tax callback simulated
                   </p>
                 </div>
