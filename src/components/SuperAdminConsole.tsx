@@ -387,7 +387,7 @@ export default function SuperAdminConsole({
   // Enterprise Settings Map State (12 screenshot categories)
   const [enterpriseSettings, setEnterpriseSettings] = useState({
     // Business
-    companyName: "ExpertAid Retail Hub",
+    companyName: "Expert POS Retail Hub",
     businessLocations: "New Delhi, Mumbai, Bengaluru, Chennai",
     aivoviaActive: true,
     businessGoals: "Achieve 100% paperless multi-tenant automation by Q4 2026",
@@ -398,10 +398,10 @@ export default function SuperAdminConsole({
     systemTheme: "Slate Light Enterprise",
     // Miscellaneous
     softwareVersion: "v4.12.2-stable",
-    emailSmtpServer: "smtp.expertaid.com",
+    emailSmtpServer: "smtp.expertpos.com",
     transactionCategoryList: "Subscription, Onboarding, Consultation, Support, Addon",
     emailAlertsEnabled: true,
-    aboutText: "ExpertAid SaaS Enterprise Platform Sandbox.",
+    aboutText: "Expert POS SaaS Enterprise Platform Sandbox.",
     // Advanced
     restApiEnabled: true,
     cronJobSchedule: "0 0 * * * (Every midnight UTC)",
@@ -428,7 +428,7 @@ export default function SuperAdminConsole({
     paymentGateway: "Razorpay Enterprise API",
     supportedCurrencies: "INR, USD, SGD, AED",
     exchangeRateSync: true,
-    bankAccountName: "ExpertAid Core Operations Bank",
+    bankAccountName: "Expert POS Core Operations Bank",
     // CRM
     selfAttendanceEnabled: true,
     crmLeadTracking: true,
@@ -821,16 +821,16 @@ export default function SuperAdminConsole({
 
     if (template === "overdue") {
       subject = `ACTION REQUIRED: Outstanding Balance Reminder for ${tenant.name}`;
-      body = `Dear Admin of ${tenant.name},\n\nThis is an actionable notice regarding your outstanding balance of ₹${pendingBillAmount.toLocaleString()} under your ${tenant.tier} tier subscription. Please login to your billing workspace and authorize settlement to avoid temporary sandbox restrictions.\n\nSecure payment link: https://${tenant.subdomain}.expertaid.com/billing/pay\n\nSaaS Billing Operations Team`;
+      body = `Dear Admin of ${tenant.name},\n\nThis is an actionable notice regarding your outstanding balance of ₹${pendingBillAmount.toLocaleString()} under your ${tenant.tier} tier subscription. Please login to your billing workspace and authorize settlement to avoid temporary sandbox restrictions.\n\nSecure payment link: https://${tenant.subdomain}.expertpos.com/billing/pay\n\nSaaS Billing Operations Team`;
     } else if (template === "renewal") {
       subject = `Notification: Upcoming Subscription Renewal for ${tenant.name}`;
-      body = `Dear Admin of ${tenant.name},\n\nYour ${tenant.tier} tier subscription is scheduled for renewal on ${tenant.subscriptionEndDate || "2027-06-01"}. A renewal fee of ₹${(tenant.monthlySubscriptionFee || 4500).toLocaleString()} will be billed as per your ${tenant.billingCycle || "MONTHLY"} billing schedule.\n\nManage subscription: https://${tenant.subdomain}.expertaid.com/settings/subscription\n\nSaaS Billing Operations Team`;
+      body = `Dear Admin of ${tenant.name},\n\nYour ${tenant.tier} tier subscription is scheduled for renewal on ${tenant.subscriptionEndDate || "2027-06-01"}. A renewal fee of ₹${(tenant.monthlySubscriptionFee || 4500).toLocaleString()} will be billed as per your ${tenant.billingCycle || "MONTHLY"} billing schedule.\n\nManage subscription: https://${tenant.subdomain}.expertpos.com/settings/subscription\n\nSaaS Billing Operations Team`;
     } else if (template === "kyc") {
       subject = `Compliance Notice: Complete KYC Verification for ${tenant.name}`;
-      body = `Dear Admin of ${tenant.name},\n\nTo comply with digital billing guidelines, we request you to complete your KYC Verification. Your current compliance status is ${tenant.clientVerificationStatus || "PENDING_KYC"}.\n\nPlease upload valid business registry documents via the verification portal to maintain full platform privileges.\n\nCompliance Portal: https://${tenant.subdomain}.expertaid.com/settings/compliance\n\nSaaS Security & Trust Division`;
+      body = `Dear Admin of ${tenant.name},\n\nTo comply with digital billing guidelines, we request you to complete your KYC Verification. Your current compliance status is ${tenant.clientVerificationStatus || "PENDING_KYC"}.\n\nPlease upload valid business registry documents via the verification portal to maintain full platform privileges.\n\nCompliance Portal: https://${tenant.subdomain}.expertpos.com/settings/compliance\n\nSaaS Security & Trust Division`;
     } else {
       subject = `Announcement: System Maintenance & Upgrades for ${tenant.name}`;
-      body = `Dear Admin of ${tenant.name},\n\nWe would like to inform you that our core server cluster hosting your tenant subdomain '${tenant.subdomain}.expertaid.com' will undergo scheduled performance maintenance this weekend.\n\nNo downtime is expected, but background APIs might undergo short latency fluctuations.\n\nThank you for choosing ExpertAid SaaS.`;
+      body = `Dear Admin of ${tenant.name},\n\nWe would like to inform you that our core server cluster hosting your tenant subdomain '${tenant.subdomain}.expertpos.com' will undergo scheduled performance maintenance this weekend.\n\nNo downtime is expected, but background APIs might undergo short latency fluctuations.\n\nThank you for choosing Expert POS SaaS.`;
     }
 
     setEmailSubject(subject);
@@ -991,7 +991,7 @@ export default function SuperAdminConsole({
             </div>
             <div className="min-w-0">
               <p className="text-xs font-bold text-white truncate font-sans">Super Admin</p>
-              <p className="text-[9px] text-slate-400 font-mono truncate">superadmin@expertaid.com</p>
+              <p className="text-[9px] text-slate-400 font-mono truncate">superadmin@expertpos.com</p>
             </div>
           </div>
           <button
@@ -1501,7 +1501,7 @@ export default function SuperAdminConsole({
                               </div>
                               <div>
                                 <p className="text-xs font-bold text-slate-800 leading-snug">{t.name}</p>
-                                <p className="text-[10px] text-slate-400 font-semibold font-mono tracking-wide">{t.subdomain}.expertaid.com</p>
+                                <p className="text-[10px] text-slate-400 font-semibold font-mono tracking-wide">{t.subdomain}.expertpos.com</p>
                               </div>
                             </div>
                           </td>
@@ -1651,7 +1651,7 @@ export default function SuperAdminConsole({
                       </td>
                       <td className="p-4">
                         <span className="font-mono bg-blue-50 text-blue-600 px-2.5 py-1 rounded-lg border border-blue-100 font-bold">
-                          {t.subdomain}.expertaid.com
+                          {t.subdomain}.expertpos.com
                         </span>
                       </td>
                       <td className="p-4 space-y-0.5">
@@ -2008,7 +2008,7 @@ export default function SuperAdminConsole({
                     <input
                       type="email"
                       required
-                      placeholder="e.g. alice@expertaid.com"
+                      placeholder="e.g. alice@expertpos.com"
                       value={newEmail}
                       onChange={(e) => setNewEmail(e.target.value)}
                       className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2 px-3 text-xs font-semibold placeholder-slate-400 focus:outline-none focus:border-blue-500 focus:bg-white"
@@ -2092,7 +2092,7 @@ export default function SuperAdminConsole({
                 <h2 className="text-xl font-extrabold text-slate-900 font-sans tracking-tight">Sovereign Billing & Ledger</h2>
                 <p className="text-xs text-slate-500">Track isolated database slice balances, MRR cycles, and platform receivables</p>
               </div>
-              <div className="flex items-center gap-3">
+              <div className="flex flex-wrap items-center gap-3">
                 <button
                   onClick={async () => {
                     triggerNotification("Compiling corporate ledger details...", "success");
@@ -2107,6 +2107,21 @@ export default function SuperAdminConsole({
                 >
                   <Printer className="w-4 h-4 text-emerald-400" />
                   <span>Print Ledger</span>
+                </button>
+                <button
+                  onClick={async () => {
+                    triggerNotification("Compiling and downloading high-fidelity PDF Ledger copy...", "success");
+                    const success = await saveElementAsPDF("billing-ledger-table", `Billing-Ledger-${new Date().toISOString().slice(0, 10)}.pdf`, "standard-a4");
+                    if (success) {
+                      triggerNotification("PDF ledger downloaded successfully.", "success");
+                    } else {
+                      triggerNotification("Could not compile PDF ledger copy.", "warning");
+                    }
+                  }}
+                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold shadow-lg shadow-blue-500/10 flex items-center gap-2 cursor-pointer transition-all"
+                >
+                  <Download className="w-4 h-4 text-blue-100" />
+                  <span>Save PDF Ledger</span>
                 </button>
                 <button
                   onClick={() => {
@@ -2226,7 +2241,7 @@ export default function SuperAdminConsole({
                               </div>
                               <div>
                                 <p className="text-xs font-bold text-slate-800 leading-snug">{t.name}</p>
-                                <p className="text-[9px] text-slate-400 font-mono tracking-wider">{t.subdomain}.expertaid.com</p>
+                                <p className="text-[9px] text-slate-400 font-mono tracking-wider">{t.subdomain}.expertpos.com</p>
                               </div>
                             </div>
                           </td>
@@ -2311,8 +2326,8 @@ export default function SuperAdminConsole({
                                     : `Notification: Upcoming Subscription Renewal for ${t.name}`;
 
                                   const body = type === "overdue"
-                                    ? `Dear Admin of ${t.name},\n\nThis is an actionable notice regarding your outstanding balance of ₹${pendingBillAmount.toLocaleString()} under your ${t.tier} tier subscription. Please login to your billing workspace and authorize settlement to avoid temporary sandbox restrictions.\n\nSecure payment link: https://${t.subdomain}.expertaid.com/billing/pay\n\nSaaS Billing Operations Team`
-                                    : `Dear Admin of ${t.name},\n\nYour ${t.tier} tier subscription is scheduled for renewal on ${t.subscriptionEndDate || "2027-06-01"}. A renewal fee of ₹${(t.monthlySubscriptionFee || 4500).toLocaleString()} will be billed as per your ${t.billingCycle || "MONTHLY"} billing schedule.\n\nManage subscription: https://${t.subdomain}.expertaid.com/settings/subscription\n\nSaaS Billing Operations Team`;
+                                    ? `Dear Admin of ${t.name},\n\nThis is an actionable notice regarding your outstanding balance of ₹${pendingBillAmount.toLocaleString()} under your ${t.tier} tier subscription. Please login to your billing workspace and authorize settlement to avoid temporary sandbox restrictions.\n\nSecure payment link: https://${t.subdomain}.expertpos.com/billing/pay\n\nSaaS Billing Operations Team`
+                                    : `Dear Admin of ${t.name},\n\nYour ${t.tier} tier subscription is scheduled for renewal on ${t.subscriptionEndDate || "2027-06-01"}. A renewal fee of ₹${(t.monthlySubscriptionFee || 4500).toLocaleString()} will be billed as per your ${t.billingCycle || "MONTHLY"} billing schedule.\n\nManage subscription: https://${t.subdomain}.expertpos.com/settings/subscription\n\nSaaS Billing Operations Team`;
 
                                   setEmailSubject(subject);
                                   setEmailBody(body);
@@ -2340,21 +2355,38 @@ export default function SuperAdminConsole({
                 <h2 className="text-xl font-extrabold text-slate-900 font-sans tracking-tight">Platform Invoices Center</h2>
                 <p className="text-xs text-slate-500">Generate, audit, and distribute invoices with 18% GST parameters automatically</p>
               </div>
-              <button
-                onClick={async () => {
-                  triggerNotification("Compiling invoice directory report...", "success");
-                  const success = await printElementById("invoices-directory-table");
-                  if (success) {
-                    triggerNotification("Invoice directory report compiled successfully! Check your printer dialog or downloads folder.", "success");
-                  } else {
-                    triggerNotification("Could not compile invoice directory report.", "warning");
-                  }
-                }}
-                className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold shadow-lg shadow-slate-900/10 flex items-center gap-2 cursor-pointer transition-all border border-slate-800 shrink-0"
-              >
-                <Printer className="w-4 h-4 text-emerald-400" />
-                <span>Print Invoice Directory</span>
-              </button>
+              <div className="flex flex-wrap items-center gap-3 shrink-0">
+                <button
+                  onClick={async () => {
+                    triggerNotification("Compiling invoice directory report...", "success");
+                    const success = await printElementById("invoices-directory-table");
+                    if (success) {
+                      triggerNotification("Invoice directory report compiled successfully! Check your printer dialog or downloads folder.", "success");
+                    } else {
+                      triggerNotification("Could not compile invoice directory report.", "warning");
+                    }
+                  }}
+                  className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold shadow-lg shadow-slate-900/10 flex items-center gap-2 cursor-pointer transition-all border border-slate-800"
+                >
+                  <Printer className="w-4 h-4 text-emerald-400" />
+                  <span>Print Directory</span>
+                </button>
+                <button
+                  onClick={async () => {
+                    triggerNotification("Compiling and downloading high-fidelity PDF directory...", "success");
+                    const success = await saveElementAsPDF("invoices-directory-table", `Invoice-Directory-${new Date().toISOString().slice(0, 10)}.pdf`, "standard-a4");
+                    if (success) {
+                      triggerNotification("Invoice directory PDF copy downloaded successfully.", "success");
+                    } else {
+                      triggerNotification("Failed to download invoice directory PDF copy.", "warning");
+                    }
+                  }}
+                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold shadow-lg shadow-blue-500/10 flex items-center gap-2 cursor-pointer transition-all"
+                >
+                  <Download className="w-4 h-4 text-blue-100" />
+                  <span>Save PDF Directory</span>
+                </button>
+              </div>
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
@@ -3308,7 +3340,7 @@ export default function SuperAdminConsole({
               <p className="text-slate-400">[2024-05-24 10:05:14 UTC] POLICY_AUDIT: Root certificates mapped to tenant isolates...</p>
               <p className="text-emerald-500">[2024-05-24 10:12:44 UTC] DATABASE: SaaS node TENANT-001 sandbox initialized completely.</p>
               <p className="text-emerald-500">[2024-05-24 10:15:30 UTC] DISPATCH: Physical 80mm Thermal Printer dispatched to TENANT-002.</p>
-              <p className="text-slate-400">[2024-05-24 11:20:10 UTC] AUTHENTICATION: Master key superadmin@expertaid.com completed session auth challenge.</p>
+              <p className="text-slate-400">[2024-05-24 11:20:10 UTC] AUTHENTICATION: Master key superadmin@expertpos.com completed session auth challenge.</p>
               <p className="text-blue-400">[2024-05-24 12:44:00 UTC] ISOLATION_LOCK: Quota values mapped for Tech Solutions (Branches: 5, SKU limit: 100).</p>
               <p className="text-amber-400">[2024-05-24 13:00:15 UTC] BILLING_SYNC: Corporate monthly subscription ledger generated for 9 tenants.</p>
               <p className="text-emerald-400">[2024-05-24 14:02:11 UTC] BACKUP: Manual export JSON file completed on sovereign request.</p>
@@ -4260,7 +4292,7 @@ export default function SuperAdminConsole({
               <div className="grid grid-cols-2 gap-4 border-b border-slate-800/40 pb-4">
                 <div>
                   <p className="text-[9px] text-slate-500 uppercase tracking-widest mb-1">Domain URL</p>
-                  <p className="font-mono text-blue-400 font-bold">{viewingTenant.subdomain}.expertaid.com</p>
+                  <p className="font-mono text-blue-400 font-bold">{viewingTenant.subdomain}.expertpos.com</p>
                 </div>
                 <div>
                   <p className="text-[9px] text-slate-500 uppercase tracking-widest mb-1">KYC Status</p>
@@ -4956,7 +4988,7 @@ export default function SuperAdminConsole({
               {/* Header Branding */}
               <div className="flex justify-between items-start">
                 <div className="space-y-1">
-                  <h4 className="text-lg font-black text-blue-600 tracking-tight font-sans">EXPERTAID SAAS INC.</h4>
+                  <h4 className="text-lg font-black text-blue-600 tracking-tight font-sans">EXPERT POS SAAS INC.</h4>
                   <p className="text-[9px] text-slate-400 font-semibold uppercase tracking-widest">Sovereign Core Infrastructure</p>
                 </div>
                 <div className="text-right space-y-0.5">

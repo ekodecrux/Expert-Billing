@@ -108,7 +108,7 @@ export default function SmartCopilot({ currentRole, currentBranch, products, onA
           <div>
             <h3 className="font-display font-semibold text-sm tracking-tight text-slate-800 flex items-center gap-1.5">
               <Sparkles className="w-4 h-4 text-emerald-600" />
-              ExpertAid Billing AI
+              Expert POS Billing AI
             </h3>
             <p className="text-[10px] text-slate-500 font-sans tracking-wide">
               Context: Supermarket Operations & Analytics

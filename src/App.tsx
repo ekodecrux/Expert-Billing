@@ -70,7 +70,8 @@ import {
   MeasurementUnit,
   Tenant,
   StockTransfer,
-  printElementById
+  printElementById,
+  saveElementAsPDF
 } from "./types";
 
 import SmartCopilot from "./components/SmartCopilot";
@@ -82,9 +83,9 @@ import { ExpertAidLogo } from "./components/ExpertAidLogo";
 const PRESET_TENANTS: Tenant[] = [
   {
     id: "TENANT-001",
-    name: "ExpertAid Retail Hub",
+    name: "Expert POS Retail Hub",
     subdomain: "hub",
-    adminEmail: "admin@expertaid.com",
+    adminEmail: "admin@expertpos.com",
     phone: "+91 9988776655",
     currency: "₹",
     tier: "ENTERPRISE",
@@ -310,11 +311,83 @@ const PRESET_TENANTS: Tenant[] = [
   }
 ];
 
+const LOGIN_BG_CONFIGS: Record<string, {
+  name: string;
+  outerBg: string;
+  innerBg: string;
+  isDark: boolean;
+  themeColor: string;
+  btnAccent: string;
+  glows: string[];
+}> = {
+  "cosmic-aurora": {
+    name: "Cosmic Aurora ✨",
+    outerBg: "bg-gradient-to-br from-[#1e1b4b] via-[#311042] to-[#081c3b]",
+    innerBg: "bg-[#170e28]/85 border-violet-500/20 shadow-violet-500/10",
+    isDark: true,
+    themeColor: "text-violet-400",
+    btnAccent: "bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white shadow-lg shadow-violet-500/20",
+    glows: [
+      "absolute top-[-20%] left-[-20%] w-[80%] h-[80%] bg-pink-500/15 rounded-full blur-[120px] animate-pulse pointer-events-none",
+      "absolute bottom-[-10%] right-[-10%] w-[70%] h-[70%] bg-blue-500/15 rounded-full blur-[100px] pointer-events-none",
+      "absolute top-[30%] left-[30%] w-[40%] h-[40%] bg-purple-600/10 rounded-full blur-[80px] pointer-events-none"
+    ]
+  },
+  "sunset-dream": {
+    name: "Sunset Dream 🌅",
+    outerBg: "bg-gradient-to-br from-[#fdba74] via-[#f87171] to-[#c084fc]",
+    innerBg: "bg-white/95 border-orange-200/50 shadow-orange-500/5",
+    isDark: false,
+    themeColor: "text-orange-600",
+    btnAccent: "bg-gradient-to-r from-orange-600 to-rose-600 hover:from-orange-500 hover:to-rose-500 text-white shadow-lg shadow-orange-500/20",
+    glows: [
+      "absolute top-[-10%] left-[-10%] w-[60%] h-[60%] bg-rose-400/20 rounded-full blur-[100px] pointer-events-none",
+      "absolute bottom-[-10%] right-[-10%] w-[60%] h-[60%] bg-amber-300/25 rounded-full blur-[90px] pointer-events-none"
+    ]
+  },
+  "neon-cyberpunk": {
+    name: "Neon Cyberpunk 👾",
+    outerBg: "bg-gradient-to-br from-[#020617] via-[#0b1329] to-[#1e1b4b]",
+    innerBg: "bg-[#090d16]/90 border border-teal-500/30 shadow-2xl shadow-teal-500/10",
+    isDark: true,
+    themeColor: "text-cyan-400",
+    btnAccent: "bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white shadow-lg shadow-cyan-500/20",
+    glows: [
+      "absolute top-[-20%] left-[10%] w-[50%] h-[50%] bg-cyan-500/10 rounded-full blur-[100px] pointer-events-none",
+      "absolute bottom-[-10%] right-[-10%] w-[60%] h-[60%] bg-fuchsia-500/15 rounded-full blur-[100px] pointer-events-none"
+    ]
+  },
+  "mint-refresh": {
+    name: "Mint Refresh 🍃",
+    outerBg: "bg-gradient-to-br from-[#a7f3d0] via-[#34d399] to-[#06b6d4]",
+    innerBg: "bg-white/95 border-emerald-100 shadow-emerald-500/5",
+    isDark: false,
+    themeColor: "text-emerald-600",
+    btnAccent: "bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white shadow-lg shadow-emerald-500/20",
+    glows: [
+      "absolute top-[-20%] left-[-20%] w-[60%] h-[60%] bg-teal-300/15 rounded-full blur-[100px] pointer-events-none",
+      "absolute bottom-[-10%] right-[-10%] w-[50%] h-[50%] bg-lime-300/15 rounded-full blur-[90px] pointer-events-none"
+    ]
+  },
+  "classic-blue": {
+    name: "Classic Slate 🏢",
+    outerBg: "bg-gradient-to-br from-[#d4e2ff] to-[#eef2f9]",
+    innerBg: "bg-gradient-to-tr from-[#d3e3fd]/90 via-[#e8f0fe]/90 to-[#f4f8ff]/95 border-white/60 shadow-blue-500/5",
+    isDark: false,
+    themeColor: "text-blue-600",
+    btnAccent: "bg-blue-600 hover:bg-blue-700 text-white shadow-lg shadow-blue-500/20",
+    glows: [
+      "absolute top-[-20%] left-[-20%] w-[60%] h-[60%] bg-blue-300/15 rounded-full blur-3xl pointer-events-none",
+      "absolute bottom-[-10%] right-[-10%] w-[50%] h-[50%] bg-indigo-300/10 rounded-full blur-3xl pointer-events-none"
+    ]
+  }
+};
+
 const PRESET_CREDENTIALS = [
   {
     role: UserRole.ADMIN,
     title: "Super Admin Master Controls",
-    email: "superadmin@expertaid.com",
+    email: "superadmin@expertpos.com",
     password: "SuperAdminMasterKey2026",
     name: "System Sovereign (Super Admin)",
     color: "violet",
@@ -330,7 +403,7 @@ const PRESET_CREDENTIALS = [
   {
     role: UserRole.ADMIN,
     title: "Admin Full Control",
-    email: "admin@expertaid.com",
+    email: "admin@expertpos.com",
     password: "AdminOverrideX99",
     name: "John Doe (Admin)",
     color: "emerald",
@@ -346,7 +419,7 @@ const PRESET_CREDENTIALS = [
   {
     role: UserRole.MANAGER,
     title: "Manager Reports & Stock",
-    email: "manager@expertaid.com",
+    email: "manager@expertpos.com",
     password: "ManagerProfit77",
     name: "Alice Manager",
     color: "indigo",
@@ -363,7 +436,7 @@ const PRESET_CREDENTIALS = [
   {
     role: UserRole.CASHIER,
     title: "Cashier Billing Only",
-    email: "cashier@expertaid.com",
+    email: "cashier@expertpos.com",
     password: "CashierBilling101",
     name: "John Cashier",
     color: "amber",
@@ -380,7 +453,7 @@ const PRESET_CREDENTIALS = [
   {
     role: UserRole.STORE_KEEPER,
     title: "Store Keeper Inventory Management",
-    email: "storekeeper@expertaid.com",
+    email: "storekeeper@expertpos.com",
     password: "StoreKeeperReconcile26",
     name: "Devin Stocker",
     color: "rose",
@@ -395,6 +468,75 @@ const PRESET_CREDENTIALS = [
     phone: "+91 9944556677"
   }
 ];
+
+function playThermalPrintSound() {
+  try {
+    const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
+    if (!AudioContext) return;
+    const ctx = new AudioContext();
+    
+    // Create oscillator for whirring sound
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    
+    osc.type = "sawtooth";
+    // Pitch modulations to sound like a stepper motor
+    osc.frequency.setValueAtTime(320, ctx.currentTime);
+    osc.frequency.linearRampToValueAtTime(380, ctx.currentTime + 0.1);
+    osc.frequency.linearRampToValueAtTime(300, ctx.currentTime + 0.2);
+    osc.frequency.setValueAtTime(340, ctx.currentTime + 0.3);
+    osc.frequency.linearRampToValueAtTime(390, ctx.currentTime + 0.5);
+    osc.frequency.linearRampToValueAtTime(310, ctx.currentTime + 0.7);
+    osc.frequency.setValueAtTime(350, ctx.currentTime + 0.8);
+    osc.frequency.linearRampToValueAtTime(400, ctx.currentTime + 1.1);
+    
+    // Tremolo/vibrato for motor vibration
+    const tremolo = ctx.createOscillator();
+    const tremoloGain = ctx.createGain();
+    tremolo.frequency.value = 50; // 50 Hz vibration
+    tremoloGain.gain.value = 15;
+    tremolo.connect(tremoloGain);
+    tremoloGain.connect(osc.frequency);
+    
+    gain.gain.setValueAtTime(0.08, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 1.2);
+    
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    
+    tremolo.start();
+    osc.start();
+    
+    tremolo.stop(ctx.currentTime + 1.2);
+    osc.stop(ctx.currentTime + 1.2);
+    
+    // Play a paper tear click at the end!
+    setTimeout(() => {
+      const clickNoise = ctx.createBufferSource();
+      const bufferSize = ctx.sampleRate * 0.05;
+      const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+      const data = buffer.getChannelData(0);
+      for (let i = 0; i < bufferSize; i++) {
+        data[i] = Math.random() * 2 - 1;
+      }
+      clickNoise.buffer = buffer;
+      const clickFilter = ctx.createBiquadFilter();
+      clickFilter.type = "bandpass";
+      clickFilter.frequency.value = 1000;
+      
+      const clickGain = ctx.createGain();
+      clickGain.gain.setValueAtTime(0.15, ctx.currentTime);
+      clickGain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.05);
+      
+      clickNoise.connect(clickFilter);
+      clickFilter.connect(clickGain);
+      clickGain.connect(ctx.destination);
+      clickNoise.start();
+    }, 1150);
+  } catch (e) {
+    console.warn("Web Audio API not supported or blocked by user gesture:", e);
+  }
+}
 
 export default function App() {
   // State from server DB
@@ -456,7 +598,7 @@ export default function App() {
 
   const activeTenant = tenantsList.find(t => t.id === activeTenantId) || tenantsList[0] || PRESET_TENANTS[0];
 
-  const tenantProducts = products.filter(p => (p.tenantId || "TENANT-001") === activeTenantId);
+  const tenantProducts = products.filter(p => !p.tenantId || p.tenantId === activeTenantId);
 
   // Map tenants color theme dynamically
   const getThemeColorClasses = (theme: string) => {
@@ -544,6 +686,188 @@ export default function App() {
     }
   };
 
+  const [attractiveMode, setAttractiveMode] = useState<"mint" | "cosmic" | "cream" | "velvet" | "sunset" | "oceanic" | "cyberpunk" | "nordic" | "espresso" | "aura">(() => {
+    return (localStorage.getItem("expert_aid_attractive_mode") as any) || "mint";
+  });
+
+  const getAttractiveBgClasses = (mode: string) => {
+    switch (mode) {
+      case "cosmic": // Midnight Cyberpunk / Cosmic Mode (Dark)
+        return {
+          rootBg: "bg-[#090D16]",
+          contentBg: "bg-[#0F172A]",
+          sidebarBg: "bg-[#090D16] border-[#1E293B]",
+          cardBg: "bg-[#1E293B]/80 border-[#334155] text-slate-100 shadow-[0_4px_20px_rgba(0,0,0,0.3)] backdrop-blur-xs",
+          headerBg: "bg-[#0F172A] border-[#1E293B] text-slate-100",
+          text: "text-slate-300",
+          textMuted: "text-slate-500",
+          textHeading: "text-slate-100",
+          badgeBg: "bg-[#334155] border-[#475569] text-slate-300",
+          badgeText: "text-slate-300",
+          inputBg: "bg-[#0F172A] border-[#334155] text-slate-100 focus:bg-[#1E293B]",
+          border: "border-[#1E293B]",
+          borderAccent: "border-[#334155]",
+          innerCard: "bg-[#0F172A]/70 border-[#334155] text-slate-200"
+        };
+      case "oceanic": // Deep Oceanic Abyssal Blue (Dark)
+        return {
+          rootBg: "bg-[#0B151F]",
+          contentBg: "bg-[#101E2E]",
+          sidebarBg: "bg-[#0B151F] border-[#1B324B]",
+          cardBg: "bg-[#162A3F]/85 border-[#234364] text-slate-100 shadow-[0_4px_20px_rgba(0,0,0,0.25)]",
+          headerBg: "bg-[#101E2E] border-[#1B324B] text-slate-100",
+          text: "text-teal-100/90",
+          textMuted: "text-slate-400",
+          textHeading: "text-white",
+          badgeBg: "bg-[#234364] border-[#2C557E] text-teal-300",
+          badgeText: "text-teal-200",
+          inputBg: "bg-[#101E2E] border-[#234364] text-white focus:bg-[#162A3F]",
+          border: "border-[#1B324B]",
+          borderAccent: "border-[#234364]",
+          innerCard: "bg-[#101E2E]/80 border-[#234364] text-slate-200"
+        };
+      case "cyberpunk": // Cyberpunk Charcoal Dark with High-contrast Neon Amber (Dark)
+        return {
+          rootBg: "bg-[#0C0C0E]",
+          contentBg: "bg-[#121214]",
+          sidebarBg: "bg-[#0C0C0E] border-[#222226]",
+          cardBg: "bg-[#1A1A1E] border-[#2A2A32] text-amber-100 shadow-[0_4px_16px_rgba(245,158,11,0.05)]",
+          headerBg: "bg-[#121214] border-[#222226] text-amber-500",
+          text: "text-slate-300",
+          textMuted: "text-slate-500",
+          textHeading: "text-amber-500",
+          badgeBg: "bg-[#2A2A32] border-[#3A3A46] text-amber-400",
+          badgeText: "text-amber-400",
+          inputBg: "bg-[#121214] border-[#2A2A32] text-amber-100 focus:bg-[#1A1A1E]",
+          border: "border-[#222226]",
+          borderAccent: "border-[#2A2A32]",
+          innerCard: "bg-[#121214]/80 border-[#2A2A32] text-amber-100/90"
+        };
+      case "nordic": // Nordic Sage Green (Light)
+        return {
+          rootBg: "bg-[#EFEFEE]",
+          contentBg: "bg-[#F5F5F4]",
+          sidebarBg: "bg-[#E5E5E3] border-[#D1D1CD]",
+          cardBg: "bg-white border-[#D1D1CD] text-[#2F3E36] shadow-sm",
+          headerBg: "bg-white border-[#D1D1CD] text-[#2F3E36]",
+          text: "text-[#4F5D54]",
+          textMuted: "text-[#829188]",
+          textHeading: "text-[#2F3E36]",
+          badgeBg: "bg-[#E5E5E3] border-[#D1D1CD] text-[#2F3E36]",
+          badgeText: "text-[#2F3E36]",
+          inputBg: "bg-[#F5F5F4] border-[#D1D1CD] text-[#2F3E36] focus:bg-white",
+          border: "border-[#D1D1CD]",
+          borderAccent: "border-[#C4C4C0]",
+          innerCard: "bg-[#F5F5F4] border-[#D1D1CD] text-[#4F5D54]"
+        };
+      case "espresso": // Royal Chocolatier and Gold (Dark)
+        return {
+          rootBg: "bg-[#1A110E]",
+          contentBg: "bg-[#231814]",
+          sidebarBg: "bg-[#1A110E] border-[#362721]",
+          cardBg: "bg-[#2E1E1A] border-[#44312A] text-amber-100 shadow-md",
+          headerBg: "bg-[#231814] border-[#362721] text-amber-400",
+          text: "text-[#D5C2BB]",
+          textMuted: "text-[#8D766E]",
+          textHeading: "text-amber-200",
+          badgeBg: "bg-[#44312A] border-[#553E35] text-amber-300",
+          badgeText: "text-amber-200",
+          inputBg: "bg-[#231814] border-[#44312A] text-amber-100 focus:bg-[#2E1E1A]",
+          border: "border-[#362721]",
+          borderAccent: "border-[#44312A]",
+          innerCard: "bg-[#231814]/80 border-[#44312A] text-[#D5C2BB]"
+        };
+      case "aura": // Aura Twilight Purple & Lavender Dream (Light)
+        return {
+          rootBg: "bg-[#FAF9FF]",
+          contentBg: "bg-[#F3F1FE]",
+          sidebarBg: "bg-[#E8E4FD] border-[#D6CFF9]",
+          cardBg: "bg-white border-[#D6CFF9] text-[#2A1B6A] shadow-md",
+          headerBg: "bg-white border-[#D6CFF9] text-[#2A1B6A]",
+          text: "text-[#4D3F9B]",
+          textMuted: "text-[#8B7EC8]",
+          textHeading: "text-[#2A1B6A]",
+          badgeBg: "bg-[#E8E4FD] border-[#D6CFF9] text-[#4D3F9B]",
+          badgeText: "text-[#4D3F9B]",
+          inputBg: "bg-[#FAF9FF] border-[#D6CFF9] text-[#2A1B6A] focus:bg-white",
+          border: "border-[#D6CFF9]",
+          borderAccent: "border-[#C5BCF6]",
+          innerCard: "bg-[#F3F1FE] border-[#D6CFF9] text-[#4D3F9B]"
+        };
+      case "cream": // Warm Vintage Buttermilk / Champagne Cream (Light)
+        return {
+          rootBg: "bg-[#FAF5F0]",
+          contentBg: "bg-[#FAF5F0]",
+          sidebarBg: "bg-[#F3EAE3] border-[#E6D4C5]",
+          cardBg: "bg-white border-[#E6D4C5] text-[#3E2723] shadow-md",
+          headerBg: "bg-white border-[#E6D4C5] text-[#3E2723]",
+          text: "text-[#5D4037]",
+          textMuted: "text-[#8D6E63]",
+          textHeading: "text-[#3E2723]",
+          badgeBg: "bg-[#F3EAE3] border-[#E6D4C5] text-[#5D4037]",
+          badgeText: "text-[#5D4037]",
+          inputBg: "bg-[#FAF5F0] border-[#E6D4C5] text-[#3E2723] focus:bg-white",
+          border: "border-[#E6D4C5]",
+          borderAccent: "border-[#D7CCC8]",
+          innerCard: "bg-[#FAF5F0] border-[#E6D4C5] text-[#5D4037]"
+        };
+      case "velvet": // Majestic Royal Velvet Plum / Elderberry (Dark Mode with Luxury Purple glow)
+        return {
+          rootBg: "bg-[#130919]",
+          contentBg: "bg-[#1A0E23]",
+          sidebarBg: "bg-[#130919] border-[#2D163F]",
+          cardBg: "bg-[#251533]/80 border-[#3D1E58] text-purple-100 shadow-xl backdrop-blur-xs",
+          headerBg: "bg-[#1A0E23] border-[#2D163F] text-purple-100",
+          text: "text-purple-300",
+          textMuted: "text-purple-500",
+          textHeading: "text-purple-100",
+          badgeBg: "bg-[#3D1E58] border-[#4E2472] text-purple-200",
+          badgeText: "text-purple-200",
+          inputBg: "bg-[#1A0E23] border-[#3D1E58] text-purple-100 focus:bg-[#251533]",
+          border: "border-[#2D163F]",
+          borderAccent: "border-[#3D1E58]",
+          innerCard: "bg-[#1A0E23]/60 border-[#3D1E58] text-purple-200"
+        };
+      case "sunset": // Rose Gold Sunset / Blush Champagne (Sleek Warm)
+        return {
+          rootBg: "bg-[#FFF6F6]",
+          contentBg: "bg-[#FFF9F9]",
+          sidebarBg: "bg-[#FFEBEB] border-[#FFD3D3]",
+          cardBg: "bg-white border-[#FFD3D3] text-[#4A2E2E] shadow-md",
+          headerBg: "bg-white border-[#FFD3D3] text-[#4A2E2E]",
+          text: "text-[#7A4B4B]",
+          textMuted: "text-[#A87E7E]",
+          textHeading: "text-[#4A2E2E]",
+          badgeBg: "bg-[#FFEBEB] border-[#FFD3D3] text-[#7A4B4B]",
+          badgeText: "text-[#7A4B4B]",
+          inputBg: "bg-[#FFF6F6] border-[#FFD3D3] text-[#4A2E2E] focus:bg-white",
+          border: "border-[#FFD3D3]",
+          borderAccent: "border-[#FFC2C2]",
+          innerCard: "bg-[#FFF9F9] border-[#FFD3D3] text-[#7A4B4B]"
+        };
+      case "mint": // Classic Clean / Soft Mint Green
+      default:
+        return {
+          rootBg: "bg-slate-50",
+          contentBg: "bg-slate-50",
+          sidebarBg: "bg-slate-50 border-slate-200",
+          cardBg: "bg-white border-slate-200 text-slate-800 shadow-sm",
+          headerBg: "bg-white border-slate-200 text-slate-800",
+          text: "text-slate-600",
+          textMuted: "text-slate-400",
+          textHeading: "text-slate-800",
+          badgeBg: "bg-slate-100 border-slate-200 text-slate-700",
+          badgeText: "text-slate-700",
+          inputBg: "bg-slate-100 border-transparent text-slate-800 focus:bg-white focus:border-slate-300",
+          border: "border-slate-200",
+          borderAccent: "border-slate-300",
+          innerCard: "bg-slate-50 border-slate-200 text-slate-700"
+        };
+    }
+  };
+
+  const bgMode = getAttractiveBgClasses(attractiveMode);
+
   const currentTheme = getThemeColorClasses(activeTenant.colorTheme);
 
   // User credentials state for RBAC management
@@ -579,8 +903,11 @@ export default function App() {
   const [loginError, setLoginError] = useState<string | null>(null);
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState<boolean>(false);
+  const [loginBgMode, setLoginBgMode] = useState<string>(() => {
+    return localStorage.getItem("expert_pos_login_bg_mode") || "cosmic-aurora";
+  });
 
-  const isSuperAdmin = currentUserEmail.toLowerCase() === "superadmin@expertaid.com" && currentRole === UserRole.ADMIN && currentCashierName.toLowerCase().includes("super");
+  const isSuperAdmin = currentUserEmail.toLowerCase() === "superadmin@expertpos.com" && currentRole === UserRole.ADMIN && currentCashierName.toLowerCase().includes("super");
 
   // Active POS cart states
   const [cartItems, setCartItems] = useState<InvoiceItem[]>([]);
@@ -600,6 +927,12 @@ export default function App() {
   const [showInvoicePrintPreview, setShowInvoicePrintPreview] = useState<Invoice | null>(null);
   const [selectedPrinterLayout, setSelectedPrinterLayout] = useState<"standard-a4" | "thermal-80mm" | "thermal-58mm">("thermal-80mm");
   const [categoryFilter, setCategoryFilter] = useState<string>("All");
+  const [reprintSearch, setReprintSearch] = useState<string>("");
+  const [reprintShowAllBranches, setReprintShowAllBranches] = useState<boolean>(false);
+  const [selectedReprintInvoiceId, setSelectedReprintInvoiceId] = useState<string | null>(null);
+  const [isVirtualPrinting, setIsVirtualPrinting] = useState<boolean>(false);
+  const [virtualPrintDone, setVirtualPrintDone] = useState<boolean>(false);
+  const [soundEnabled, setSoundEnabled] = useState<boolean>(true);
   
   // Forms states
   const [newProduct, setNewProduct] = useState<Partial<Product>>({
@@ -736,7 +1069,7 @@ export default function App() {
 
   useEffect(() => {
     if (isLoggedIn) {
-      const isSuperAdmin = currentUserEmail.toLowerCase() === "superadmin@expertaid.com" && currentRole === UserRole.ADMIN && currentCashierName.toLowerCase().includes("super");
+      const isSuperAdmin = currentUserEmail.toLowerCase() === "superadmin@expertpos.com" && currentRole === UserRole.ADMIN && currentCashierName.toLowerCase().includes("super");
       if (isSuperAdmin) {
         const allowedTabs = ["super-admin", "staff-registry", "analytics"];
         if (!allowedTabs.includes(activeTab)) {
@@ -785,7 +1118,7 @@ export default function App() {
       }
       
       // Auto-route based on permissions
-      if (match.email.toLowerCase() === "superadmin@expertaid.com") {
+      if (match.email.toLowerCase() === "superadmin@expertpos.com") {
         setActiveTab("super-admin");
       } else if (match.role === UserRole.CASHIER) {
         setActiveTab("pos");
@@ -796,7 +1129,7 @@ export default function App() {
       }
 
       // Automatically detect and select the appropriate client company tenant workspace!
-      if (trimmedId !== "superadmin@expertaid.com") {
+      if (trimmedId !== "superadmin@expertpos.com") {
         let tenantMatch = tenantsList.find(
           (t) => t.adminEmail.toLowerCase() === trimmedId
         );
@@ -843,7 +1176,7 @@ export default function App() {
     setCurrentUserEmail(cred.email);
     setIsLoggedIn(true);
 
-    if (cred.email.toLowerCase() === "superadmin@expertaid.com") {
+    if (cred.email.toLowerCase() === "superadmin@expertpos.com") {
       setActiveTab("super-admin");
     } else if (cred.role === UserRole.CASHIER) {
       setActiveTab("pos");
@@ -855,7 +1188,7 @@ export default function App() {
 
     // Automatically detect and select the appropriate client company tenant workspace!
     const trimmedId = cred.email.toLowerCase();
-    if (trimmedId !== "superadmin@expertaid.com") {
+    if (trimmedId !== "superadmin@expertpos.com") {
       let tenantMatch = tenantsList.find(
         (t) => t.adminEmail.toLowerCase() === trimmedId
       );
@@ -1801,7 +2134,7 @@ export default function App() {
   const filteredProductsBySearch = tenantProducts.filter((p) => {
     const matchesSearch =
       p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      p.barcode.includes(searchQuery) ||
+      (p.barcode || "").includes(searchQuery) ||
       p.sku.toLowerCase().includes(searchQuery.toLowerCase());
     
     if (categoryFilter === "All") return matchesSearch;
@@ -1823,6 +2156,22 @@ export default function App() {
   const tenantAndBranchInvoices = invoices.filter((inv) => {
     if (currentBranch) {
       return inv.storeBranchId === currentBranch.id;
+    }
+    return true;
+  });
+
+  // Filter invoices for the Reprint Hub (incorporating search query and show all branches toggle)
+  const reprintFilteredInvoices = invoices.filter((inv) => {
+    if (!reprintShowAllBranches && currentBranch && inv.storeBranchId !== currentBranch.id) {
+      return false;
+    }
+    if (reprintSearch.trim() !== "") {
+      const s = reprintSearch.toLowerCase();
+      const idMatch = inv.id.toLowerCase().includes(s);
+      const nameMatch = inv.customerName?.toLowerCase().includes(s) || false;
+      const phoneMatch = inv.customerPhone?.toLowerCase().includes(s) || false;
+      const cashierMatch = inv.cashierName?.toLowerCase().includes(s) || false;
+      return idMatch || nameMatch || phoneMatch || cashierMatch;
     }
     return true;
   });
@@ -1865,7 +2214,7 @@ export default function App() {
       e.preventDefault();
       if (otpInput.trim() === "123456") {
         // Log in as tenant admin by default
-        const match = credentialsList.find(c => c.email === "admin@expertaid.com") || PRESET_CREDENTIALS[1];
+        const match = credentialsList.find(c => c.email === "admin@expertpos.com") || PRESET_CREDENTIALS[1];
         setCurrentRole(match.role);
         setCurrentCashierName(match.name);
         setCurrentUserEmail(match.email);
@@ -1877,29 +2226,62 @@ export default function App() {
       }
     };
 
+    const activeBgConfig = LOGIN_BG_CONFIGS[loginBgMode] || LOGIN_BG_CONFIGS["cosmic-aurora"];
+    const isDarkTheme = activeBgConfig.isDark;
+
     return (
-      <div className="min-h-screen w-screen bg-gradient-to-br from-[#d4e2ff] to-[#eef2f9] flex items-center justify-center p-3 sm:p-6 md:p-8 relative overflow-y-auto font-sans text-slate-800 selection:bg-blue-100 selection:text-blue-900" id="secured-login-portal">
+      <div className={`min-h-screen w-screen ${activeBgConfig.outerBg} flex items-center justify-center p-3 sm:p-6 md:p-8 relative overflow-y-auto font-sans transition-all duration-700 selection:bg-blue-100 selection:text-blue-900`} id="secured-login-portal">
 
+        {/* Floating Attractive Mode Switcher Dock */}
+        <div className="absolute top-4 right-4 sm:right-8 z-50 flex items-center gap-1.5 bg-slate-900/45 backdrop-blur-md border border-white/10 rounded-full p-1.5 shadow-xl max-w-full overflow-x-auto">
+          <span className="text-[10px] font-black uppercase tracking-wider text-white/80 px-2.5 select-none hidden sm:inline-block font-sans">Mode:</span>
+          <div className="flex items-center gap-1 shrink-0">
+            {Object.entries(LOGIN_BG_CONFIGS).map(([key, config]) => {
+              const isActive = loginBgMode === key;
+              return (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => {
+                    setLoginBgMode(key);
+                    localStorage.setItem("expert_pos_login_bg_mode", key);
+                    triggerNotification(`Switched background theme to: ${config.name}`, "success");
+                  }}
+                  className={`relative flex items-center justify-center p-1.5 px-3 rounded-full transition-all duration-300 group hover:scale-105 cursor-pointer text-[11px] font-bold ${
+                    isActive 
+                      ? "bg-white text-slate-900 shadow-md font-extrabold scale-105" 
+                      : "text-white/70 hover:text-white hover:bg-white/10"
+                  }`}
+                  title={config.name}
+                >
+                  <span className="mr-1">{config.name.split(" ")[1]}</span>
+                  <span className="hidden md:inline">{config.name.split(" ")[0]}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
 
-        {/* Outer Split Canvas Wrapper matching the attachment */}
-        <div className="w-full max-w-7xl bg-gradient-to-tr from-[#d3e3fd] via-[#e8f0fe] to-[#f4f8ff] rounded-[2.5rem] shadow-2xl border border-white/60 flex flex-col lg:flex-row overflow-hidden relative min-h-[680px] lg:min-h-[760px]">
+        {/* Outer Split Canvas Wrapper matching the attachment with dynamic multi bg theme */}
+        <div className={`w-full max-w-7xl ${activeBgConfig.innerBg} rounded-[2.5rem] shadow-2xl border transition-all duration-700 flex flex-col lg:flex-row overflow-hidden relative min-h-[680px] lg:min-h-[760px]`}>
           
           {/* Left Column (Branding, Features Grid & Beautiful UI Mockup illustration) */}
           <div className="w-full lg:w-[56%] p-6 sm:p-10 lg:p-12 flex flex-col justify-between relative overflow-hidden select-none">
-            {/* Soft ambient backgrounds in left panel */}
-            <div className="absolute top-[-20%] left-[-20%] w-[60%] h-[60%] bg-blue-300/20 rounded-full blur-3xl pointer-events-none"></div>
-            <div className="absolute bottom-[-10%] right-[-10%] w-[50%] h-[50%] bg-indigo-300/10 rounded-full blur-3xl pointer-events-none"></div>
+            {/* Soft dynamic gradient ambient backgrounds in left panel */}
+            {activeBgConfig.glows.map((gClass, idx) => (
+              <div key={idx} className={gClass} />
+            ))}
 
             <div className="relative z-10">
               {/* ExpertAid High Fidelity SVG Logo Header */}
               <ExpertAidLogo />
-
+ 
               {/* Display Header Text */}
               <div className="mt-8">
-                <h1 className="text-[#0f172a] font-sans font-black text-3xl sm:text-4xl lg:text-[44px] tracking-tight leading-[1.08]">
+                <h1 className={`font-sans font-black text-3xl sm:text-4xl lg:text-[44px] tracking-tight leading-[1.08] transition-colors duration-500 ${isDarkTheme ? "text-white" : "text-[#0f172a]"}`}>
                   Smart Billing Software
                 </h1>
-                <p className="text-slate-600 font-sans font-medium text-sm sm:text-base mt-2.5 max-w-lg leading-relaxed">
+                <p className={`font-sans font-medium text-sm sm:text-base mt-2.5 max-w-lg leading-relaxed transition-colors duration-500 ${isDarkTheme ? "text-slate-300" : "text-slate-600"}`}>
                   Manage your Business, Invoices, Inventory, GST & Reports in one place.
                 </p>
               </div>
@@ -1919,10 +2301,10 @@ export default function App() {
                   const IconComp = feat.icon;
                   return (
                     <div key={i} className="flex items-center gap-3 hover:translate-x-1 transition-transform duration-200">
-                      <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-white shadow-md shadow-blue-500/10 shrink-0">
+                      <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white shadow-md shrink-0 transition-all duration-500 ${isDarkTheme ? "bg-violet-600 shadow-violet-500/20" : "bg-blue-600 shadow-blue-500/10"}`}>
                         <IconComp className="w-4 h-4" />
                       </div>
-                      <span className="text-slate-800 font-sans font-extrabold text-xs sm:text-[13px] tracking-tight">
+                      <span className={`font-sans font-extrabold text-xs sm:text-[13px] tracking-tight transition-colors duration-500 ${isDarkTheme ? "text-slate-200" : "text-slate-800"}`}>
                         {feat.label}
                       </span>
                     </div>
@@ -2122,17 +2504,17 @@ export default function App() {
             </div>
 
             {/* Bottom trust indicators block */}
-            <div className="relative z-10 flex flex-wrap items-center justify-start gap-6 pt-4 border-t border-slate-200/50 mt-4 md:mt-0">
-              <div className="flex items-center gap-1.5 text-xs text-slate-600 font-bold">
-                <CheckCircle className="w-4 h-4 text-blue-600" />
+            <div className={`relative z-10 flex flex-wrap items-center justify-start gap-6 pt-4 border-t mt-4 md:mt-0 transition-colors duration-500 ${isDarkTheme ? "border-slate-800/80 text-slate-300" : "border-slate-200/50 text-slate-600"}`}>
+              <div className="flex items-center gap-1.5 text-xs font-bold">
+                <CheckCircle className={`w-4 h-4 ${isDarkTheme ? "text-violet-400" : "text-blue-600"}`} />
                 <span>Secure</span>
               </div>
-              <div className="flex items-center gap-1.5 text-xs text-slate-600 font-bold">
-                <Cloud className="w-4 h-4 text-blue-600" />
+              <div className="flex items-center gap-1.5 text-xs font-bold">
+                <Cloud className={`w-4 h-4 ${isDarkTheme ? "text-violet-400" : "text-blue-600"}`} />
                 <span>Reliable</span>
               </div>
-              <div className="flex items-center gap-1.5 text-xs text-slate-600 font-bold">
-                <Headphones className="w-4 h-4 text-blue-600" />
+              <div className="flex items-center gap-1.5 text-xs font-bold">
+                <Headphones className={`w-4 h-4 ${isDarkTheme ? "text-violet-400" : "text-blue-600"}`} />
                 <span>24/7 Support</span>
               </div>
             </div>
@@ -2148,10 +2530,10 @@ export default function App() {
                   Welcome Back!
                 </h2>
                 <p className="text-slate-500 text-sm mt-1.5 font-sans font-medium">
-                  Login to your <span className="text-[#2563eb] font-extrabold">ExpertAid</span> Billing Account
+                  Login to your <span className={`font-extrabold transition-colors duration-500 ${isDarkTheme ? "text-violet-600" : "text-blue-600"}`}>Expert POS</span> Billing Account
                 </p>
-                {/* Centered blue accent bar */}
-                <div className="w-12 h-1 bg-blue-600 rounded mx-auto mt-3.5"></div>
+                {/* Centered themed accent bar */}
+                <div className={`w-12 h-1 rounded mx-auto mt-3.5 transition-all duration-500 ${isDarkTheme ? "bg-violet-600" : "bg-blue-600"}`}></div>
               </div>
 
               {loginError && (
@@ -2176,7 +2558,11 @@ export default function App() {
                         placeholder="Username / Email"
                         value={loginUserId}
                         onChange={(e) => setLoginUserId(e.target.value)}
-                        className="w-full bg-[#f8fafc] border border-slate-200 text-slate-900 rounded-xl py-3.5 pl-11 pr-4 text-sm font-semibold placeholder-slate-400 focus:outline-none focus:bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-100 transition-all shadow-3xs"
+                        className={`w-full bg-[#f8fafc] border border-slate-200 text-slate-900 rounded-xl py-3.5 pl-11 pr-4 text-sm font-semibold placeholder-slate-400 focus:outline-none focus:bg-white focus:ring-4 transition-all shadow-3xs ${
+                          isDarkTheme 
+                            ? "focus:border-violet-500 focus:ring-violet-100" 
+                            : "focus:border-blue-500 focus:ring-blue-100"
+                        }`}
                         id="login-username-input"
                       />
                       <User className="w-5 h-5 absolute left-4 top-3.5 text-slate-400" />
@@ -2191,7 +2577,11 @@ export default function App() {
                         placeholder="Password"
                         value={loginPassword}
                         onChange={(e) => setLoginPassword(e.target.value)}
-                        className="w-full bg-[#f8fafc] border border-slate-200 text-slate-900 rounded-xl py-3.5 pl-11 pr-11 text-sm font-semibold placeholder-slate-400 focus:outline-none focus:bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-100 transition-all shadow-3xs"
+                        className={`w-full bg-[#f8fafc] border border-slate-200 text-slate-900 rounded-xl py-3.5 pl-11 pr-11 text-sm font-semibold placeholder-slate-400 focus:outline-none focus:bg-white focus:ring-4 transition-all shadow-3xs ${
+                          isDarkTheme 
+                            ? "focus:border-violet-500 focus:ring-violet-100" 
+                            : "focus:border-blue-500 focus:ring-blue-100"
+                        }`}
                         id="login-password-input"
                       />
                       <Lock className="w-5 h-5 absolute left-4 top-3.5 text-slate-400" />
@@ -2213,18 +2603,24 @@ export default function App() {
                         type="checkbox"
                         checked={rememberMe}
                         onChange={(e) => setRememberMe(e.target.checked)}
-                        className="rounded border-slate-300 text-blue-600 focus:ring-blue-500 w-4 h-4 cursor-pointer"
+                        className={`rounded border-slate-300 w-4 h-4 cursor-pointer ${
+                          isDarkTheme 
+                            ? "text-violet-600 focus:ring-violet-500" 
+                            : "text-blue-600 focus:ring-blue-500"
+                        }`}
                       />
                       <span>Remember Me</span>
                     </label>
                     <button
                       type="button"
                       onClick={() => {
-                        setLoginUserId("admin@expertaid.com");
+                        setLoginUserId("admin@expertpos.com");
                         setLoginPassword("AdminOverrideX99");
                         triggerNotification("Credentials quick-filled! Click 'Login' to enter.", "success");
                       }}
-                      className="text-blue-600 hover:text-blue-800 transition-colors hover:underline"
+                      className={`transition-colors hover:underline ${
+                        isDarkTheme ? "text-violet-600 hover:text-violet-800" : "text-blue-600 hover:text-blue-800"
+                      }`}
                     >
                       Forgot Password?
                     </button>
@@ -2233,7 +2629,7 @@ export default function App() {
                   {/* Login Button with lock icon */}
                   <button
                     type="submit"
-                    className="w-full bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-extrabold text-sm py-4 px-4 rounded-xl transition-all flex items-center justify-center gap-2 cursor-pointer shadow-lg shadow-blue-500/20 active:scale-98 mt-6"
+                    className={`w-full text-white font-extrabold text-sm py-4 px-4 rounded-xl transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-98 mt-6 ${activeBgConfig.btnAccent}`}
                   >
                     <Lock className="w-4 h-4 shrink-0 fill-current" />
                     <span>Login</span>
@@ -2242,11 +2638,15 @@ export default function App() {
               ) : (
                 /* 2. OTP Authenticator Form */
                 <form onSubmit={handleOtpSubmit} className="space-y-4">
-                  <div className="bg-blue-50 border border-blue-100 rounded-xl p-3 text-xs text-blue-800 flex gap-2">
-                    <Info className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
+                  <div className={`rounded-xl p-3 text-xs flex gap-2 border transition-all duration-500 ${
+                    isDarkTheme ? "bg-violet-950/40 border-violet-800/40 text-violet-300" : "bg-blue-50 border-blue-100 text-blue-800"
+                  }`}>
+                    <Info className={`w-4 h-4 shrink-0 mt-0.5 ${isDarkTheme ? "text-violet-400" : "text-blue-600"}`} />
                     <div>
                       <span className="font-bold block">One-Time Password Demo</span>
-                      Enter registered system OTP code to access branch nodes immediately. Use code <span className="font-mono font-bold bg-blue-100 px-1.5 py-0.2 rounded text-blue-700">123456</span> to pass.
+                      Enter registered system OTP code to access branch nodes immediately. Use code <span className={`font-mono font-bold px-1.5 py-0.2 rounded ${
+                        isDarkTheme ? "bg-violet-900/60 text-violet-200" : "bg-blue-100 text-blue-700"
+                      }`}>123456</span> to pass.
                     </div>
                   </div>
 
@@ -2259,7 +2659,11 @@ export default function App() {
                         placeholder="6-Digit OTP Code (e.g. 123456)"
                         value={otpInput}
                         onChange={(e) => setOtpInput(e.target.value.replace(/[^0-9]/g, ""))}
-                        className="w-full bg-[#f8fafc] border border-slate-200 text-slate-900 rounded-xl py-3.5 pl-11 pr-4 text-sm font-mono font-bold tracking-widest placeholder-slate-400 focus:outline-none focus:bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-100 transition-all text-center"
+                        className={`w-full bg-[#f8fafc] border border-slate-200 text-slate-900 rounded-xl py-3.5 pl-11 pr-4 text-sm font-mono font-bold tracking-widest placeholder-slate-400 focus:outline-none focus:bg-white focus:ring-4 transition-all text-center ${
+                          isDarkTheme 
+                            ? "focus:border-violet-500 focus:ring-violet-100" 
+                            : "focus:border-blue-500 focus:ring-blue-100"
+                        }`}
                       />
                       <Smartphone className="w-5 h-5 absolute left-4 top-3.5 text-slate-400" />
                     </div>
@@ -2269,7 +2673,9 @@ export default function App() {
                     <button
                       type="button"
                       onClick={() => setOtpInput("123456")}
-                      className="text-blue-600 font-bold hover:underline"
+                      className={`font-bold hover:underline transition-colors duration-500 ${
+                        isDarkTheme ? "text-violet-400 hover:text-violet-300" : "text-blue-600 hover:text-blue-800"
+                      }`}
                     >
                       Auto Fill Demo OTP
                     </button>
@@ -2284,7 +2690,7 @@ export default function App() {
 
                   <button
                     type="submit"
-                    className="w-full bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-extrabold text-sm py-4 px-4 rounded-xl transition-all flex items-center justify-center gap-2 cursor-pointer shadow-lg shadow-blue-500/20 active:scale-98 mt-4"
+                    className={`w-full text-white font-extrabold text-sm py-4 px-4 rounded-xl transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-98 mt-4 ${activeBgConfig.btnAccent}`}
                   >
                     <Unlock className="w-4 h-4 shrink-0" />
                     <span>Verify & Continue</span>
@@ -2318,7 +2724,7 @@ export default function App() {
 
             {/* Copyright, details, and legal footer */}
             <div className="text-center font-sans text-slate-400 text-[11px] leading-relaxed pt-6 border-t border-slate-100 mt-8 lg:mt-0">
-              <p className="font-extrabold text-slate-500">Expertaid Technologies Pvt. Ltd.</p>
+              <p className="font-extrabold text-slate-500">Expert POS Technologies Pvt. Ltd.</p>
               <p className="mt-0.5">© 2024 All Rights Reserved.</p>
             </div>
           </div>
@@ -2375,7 +2781,7 @@ export default function App() {
   }
 
   return (
-    <div className="flex h-screen w-screen bg-slate-50 overflow-hidden font-sans text-slate-800" id="smart-billing-root">
+    <div className={`flex h-screen w-screen ${bgMode.rootBg} ${bgMode.text} overflow-hidden font-sans`} id="smart-billing-root">
       {/* Dynamic Native Alert Bar */}
       {notifText && (
         <div className={`fixed top-4 right-4 z-50 p-4 rounded-xl shadow-xl flex items-center gap-3 transition-transform animate-bounce ${
@@ -2392,8 +2798,8 @@ export default function App() {
       )}
 
       {/* Sidebar Navigation - Precise Sleek Theme */}
-      <aside className="w-64 bg-slate-50 flex flex-col shrink-0 border-r border-slate-200" id="sidebar">
-        <div className="p-6 border-b border-slate-200 flex flex-col items-center text-center">
+      <aside className={`w-64 ${bgMode.sidebarBg} flex flex-col shrink-0 border-r`} id="sidebar">
+        <div className={`p-6 border-b ${bgMode.border} flex flex-col items-center text-center`}>
           {/* Top-left Gate Badge portion for logged-in side */}
           <div className="mb-4">
             <span className={`inline-block ${currentTheme.bg} text-white text-[9px] font-sans font-black uppercase tracking-wider rounded-full px-2.5 py-1.5 shadow-sm`}>
@@ -2421,7 +2827,7 @@ export default function App() {
               </div>
             )}
             <div className="w-full">
-              <h1 className="text-slate-900 font-display font-black text-sm tracking-tight leading-tight uppercase font-sans break-words px-2" title={activeTenant.name}>
+              <h1 className={`${bgMode.textHeading} font-display font-black text-sm tracking-tight leading-tight uppercase font-sans break-words px-2`} title={activeTenant.name}>
                 {activeTenant.name}
               </h1>
               <span className={`${currentTheme.text} text-[9.5px] font-mono tracking-widest font-black uppercase block mt-1.5`}>
@@ -2429,8 +2835,8 @@ export default function App() {
               </span>
             </div>
           </div>
-          <p className="text-slate-500 text-[9px] mt-4 font-mono flex items-center justify-center gap-1 font-sans">
-            <Clock className="w-3 h-3 text-slate-400" /> UTC: 2026-05-22
+          <p className={`${bgMode.textMuted} text-[9px] mt-4 font-mono flex items-center justify-center gap-1 font-sans`}>
+            <Clock className={`w-3 h-3 ${bgMode.textMuted}`} /> UTC: 2026-05-22
           </p>
         </div>
 
@@ -2491,6 +2897,30 @@ export default function App() {
               >
                 <Users className="w-4 h-4" />
                 <span>CRM &amp; Loyalty</span>
+              </button>
+
+              <button
+                onClick={() => {
+                  setActiveTab("saved-bills");
+                  // Clear active printing states
+                  setIsVirtualPrinting(false);
+                  setVirtualPrintDone(false);
+                }}
+                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-colors font-sans text-xs font-medium cursor-pointer ${
+                  activeTab === "saved-bills"
+                    ? `${currentTheme.bg} text-white font-bold shadow-md`
+                    : "text-slate-600 hover:bg-slate-200/60 hover:text-slate-900"
+                }`}
+              >
+                <FileText className="w-4 h-4 text-emerald-500" />
+                <div className="flex justify-between items-center w-full">
+                  <span>Saved Bills &amp; Receipts</span>
+                  {invoices.length > 0 && (
+                    <span className="bg-emerald-500 text-slate-950 text-[9px] px-1.5 py-0.5 rounded-full font-bold">
+                      {invoices.length}
+                    </span>
+                  )}
+                </div>
               </button>
 
               <button
@@ -2569,18 +2999,18 @@ export default function App() {
         </nav>
 
         {/* User Session Metadata */}
-        <div className="p-4 mt-auto border-t border-slate-200">
-          <div className="bg-slate-100 p-4 rounded-xl border border-slate-200 space-y-3">
+        <div className={`p-4 mt-auto border-t ${bgMode.border}`}>
+          <div className={`${bgMode.innerCard} p-4 rounded-xl border space-y-3`}>
             <div className="flex items-center gap-3 overflow-hidden">
-              <div className="w-9 h-9 rounded-full bg-slate-200 border border-slate-300 flex items-center justify-center text-slate-805 text-xs font-bold shrink-0 font-sans text-slate-800">
+              <div className={`w-9 h-9 rounded-full ${bgMode.inputBg} border ${bgMode.border} flex items-center justify-center ${bgMode.textHeading} text-xs font-bold shrink-0 font-sans`}>
                 {currentCashierName ? currentCashierName.split(" ").map(n => n[0]).join("") : "U"}
               </div>
               <div className="overflow-hidden">
-                <p className="text-slate-900 text-xs font-bold truncate leading-tight">{currentCashierName}</p>
+                <p className={`${bgMode.textHeading} text-xs font-bold truncate leading-tight`}>{currentCashierName}</p>
                 <p className={`text-[10px] truncate leading-none mt-1 font-mono font-bold uppercase tracking-wider ${
                   currentRole === UserRole.ADMIN && currentCashierName.toLowerCase().includes("super")
-                    ? "text-purple-700"
-                    : "text-slate-500"
+                    ? "text-purple-500"
+                    : bgMode.textMuted
                 }`}>
                   {currentRole === UserRole.ADMIN && currentCashierName.toLowerCase().includes("super") ? "SUPERADMIN" : currentRole}
                 </p>
@@ -2595,7 +3025,7 @@ export default function App() {
                 setSelectedLoginRole("admin");
                 triggerNotification("Successfully logged out. All access revoked.", "warning");
               }}
-              className="w-full py-2 bg-white hover:bg-rose-50 hover:text-rose-600 text-slate-600 rounded-lg border border-slate-200 hover:border-rose-200 transition-all font-sans text-[10px] flex items-center justify-center gap-1.5 cursor-pointer font-bold uppercase tracking-wider shadow-sm"
+              className="w-full py-2 bg-white dark:bg-slate-800 hover:bg-rose-50 hover:text-rose-600 text-slate-600 dark:text-slate-300 rounded-lg border border-slate-200 dark:border-slate-700 hover:border-rose-200 transition-all font-sans text-[10px] flex items-center justify-center gap-1.5 cursor-pointer font-bold uppercase tracking-wider shadow-sm"
               title="Log Out"
             >
               <LogOut className="w-3.5 h-3.5" />
@@ -2606,17 +3036,17 @@ export default function App() {
       </aside>
 
       {/* Main Content Pane */}
-      <div className="flex-1 flex flex-col overflow-hidden bg-slate-50">
+      <div className={`flex-1 flex flex-col overflow-hidden ${bgMode.contentBg}`}>
         {/* Header - Styled sleek index */}
-        <header className="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-8 shrink-0">
+        <header className={`h-16 ${bgMode.headerBg} border-b flex items-center justify-between px-8 shrink-0`}>
           <div className="flex items-center gap-6">
-            <div className="flex items-center gap-2 text-slate-400">
+            <div className={`flex items-center gap-2 ${bgMode.textMuted}`}>
               <Store className={`w-4 h-4 ${currentTheme.textAccent}`} />
               {currentRole === UserRole.ADMIN || isSuperAdmin ? (
                 <select
                   value={currentBranch?.id}
                   onChange={(e) => handleBranchChange(e.target.value)}
-                  className="border-none bg-transparent hover:bg-slate-100 p-1 rounded text-xs font-semibold text-slate-700 focus:ring-0 outline-none cursor-pointer"
+                  className={`border-none bg-transparent hover:bg-slate-100 dark:hover:bg-slate-800 p-1 rounded text-xs font-semibold ${bgMode.textHeading} focus:ring-0 outline-none cursor-pointer`}
                 >
                   {branches.map((b) => (
                     <option key={b.id} value={b.id}>
@@ -2639,7 +3069,7 @@ export default function App() {
                 placeholder="Scan item barcode (e.g. 5449000133335) or search..."
                 value={barcodeSearch}
                 onChange={(e) => setBarcodeSearch(e.target.value)}
-                className="w-96 pl-9 pr-4 py-1.5 bg-slate-100 border border-transparent rounded-lg text-xs focus:bg-white focus:border-slate-300 transition-all outline-none"
+                className={`w-96 pl-9 pr-4 py-1.5 ${bgMode.inputBg} border border-transparent rounded-lg text-xs transition-all outline-none focus:bg-white dark:focus:bg-slate-800 focus:border-slate-300`}
               />
               <Search className="w-3.5 h-3.5 absolute left-3 top-2.5 text-slate-400" />
               <button type="submit" className="hidden" />
@@ -2654,7 +3084,7 @@ export default function App() {
                   setActiveTab("inventory");
                   triggerNotification("Filter through current near-critical warning lists below", "success");
                 }}
-                className="flex items-center gap-1.5 bg-rose-50 text-rose-600 px-3 py-1.5 rounded-lg text-xs font-bold border border-rose-100 flex-row"
+                className="flex items-center gap-1.5 bg-rose-50 dark:bg-rose-950/30 text-rose-600 dark:text-rose-400 px-3 py-1.5 rounded-lg text-xs font-bold border border-rose-100 dark:border-rose-900/30 flex-row shrink-0"
               >
                 <span className="relative flex h-2 w-2">
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
@@ -2670,14 +3100,40 @@ export default function App() {
                 onClick={() => {
                   setActiveTab("inventory");
                 }}
-                className="flex items-center gap-1.5 bg-amber-50 text-amber-700 px-3 py-1.5 rounded-lg text-xs font-bold border border-amber-100"
+                className="flex items-center gap-1.5 bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-400 px-3 py-1.5 rounded-lg text-xs font-bold border border-amber-100 dark:border-amber-900/30 shrink-0"
               >
                 Near Expiry ({nearExpiryProductsAlert.length})
               </button>
             )}
 
+            {/* Interactive Attractive Mode Switcher */}
+            <div className={`flex items-center gap-1.5 ${bgMode.inputBg} p-1 rounded-xl border ${bgMode.border} shadow-xs shrink-0`}>
+              <span className={`text-[10px] font-sans font-bold ${bgMode.textMuted} pl-1.5 hidden md:inline`}>🎨 Mode:</span>
+              <select
+                value={attractiveMode}
+                onChange={(e) => {
+                  const newMode = e.target.value as any;
+                  setAttractiveMode(newMode);
+                  localStorage.setItem("expert_aid_attractive_mode", newMode);
+                  triggerNotification(`Switched visual canvas to ${newMode.toUpperCase()} mode!`, "success");
+                }}
+                className={`bg-white dark:bg-slate-850 border ${bgMode.border} rounded-lg text-[10.5px] font-bold ${bgMode.textHeading} px-2 py-0.5 outline-none cursor-pointer hover:bg-slate-50 transition-colors focus:ring-0`}
+              >
+                <option value="mint">🌿 Soft Mint (Classic)</option>
+                <option value="cosmic">🌌 Cosmic Midnight (Dark)</option>
+                <option value="oceanic">🌊 Oceanic Depth (Dark Teal)</option>
+                <option value="cyberpunk">⚡ Cyber Amber (Charcoal Dark)</option>
+                <option value="nordic">🏔️ Nordic Sage (Light Slate)</option>
+                <option value="espresso">☕ Royal Espresso (Dark Gold)</option>
+                <option value="aura">✨ Aura Indigo (Light Purple)</option>
+                <option value="cream">🧁 Champagne Cream (Warm)</option>
+                <option value="velvet">🔮 Royal Velvet (Plum)</option>
+                <option value="sunset">🌸 Blush Sunset (Rose)</option>
+              </select>
+            </div>
+
             {/* Terminal Log In Active Session Badge */}
-            <div className="flex items-center gap-2 bg-slate-900 border border-slate-800 text-slate-100 rounded-lg p-1.5 px-3 shadow-sm">
+            <div className="flex items-center gap-2 bg-slate-900 border border-slate-800 text-slate-100 rounded-lg p-1.5 px-3 shadow-sm shrink-0">
               <div className="flex flex-col text-right pr-2.5 border-r border-slate-800 shrink-0">
                 <span className="text-[8px] text-slate-500 font-mono font-bold leading-none mb-0.5 tracking-wider">ACTIVE SESSION</span>
                 <span className={`text-[10px] font-bold leading-none uppercase ${
@@ -2704,9 +3160,9 @@ export default function App() {
               </button>
             </div>
 
-            <div className="text-right hidden sm:block">
-              <p className="text-xs font-mono font-medium text-slate-500">Branch Offline Mode</p>
-              <p className="text-[10px] text-slate-400 font-mono">Sync State: Secure Local (Cloud Vault Enabled)</p>
+            <div className="text-right hidden xl:block shrink-0">
+              <p className={`text-xs font-mono font-medium ${bgMode.textMuted}`}>Branch Offline Mode</p>
+              <p className={`text-[10px] ${bgMode.textMuted} font-mono opacity-80`}>Sync State: Secure Local (Cloud Vault Enabled)</p>
             </div>
           </div>
         </header>
@@ -2721,34 +3177,34 @@ export default function App() {
               <div className="flex-1 space-y-6">
                 {/* Statistics line */}
                 <div className="grid grid-cols-4 gap-4">
-                  <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200">
-                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Today's Total Sale</p>
-                    <h3 className="text-xl font-bold font-mono text-slate-900">₹{totalInvoicedRevenue.toFixed(2)}</h3>
-                    <p className="text-[9px] text-emerald-600 font-bold mt-1">✓ Live Session Sales</p>
+                  <div className={`p-4 rounded-xl shadow-xs border ${bgMode.cardBg}`}>
+                    <p className={`text-[10px] font-bold ${bgMode.textMuted} uppercase tracking-wider mb-1`}>Today's Total Sale</p>
+                    <h3 className={`text-xl font-bold font-mono ${bgMode.textHeading}`}>₹{totalInvoicedRevenue.toFixed(2)}</h3>
+                    <p className="text-[9px] text-emerald-500 font-bold mt-1">✓ Live Session Sales</p>
                   </div>
-                  <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200">
-                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Invoice Count</p>
-                    <h3 className="text-xl font-bold font-mono text-slate-900">{invoices.length} checkouts</h3>
-                    <p className="text-[9px] text-slate-400 mt-1">Avg basket: ₹{(totalInvoicedRevenue / Math.max(1, invoices.length)).toFixed(2)}</p>
+                  <div className={`p-4 rounded-xl shadow-xs border ${bgMode.cardBg}`}>
+                    <p className={`text-[10px] font-bold ${bgMode.textMuted} uppercase tracking-wider mb-1`}>Invoice Count</p>
+                    <h3 className={`text-xl font-bold font-mono ${bgMode.textHeading}`}>{invoices.length} checkouts</h3>
+                    <p className={`text-[9px] ${bgMode.textMuted} mt-1`}>Avg basket: ₹{(totalInvoicedRevenue / Math.max(1, invoices.length)).toFixed(2)}</p>
                   </div>
-                  <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200">
-                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Tax Liability (GST)</p>
-                    <h3 className="text-xl font-bold font-mono text-emerald-600">₹{totalTaxGSTLiability.toFixed(2)}</h3>
-                    <p className="text-[9px] text-slate-500 mt-1">Tax logs registered</p>
+                  <div className={`p-4 rounded-xl shadow-xs border ${bgMode.cardBg}`}>
+                    <p className={`text-[10px] font-bold ${bgMode.textMuted} uppercase tracking-wider mb-1`}>Tax Liability (GST)</p>
+                    <h3 className="text-xl font-bold font-mono text-emerald-500">₹{totalTaxGSTLiability.toFixed(2)}</h3>
+                    <p className={`text-[9px] ${bgMode.textMuted} mt-1`}>Tax logs registered</p>
                   </div>
-                  <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200">
-                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Active Cashier</p>
-                    <h3 className="text-base font-bold text-slate-900 truncate">{currentCashierName}</h3>
-                    <p className="text-[9px] text-slate-400 mt-1">
+                  <div className={`p-4 rounded-xl shadow-xs border ${bgMode.cardBg}`}>
+                    <p className={`text-[10px] font-bold ${bgMode.textMuted} uppercase tracking-wider mb-1`}>Active Cashier</p>
+                    <h3 className={`text-base font-bold truncate ${bgMode.textHeading}`}>{currentCashierName}</h3>
+                    <p className={`text-[9px] ${bgMode.textMuted} mt-1`}>
                       {currentRole === UserRole.ADMIN && currentCashierName.toLowerCase().includes("super") ? "SUPERADMIN" : currentRole} privilege
                     </p>
                   </div>
                 </div>
 
                 {/* Local Inventory Filters */}
-                <div className="bg-white p-4 rounded-xl border border-slate-200 space-y-4">
+                <div className={`p-4 rounded-xl border space-y-4 ${bgMode.cardBg}`}>
                   <div className="flex items-center justify-between">
-                    <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
+                    <h3 className={`text-sm font-bold flex items-center gap-2 ${bgMode.textHeading}`}>
                       <ShoppingBag className="w-4 h-4 text-emerald-500" />
                       Browse Catalogue / Click item to Add to Cart
                     </h3>
@@ -2759,8 +3215,8 @@ export default function App() {
                           onClick={() => setCategoryFilter(cat)}
                           className={`px-3 py-1 rounded-full text-xs font-medium cursor-pointer ${
                             categoryFilter === cat
-                              ? "bg-slate-900 text-white"
-                              : "bg-slate-100 hover:bg-slate-200 text-slate-600"
+                              ? "bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900"
+                              : `${bgMode.inputBg} ${bgMode.textMuted} hover:opacity-80`
                           }`}
                         >
                           {cat}
@@ -2776,9 +3232,9 @@ export default function App() {
                       placeholder="Search barcode, description, SKU..."
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
-                      className="w-full pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs focus:bg-white outline-none"
+                      className={`w-full pl-9 pr-4 py-2 border rounded-lg text-xs outline-none ${bgMode.inputBg} ${bgMode.border}`}
                     />
-                    <Search className="w-3.5 h-3.5 absolute left-3 top-3 text-slate-400" />
+                    <Search className={`w-3.5 h-3.5 absolute left-3 top-3 ${bgMode.textMuted}`} />
                   </div>
 
                   {/* Catalogue Grid */}
@@ -2791,28 +3247,28 @@ export default function App() {
                           <div
                             key={product.id}
                             onClick={() => handleAddToCart(product)}
-                            className="bg-white border border-slate-200/80 p-3 rounded-lg hover:border-emerald-500 cursor-pointer transition-all hover:shadow-sm relative group flex flex-col justify-between"
+                            className={`p-3 rounded-lg hover:border-emerald-500 cursor-pointer transition-all hover:shadow-sm relative group flex flex-col justify-between border ${bgMode.innerCard}`}
                           >
                             <div>
                               <div className="flex justify-between items-start mb-1">
-                                <span className="bg-slate-100 text-[9px] px-1.5 py-0.5 rounded font-bold font-mono text-slate-600 uppercase">
+                                <span className={`text-[9px] px-1.5 py-0.5 rounded font-bold font-mono uppercase ${bgMode.inputBg} ${bgMode.textMuted}`}>
                                   {product.category.substring(0, 10)}
                                 </span>
-                                <span className={`text-[10px] font-bold ${isLowStock ? "text-rose-500" : "text-emerald-600"}`}>
+                                <span className={`text-[10px] font-bold ${isLowStock ? "text-rose-500" : "text-emerald-500"}`}>
                                   {localStock} {product.unit}s
                                 </span>
                               </div>
-                              <h4 className="text-xs font-bold text-slate-800 line-clamp-2 min-h-[32px] group-hover:text-emerald-600 transition-colors">
+                              <h4 className={`text-xs font-bold line-clamp-2 min-h-[32px] group-hover:text-emerald-500 transition-colors ${bgMode.textHeading}`}>
                                 {product.name}
                               </h4>
-                              <p className="text-[10px] text-slate-400 font-mono mt-1">SKU: {product.sku}</p>
-                              <p className="text-[10px] text-slate-400 font-mono">Barcode: {product.barcode}</p>
+                              <p className={`text-[10px] font-mono mt-1 ${bgMode.textMuted}`}>SKU: {product.sku}</p>
+                              <p className={`text-[10px] font-mono ${bgMode.textMuted}`}>Barcode: {product.barcode}</p>
                             </div>
-                            <div className="mt-2 pt-2 border-t border-slate-100 flex items-center justify-between">
-                              <span className="text-sm font-black text-slate-900 font-mono">
+                            <div className={`mt-2 pt-2 border-t flex items-center justify-between ${bgMode.border}`}>
+                              <span className={`text-sm font-black font-mono ${bgMode.textHeading}`}>
                                 ₹{product.price.toFixed(2)}
                               </span>
-                              <span className="text-[10px] bg-emerald-50 text-emerald-700 px-1 rounded font-bold">
+                              <span className="text-[10px] bg-emerald-500/10 text-emerald-400 px-1 rounded font-bold">
                                 GST {product.gstRate}%
                               </span>
                             </div>
@@ -2857,7 +3313,7 @@ export default function App() {
                       Simulated APIs &amp; Integrations
                     </h4>
                     <p className="text-[11px] text-slate-300 leading-relaxed mb-3">
-                      ExpertAid incorporates full digital POS checkout integrations with thermal printer simulators:
+                      Expert POS incorporates full digital POS checkout integrations with thermal printer simulators:
                     </p>
                     <div className="space-y-1">
                       <div className="flex justify-between text-[10px] text-slate-400 border-b border-slate-800 pb-1">
@@ -2878,21 +3334,48 @@ export default function App() {
 
                 {/* PAST BILLS & REPRINT CENTER */}
                 <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-4 mt-6">
-                  <div className="flex items-center justify-between">
+                  <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-100 pb-3">
                     <div>
                       <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
                         <Printer className="w-4 h-4 text-emerald-500 animate-pulse" />
                         Past Bills &amp; Invoice Reprint Hub
                       </h3>
                       <p className="text-[11px] text-slate-400 mt-0.5">
-                        Reprint receipts or inspect completed checkouts for this branch session ({tenantAndBranchInvoices.length} checkouts)
+                        Reprint receipts or inspect completed checkouts ({reprintFilteredInvoices.length} matched)
                       </p>
+                    </div>
+
+                    {/* Search & Filter Controls */}
+                    <div className="flex flex-wrap items-center gap-2">
+                      <div className="relative">
+                        <input
+                          type="text"
+                          placeholder="Search Bill ID, Customer..."
+                          value={reprintSearch}
+                          onChange={(e) => setReprintSearch(e.target.value)}
+                          className="pl-8 pr-2 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs outline-none focus:bg-white focus:border-slate-300 w-44"
+                        />
+                        <Search className="w-3 h-3 absolute left-2.5 top-2.5 text-slate-400" />
+                      </div>
+
+                      <label className="flex items-center gap-1.5 text-xs text-slate-600 font-medium cursor-pointer select-none border border-slate-200 bg-slate-50 px-2.5 py-1.5 rounded-lg hover:bg-slate-100">
+                        <input
+                          type="checkbox"
+                          checked={reprintShowAllBranches}
+                          onChange={(e) => setReprintShowAllBranches(e.target.checked)}
+                          className="accent-slate-800 rounded cursor-pointer"
+                        />
+                        <span>Show all branches</span>
+                      </label>
                     </div>
                   </div>
 
-                  {tenantAndBranchInvoices.length === 0 ? (
-                    <div className="text-center py-6 text-slate-400 text-xs bg-slate-50 rounded-lg border border-dashed border-slate-200">
-                      📂 No bills generated in this session yet. Complete checkout above to log receipts.
+                  {reprintFilteredInvoices.length === 0 ? (
+                    <div className="text-center py-8 text-slate-400 text-xs bg-slate-50 rounded-lg border border-dashed border-slate-200 space-y-1">
+                      <p className="text-sm">📂 No bills or checkout receipts found.</p>
+                      <p className="text-[10px] text-slate-400 max-w-md mx-auto">
+                        If you have saved bills under a different branch, try checking <strong>"Show all branches"</strong> or adjust your search query.
+                      </p>
                     </div>
                   ) : (
                     <div className="overflow-x-auto max-h-[300px] overflow-y-auto">
@@ -2908,7 +3391,7 @@ export default function App() {
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100">
-                          {tenantAndBranchInvoices.slice().reverse().map((inv) => (
+                          {reprintFilteredInvoices.slice().reverse().map((inv) => (
                             <tr key={inv.id} className="hover:bg-slate-50 transition-colors">
                               <td className="px-3 py-2 font-mono text-[10px] font-bold text-slate-500">{inv.id}</td>
                               <td className="px-3 py-2">
@@ -2957,7 +3440,7 @@ export default function App() {
               </div>
 
               {/* ACTIVE CART DRAWER (RIGHT PANEL) - Exact Sleek Style */}
-              <div className="w-80 shrink-0 bg-white border border-slate-200 rounded-2xl shadow-xl flex flex-col h-[750px]">
+              <div className={`w-80 shrink-0 border rounded-2xl shadow-xl flex flex-col h-[750px] ${bgMode.cardBg}`}>
                 <div className="bg-slate-900 p-4 text-white rounded-t-2xl">
                   <div className="flex justify-between items-center">
                     <h4 className="font-display font-bold text-sm tracking-tight flex items-center gap-1.5">
@@ -2974,17 +3457,17 @@ export default function App() {
                 </div>
 
                 {/* Customer Billing Info */}
-                <div className="p-3 bg-slate-50 border-b border-slate-200 space-y-2">
+                <div className={`p-3 border-b space-y-2 ${bgMode.innerCard} ${bgMode.border}`}>
                   <div className="flex justify-between items-center">
-                    <label className="text-[10px] font-mono font-bold text-slate-600 uppercase flex items-center gap-1">
-                      <User className="w-3.5 h-3.5 text-emerald-600 shrink-0" /> Billing Customer
+                    <label className={`text-[10px] font-mono font-bold uppercase flex items-center gap-1 ${bgMode.textHeading}`}>
+                      <User className="w-3.5 h-3.5 text-emerald-500 shrink-0" /> Billing Customer
                     </label>
                     <button
                       onClick={() => {
                         setActiveTab("customers");
                         triggerNotification("Redirected to Loyalty registration form", "success");
                       }}
-                      className="text-[10px] text-emerald-600 font-bold hover:underline"
+                      className="text-[10px] text-emerald-500 font-bold hover:underline"
                     >
                       + Register Client
                     </button>
@@ -3006,7 +3489,7 @@ export default function App() {
                           setBillingCustomerPhone("");
                         }
                       }}
-                      className="w-full text-[11px] border border-slate-200 rounded p-1 bg-white font-medium"
+                      className={`w-full text-[11px] border rounded p-1 font-medium ${bgMode.inputBg} ${bgMode.border}`}
                     >
                       <option value="">-- Guest Checkout (Select Loyalty) --</option>
                       {customers.map((c) => (
@@ -3295,7 +3778,7 @@ export default function App() {
                           return (
                             p.name.toLowerCase().includes(query) ||
                             p.sku.toLowerCase().includes(query) ||
-                            p.barcode.toLowerCase().includes(query) ||
+                            (p.barcode || "").toLowerCase().includes(query) ||
                             (p.batchNumber && p.batchNumber.toLowerCase().includes(query)) ||
                             (p.supplierName && p.supplierName.toLowerCase().includes(query)) ||
                             (p.category && p.category.toLowerCase().includes(query))
@@ -4291,6 +4774,441 @@ export default function App() {
             </div>
           )}
 
+          {/* TAB: SAVED BILLS & IN-SYSTEM VIRTUAL PRINTER SIMULATOR */}
+          {activeTab === "saved-bills" && (
+            <div className="grid grid-cols-12 gap-6 animate-fadeIn" id="saved-bills-module">
+              {/* Left Side: Invoice/Receipt Registry - 5 Columns */}
+              <div className="col-span-5 bg-white p-6 rounded-xl border border-slate-200 shadow-sm flex flex-col h-[750px]">
+                <div className="space-y-4 mb-4">
+                  <div>
+                    <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
+                      <FileText className="w-5 h-5 text-emerald-500" />
+                      Invoice Registry &amp; Reprint Center
+                    </h3>
+                    <p className="text-[11px] text-slate-400 mt-0.5">
+                      Search, view, and simulate printing of bills generated across all sessions.
+                    </p>
+                  </div>
+
+                  {/* Search and Filters */}
+                  <div className="space-y-2 bg-slate-50/50 p-3 rounded-xl border border-slate-200">
+                    <div className="relative">
+                      <input
+                        type="text"
+                        placeholder="Search Invoice ID, Cashier, Customer..."
+                        value={reprintSearch}
+                        onChange={(e) => setReprintSearch(e.target.value)}
+                        className="pl-8 pr-3 py-2 w-full bg-white border border-slate-200 rounded-lg text-xs outline-none focus:border-slate-400 font-sans"
+                      />
+                      <Search className="w-3.5 h-3.5 absolute left-2.5 top-2.5 text-slate-400" />
+                    </div>
+
+                    <div className="flex justify-between items-center text-xs">
+                      <label className="flex items-center gap-2 text-slate-600 font-medium cursor-pointer select-none">
+                        <input
+                          type="checkbox"
+                          checked={reprintShowAllBranches}
+                          onChange={(e) => setReprintShowAllBranches(e.target.checked)}
+                          className="accent-slate-800 rounded cursor-pointer"
+                        />
+                        <span>Show other outlets/branches</span>
+                      </label>
+                      <span className="text-[10px] font-mono text-slate-400 bg-white px-2 py-0.5 rounded border border-slate-200 font-semibold">
+                        {reprintFilteredInvoices.length} checkouts
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Directory List Container */}
+                <div className="flex-1 overflow-y-auto pr-1 space-y-2">
+                  {reprintFilteredInvoices.length === 0 ? (
+                    <div className="text-center py-12 text-slate-400 text-xs border border-dashed border-slate-200 rounded-xl space-y-1.5 bg-slate-50/50">
+                      <p className="font-bold text-slate-600 text-sm">No bills found</p>
+                      <p className="text-[10px] text-slate-400 max-w-[200px] mx-auto">
+                        Check "Show other outlets" or adjust search keywords.
+                      </p>
+                    </div>
+                  ) : (
+                    reprintFilteredInvoices.slice().reverse().map((inv) => {
+                      const isSelected = selectedReprintInvoiceId === inv.id;
+                      return (
+                        <div
+                          key={inv.id}
+                          onClick={() => {
+                            setSelectedReprintInvoiceId(inv.id);
+                            setIsVirtualPrinting(false);
+                            setVirtualPrintDone(false);
+                          }}
+                          className={`p-3.5 rounded-xl border text-left transition-all cursor-pointer flex justify-between items-start gap-2 ${
+                            isSelected
+                              ? "bg-emerald-500/10 border-emerald-500/50 shadow-sm ring-1 ring-emerald-500/20"
+                              : "bg-white border-slate-200 hover:bg-slate-50"
+                          }`}
+                        >
+                          <div className="space-y-1 overflow-hidden">
+                            <div className="flex items-center gap-1.5">
+                              <span className="font-mono text-[10.5px] font-extrabold text-slate-900 leading-none">
+                                #{inv.id.substring(inv.id.lastIndexOf("-") + 1 || 0)}
+                              </span>
+                              <span className="text-[9px] bg-slate-100 border text-slate-500 px-1.5 py-0.2 rounded font-mono font-bold leading-none">
+                                {inv.storeBranchId}
+                              </span>
+                            </div>
+                            <p className="font-sans font-bold text-slate-800 text-xs truncate">
+                              {inv.customerName || "Guest Client"}
+                            </p>
+                            <p className="text-[9px] text-slate-400 font-mono leading-none">
+                              Cashier: {inv.cashierName} • {inv.date} {inv.time}
+                            </p>
+                          </div>
+                          <div className="text-right flex flex-col items-end gap-1 shrink-0">
+                            <span className="font-mono font-black text-slate-900 text-xs">
+                              ₹{inv.grandTotal.toFixed(2)}
+                            </span>
+                            <span className="text-[8.5px] font-mono font-bold uppercase px-1 rounded bg-slate-950 text-white">
+                              {inv.paymentMode}
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
+
+              {/* Right Side: Virtual Printer Terminal Console & Spooled Paper Preview - 7 Columns */}
+              <div className="col-span-7 flex flex-col h-[750px] gap-6">
+                {/* Simulator Options Panel */}
+                <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-4">
+                  <div className="flex justify-between items-center border-b border-slate-100 pb-2">
+                    <div>
+                      <h3 className="text-sm font-black text-slate-800 flex items-center gap-2">
+                        <Printer className="w-5 h-5 text-emerald-500" />
+                        Virtual Terminal Printer Simulator
+                      </h3>
+                      <p className="text-[11px] text-slate-400 mt-0.5">
+                        Test full thermal formatting, feed receipts, or run a high-fidelity sound-integrated print job.
+                      </p>
+                    </div>
+
+                    {/* Sound and format control */}
+                    <div className="flex items-center gap-2">
+                      <label className="flex items-center gap-1.5 text-xs text-slate-600 font-medium cursor-pointer select-none">
+                        <input
+                          type="checkbox"
+                          checked={soundEnabled}
+                          onChange={(e) => setSoundEnabled(e.target.checked)}
+                          className="accent-slate-800 rounded cursor-pointer"
+                        />
+                        <span>🔌 Play Sound FX</span>
+                      </label>
+                    </div>
+                  </div>
+
+                  {/* Formatting selectors */}
+                  <div className="grid grid-cols-4 gap-3">
+                    <div className="col-span-1 text-xs font-bold text-slate-500 flex items-center">
+                      Paper Width:
+                    </div>
+                    <div className="col-span-3 grid grid-cols-3 gap-2">
+                      <button
+                        onClick={() => setSelectedPrinterLayout("thermal-80mm")}
+                        className={`py-1.5 rounded-lg border font-bold text-[10px] flex items-center justify-center gap-1 transition-all cursor-pointer ${
+                          selectedPrinterLayout === "thermal-80mm"
+                            ? "bg-slate-900 text-white border-slate-900 shadow"
+                            : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
+                        }`}
+                      >
+                        <span>🧾 80mm POS Roll</span>
+                      </button>
+                      <button
+                        onClick={() => setSelectedPrinterLayout("thermal-58mm")}
+                        className={`py-1.5 rounded-lg border font-bold text-[10px] flex items-center justify-center gap-1 transition-all cursor-pointer ${
+                          selectedPrinterLayout === "thermal-58mm"
+                            ? "bg-slate-900 text-white border-slate-900 shadow"
+                            : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
+                        }`}
+                      >
+                        <span>🎟️ 58mm Handheld</span>
+                      </button>
+                      <button
+                        onClick={() => setSelectedPrinterLayout("standard-a4")}
+                        className={`py-1.5 rounded-lg border font-bold text-[10px] flex items-center justify-center gap-1 transition-all cursor-pointer ${
+                          selectedPrinterLayout === "standard-a4"
+                            ? "bg-slate-900 text-white border-slate-900 shadow"
+                            : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
+                        }`}
+                      >
+                        <span>🖨️ Office A4 Page</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Virtual Hardware Terminal Cabinet & Tape Roll */}
+                <div className="flex-1 bg-slate-900 rounded-2xl border-4 border-slate-950 p-6 flex flex-col justify-between relative overflow-hidden shadow-2xl">
+                  {/* Skeuomorphic hardware status lights */}
+                  <div className="absolute top-4 left-6 flex items-center gap-3 z-20">
+                    <div className="flex items-center gap-1.5 bg-slate-950 px-2.5 py-1 rounded-full border border-slate-800">
+                      <span className={`w-2.5 h-2.5 rounded-full ${isVirtualPrinting ? "bg-amber-500 animate-ping" : "bg-emerald-500"} shadow-inner`}></span>
+                      <span className="text-[9px] font-mono font-bold text-slate-400">
+                        {isVirtualPrinting ? "PRINTING..." : "PRINTER READY / ONLINE"}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Top Feed Paper Slot / Blade Cut representation */}
+                  <div className="absolute top-14 left-0 right-0 h-4 bg-gradient-to-b from-slate-950 to-slate-900 border-b border-slate-800 shadow-inner z-10 flex items-center justify-center">
+                    <div className="w-[90%] h-[2px] bg-slate-950 rounded-full shadow-[0_0_8px_rgba(0,0,0,1)]"></div>
+                  </div>
+
+                  {/* Virtual Thermal Paper roll scrolling container */}
+                  <div className="flex-1 flex justify-center items-start pt-14 pb-16 overflow-y-auto scrollbar-thin scrollbar-thumb-slate-800">
+                    {selectedReprintInvoiceId ? (
+                      (() => {
+                        const selectedInv = invoices.find(inv => inv.id === selectedReprintInvoiceId);
+                        if (!selectedInv) return null;
+                        return (
+                          <div
+                            id="virtual-receipt-roll-wrapper"
+                            className={`transition-all duration-1000 origin-top shadow-[0_15px_30px_rgba(0,0,0,0.4)] ${
+                              isVirtualPrinting 
+                                ? "animate-printFeed max-h-[800px] opacity-100" 
+                                : virtualPrintDone 
+                                ? "max-h-[800px] opacity-100" 
+                                : "max-h-0 opacity-0 pointer-events-none"
+                            }`}
+                          >
+                            {/* Inner receipt paper tape */}
+                            <div 
+                              className={`bg-white text-slate-900 font-mono text-[10px] p-5 border-x-2 border-dashed border-slate-300 relative ${
+                                selectedPrinterLayout === "thermal-58mm" ? "w-[240px]" : selectedPrinterLayout === "standard-a4" ? "w-[450px]" : "w-[330px]"
+                              }`}
+                              style={{ 
+                                backgroundImage: "linear-gradient(rgba(240,240,240,0.1) 1px, transparent 1px)",
+                                backgroundSize: "100% 20px"
+                              }}
+                            >
+                              {/* Thermal paper header teeth */}
+                              <div className="absolute top-0 left-0 right-0 h-1 bg-[radial-gradient(circle,transparent_20%,#0f172a_21%)] bg-repeat-x bg-[length:6px_6px]" style={{ transform: "translateY(-4px)" }}></div>
+                              
+                              <div className="text-center space-y-1 mb-4 font-sans">
+                                <h4 className="font-display font-black text-xs uppercase tracking-tight text-slate-950">
+                                  ⭐ EXPERT-AID HYPERMARKETS ⭐
+                                </h4>
+                                <p className="text-[9px] text-slate-500 font-mono font-semibold">
+                                  {branches.find(b => b.id === selectedInv.storeBranchId)?.name || "Downtown Smart Hypermarket"}
+                                </p>
+                                <p className="text-[9.5px] text-slate-500 font-mono leading-tight">
+                                  {branches.find(b => b.id === selectedInv.storeBranchId)?.address || "Central Plaza, Main Avenue, New Delhi"}
+                                </p>
+                                <p className="text-[8.5px] text-slate-400 font-mono">
+                                  Phone: {branches.find(b => b.id === selectedInv.storeBranchId)?.phone || "811-23456789"}
+                                </p>
+                              </div>
+
+                              <div className="border-t border-dashed border-slate-300 py-2 space-y-0.5 text-[9.5px]">
+                                <div className="flex justify-between">
+                                  <span>Invoice ID:</span>
+                                  <span className="font-bold">{selectedInv.id}</span>
+                                </div>
+                                <div className="flex justify-between">
+                                  <span>GSTIN Check:</span>
+                                  <span className="font-bold uppercase">07AAAAA1111A1Z1</span>
+                                </div>
+                                <div className="flex justify-between">
+                                  <span>Sales Cashier:</span>
+                                  <span>{selectedInv.cashierName}</span>
+                                </div>
+                                <div className="flex justify-between">
+                                  <span>Timestamp:</span>
+                                  <span>{selectedInv.date} {selectedInv.time}</span>
+                                </div>
+                                {selectedInv.customerName && (
+                                  <div className="flex justify-between border-t border-dashed border-slate-300 pt-1">
+                                    <span>Loyalty Customer:</span>
+                                    <span className="font-bold truncate max-w-[150px]">{selectedInv.customerName}</span>
+                                  </div>
+                                )}
+                                {selectedInv.customerPhone && (
+                                  <div className="flex justify-between">
+                                    <span>Mobile No:</span>
+                                    <span className="font-bold">{selectedInv.customerPhone}</span>
+                                  </div>
+                                )}
+                              </div>
+
+                              {/* Items list */}
+                              <div className="border-t border-slate-300 py-2 space-y-1 text-[9px]">
+                                <div className="grid grid-cols-4 font-bold border-b border-slate-200 pb-1 text-slate-950">
+                                  <span className="col-span-2">Description Particular</span>
+                                  <span className="text-right">Qty</span>
+                                  <span className="text-right">Total</span>
+                                </div>
+                                {selectedInv.items.map((it, idx) => (
+                                  <div key={idx} className="grid grid-cols-4 gap-1 text-slate-800">
+                                    <span className="col-span-2 truncate font-sans text-[9.5px]">{it.name}</span>
+                                    <span className="text-right">{it.quantity} {it.unit}</span>
+                                    <span className="text-right font-bold">₹{(it.price * it.quantity).toFixed(2)}</span>
+                                  </div>
+                                ))}
+                              </div>
+
+                              {/* Calculations */}
+                              <div className="border-t border-dashed border-slate-300 pt-2 space-y-0.5 text-[9.5px]">
+                                <div className="flex justify-between">
+                                  <span>Basket Tax (GST):</span>
+                                  <span>₹{selectedInv.taxAmount.toFixed(2)}</span>
+                                </div>
+                                <div className="flex justify-between">
+                                  <span>Promo discount code:</span>
+                                  <span>{selectedInv.couponCode ? `-${showInvoicePrintPercentApplied(selectedInv)}` : "₹0.00"}</span>
+                                </div>
+                                <div className="flex justify-between text-[11px] font-black text-slate-950 border-t border-dashed border-slate-300 pt-1.5">
+                                  <span>TOTAL NET PAYABLE:</span>
+                                  <span>₹{selectedInv.grandTotal.toFixed(2)}</span>
+                                </div>
+                                {selectedInv.paymentMode === PaymentMode.CASH && (
+                                  <>
+                                    <div className="flex justify-between p-0.5 mt-1 bg-slate-100 rounded text-slate-700">
+                                      <span>Tendered Cash:</span>
+                                      <span>₹{Number(selectedInv.cashReceived || selectedInv.grandTotal).toFixed(2)}</span>
+                                    </div>
+                                    <div className="flex justify-between text-slate-700">
+                                      <span>Returned Change:</span>
+                                      <span>₹{Number(selectedInv.changeReturned || 0).toFixed(2)}</span>
+                                    </div>
+                                  </>
+                                )}
+                                <div className="flex justify-between items-center pt-1">
+                                  <span>Tender Mode:</span>
+                                  <span className="font-extrabold text-[8.5px] bg-slate-950 text-white px-1.5 py-0.2 rounded">{selectedInv.paymentMode}</span>
+                                </div>
+                              </div>
+
+                              <div className="p-2 bg-slate-50 border border-slate-200 rounded text-[8.5px] font-sans leading-normal text-center text-slate-500 mt-4">
+                                ⭐ Loyalty members: spent ₹{selectedInv.grandTotal} to award +{Math.floor(selectedInv.grandTotal/10)} Loyalty Points dynamically.<br />Thank you for shopping at Expert POS!
+                              </div>
+
+                              {/* Thermal paper tear teeth at bottom */}
+                              <div className="absolute bottom-0 left-0 right-0 h-1 bg-[radial-gradient(circle,transparent_20%,#0f172a_21%)] bg-repeat-x bg-[length:6px_6px] rotate-180" style={{ transform: "translateY(4px)" }}></div>
+                            </div>
+                          </div>
+                        );
+                      })()
+                    ) : (
+                      <div className="text-center py-24 text-slate-500 max-w-sm space-y-4 font-sans select-none my-auto">
+                        <div className="w-16 h-16 bg-slate-800 rounded-full border border-slate-700 flex items-center justify-center mx-auto shadow-inner text-2xl">
+                          📥
+                        </div>
+                        <div className="space-y-1">
+                          <p className="font-bold text-slate-200">No Receipt Loaded</p>
+                          <p className="text-[11px] text-slate-400">
+                            Select any invoice bill from the left registry panel to inspect its print layout and print-preview without physical printers.
+                          </p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Bottom mechanical/visual bezel controls */}
+                  <div className="h-14 bg-gradient-to-t from-slate-950 to-slate-900 border-t border-slate-800 -mx-6 -mb-6 px-6 flex items-center justify-between shadow-2xl z-10">
+                    <span className="text-[8px] font-mono text-slate-500 uppercase tracking-widest font-black">
+                      EXP-AID Virtual Spooler Node 2.4
+                    </span>
+
+                    <div className="flex gap-2">
+                      {selectedReprintInvoiceId && (
+                        <>
+                          <button
+                            type="button"
+                            disabled={isVirtualPrinting}
+                            onClick={async () => {
+                              setIsVirtualPrinting(true);
+                              setVirtualPrintDone(false);
+                              if (soundEnabled) {
+                                playThermalPrintSound();
+                              }
+                              triggerNotification("Sending print job to virtual paper spooler...", "success");
+                              setTimeout(() => {
+                                setIsVirtualPrinting(false);
+                                setVirtualPrintDone(true);
+                                triggerNotification("Printed successfully! Receipt is spooled on-screen. Copy text or save offline PDF below.", "success");
+                              }, 1300);
+                            }}
+                            className="px-3 py-1 bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-[10px] font-extrabold uppercase rounded border border-emerald-600 shadow-sm shadow-emerald-500/20 active:scale-95 transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                          >
+                            <Printer className="w-3.5 h-3.5" />
+                            <span>{virtualPrintDone ? "Feed Paper Print again" : "Virtual Print / Spool Paper"}</span>
+                          </button>
+
+                          {virtualPrintDone && (
+                            <>
+                              <button
+                                type="button"
+                                onClick={async () => {
+                                  const selectedInv = invoices.find(inv => inv.id === selectedReprintInvoiceId);
+                                  if (!selectedInv) return;
+                                  triggerNotification("Downloading high-fidelity PDF...", "success");
+                                  const success = await saveElementAsPDF("virtual-receipt-roll-wrapper", `Receipt-${selectedInv.id}.pdf`, selectedPrinterLayout);
+                                  if (success) {
+                                    triggerNotification("PDF receipt downloaded successfully to local system.", "success");
+                                  } else {
+                                    triggerNotification("Failed to generate PDF receipt.", "warning");
+                                  }
+                                }}
+                                className="px-3 py-1 bg-blue-600 hover:bg-blue-500 text-white text-[10px] font-extrabold uppercase rounded border border-blue-700 shadow-sm active:scale-95 transition-all flex items-center gap-1.5 cursor-pointer"
+                              >
+                                <Download className="w-3.5 h-3.5" />
+                                <span>Save PDF</span>
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const selectedInv = invoices.find(inv => inv.id === selectedReprintInvoiceId);
+                                  if (!selectedInv) return;
+                                  
+                                  const itemsText = selectedInv.items.map(it => `[${it.quantity} ${it.unit}] ${it.name} @ ₹${it.price} = ₹${(it.price * it.quantity).toFixed(2)}`).join("\n");
+                                  const textCopy = `
+========================================
+       EXPERT-AID HYPERMARKETS
+========================================
+Invoice ID: ${selectedInv.id}
+Timestamp:  ${selectedInv.date} ${selectedInv.time}
+Cashier:    ${selectedInv.cashierName}
+----------------------------------------
+Particular Description:
+${itemsText}
+----------------------------------------
+Basket Tax GST: ₹${selectedInv.taxAmount.toFixed(2)}
+Promo Code:     ${selectedInv.couponCode || "None"}
+TOTAL PAYABLE:  ₹${selectedInv.grandTotal.toFixed(2)}
+Payment Mode:   ${selectedInv.paymentMode}
+========================================
+  Thank you for shopping at Expert POS!
+========================================
+`;
+                                  navigator.clipboard.writeText(textCopy.trim());
+                                  triggerNotification("Copied high-fidelity plain text receipt to system clipboard!", "success");
+                                }}
+                                className="px-3 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-[10px] font-extrabold uppercase rounded border border-slate-700 shadow-sm active:scale-95 transition-all flex items-center gap-1.5 cursor-pointer"
+                              >
+                                <Copy className="w-3.5 h-3.5" />
+                                <span>Copy Text</span>
+                              </button>
+                            </>
+                          )}
+                        </>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* TAB 5: BRANCH STORES, EXPENSES, & CASH SESSIONS */}
           {activeTab === "expenses" && (
             <div className="grid grid-cols-2 gap-6 animate-fadeIn" id="stores-module-layout">
@@ -4774,6 +5692,11 @@ export default function App() {
                   ? "✓ Formats perfectly for standard 3-inch roll POS receipt printers."
                   : "✓ Formats tightly for mini 2-inch roll handheld thermal printers."}
               </p>
+              {typeof window !== "undefined" && window.self !== window.top && (
+                <div className="mt-1.5 p-2 bg-amber-50 rounded-xl border border-amber-200 text-[9px] font-semibold leading-normal text-amber-800 text-left">
+                  <strong>ℹ️ Print Preview & Saving:</strong> Since you are running in the sandbox workspace, browser print popups are restricted in the iframe. Click <strong>"Save PDF Receipt"</strong> below to instantly compile and download a high-fidelity PDF formatted to your choice to save locally!
+                </div>
+              )}
             </div>
 
             {/* Thermal Receipt Body */}
@@ -4873,13 +5796,14 @@ export default function App() {
               </div>
 
               <div className="p-3 bg-slate-100 rounded text-[9px] font-sans leading-tight text-center text-slate-500 border border-slate-200">
-                ⭐ Loyalty members: spent ₹{showInvoicePrintPreview.grandTotal} to award +{Math.floor(showInvoicePrintPreview.grandTotal/10)} Loyalty Points dynamically.<br />Thank you for shopping at ExpertAid!
+                ⭐ Loyalty members: spent ₹{showInvoicePrintPreview.grandTotal} to award +{Math.floor(showInvoicePrintPreview.grandTotal/10)} Loyalty Points dynamically.<br />Thank you for shopping at Expert POS!
               </div>
             </div>
 
-            {/* Print trigger simulated */}
-            <div className="pt-2">
+            {/* Print triggers */}
+            <div className="pt-2 space-y-2">
               <button
+                type="button"
                 onClick={async () => {
                   triggerNotification(`Initiating print receipt request for ${selectedPrinterLayout === 'standard-a4' ? 'Standard Printer' : 'Thermal Printer'}...`, "success");
                   const success = await printElementById("invoice-receipt-theme", selectedPrinterLayout);
@@ -4889,11 +5813,49 @@ export default function App() {
                     triggerNotification("Print spool / PDF compilation failed.", "warning");
                   }
                 }}
-                className="w-full py-2.5 bg-slate-900 border hover:bg-slate-800 text-white rounded-lg text-xs font-bold font-display tracking-wider uppercase transition-transform flex items-center justify-center gap-2 cursor-pointer"
+                className="w-full py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-xs font-bold font-display tracking-wider uppercase transition-all flex items-center justify-center gap-2 cursor-pointer shadow-sm"
               >
                 <Printer className="w-4 h-4 text-emerald-400" />
                 Spool Paper Print Receipt
               </button>
+
+              <button
+                type="button"
+                onClick={async () => {
+                  triggerNotification(`Compiling high-fidelity PDF copy of receipt and launching local downloader...`, "success");
+                  const success = await saveElementAsPDF("invoice-receipt-theme", `Receipt-${showInvoicePrintPreview.id}.pdf`, selectedPrinterLayout);
+                  if (success) {
+                    triggerNotification("PDF receipt downloaded successfully to local system.", "success");
+                  } else {
+                    triggerNotification("Failed to generate PDF receipt.", "warning");
+                  }
+                }}
+                className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold font-display tracking-wider uppercase transition-all flex items-center justify-center gap-2 cursor-pointer shadow-sm"
+              >
+                <Download className="w-4 h-4 text-blue-100" />
+                Save PDF Receipt
+              </button>
+
+              <div className="border-t border-slate-200 pt-2 mt-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const billId = showInvoicePrintPreview.id;
+                    setShowInvoicePrintPreview(null);
+                    setSelectedReprintInvoiceId(billId);
+                    setActiveTab("saved-bills");
+                    setIsVirtualPrinting(false);
+                    setVirtualPrintDone(false);
+                    triggerNotification("Opened Virtual Printer Simulator! Click 'Virtual Print / Spool Paper' below.", "success");
+                  }}
+                  className="w-full py-2 bg-emerald-550 hover:bg-emerald-600 text-emerald-800 hover:text-emerald-950 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-lg text-[10.5px] font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                >
+                  <span>🔌 Open Virtual Printer Simulator</span>
+                </button>
+                <p className="text-[8.5px] text-slate-400 font-mono text-center mt-1 leading-normal">
+                  No hardware printer connected? Use our in-system skeuomorphic virtual spooler with mechanical sounds and paper feed effects!
+                </p>
+              </div>
             </div>
           </div>
         </div>

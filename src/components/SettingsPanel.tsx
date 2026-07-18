@@ -64,7 +64,7 @@ export default function SettingsPanel({
   // --- Enterprise settings states ---
   const [enterpriseSettings, setEnterpriseSettings] = useState({
     // A. Business Settings
-    companyName: "ExpertAID POS Solutions",
+    companyName: "Expert POS Solutions",
     businessLocations: "Main Street HQ, Branch Block A, South Logistics Port",
     aivoviaActive: true,
     businessGoals: "Achieve 10,000 transactions/month, 99.9% printer uptime",
@@ -77,7 +77,7 @@ export default function SettingsPanel({
 
     // C. Miscellaneous Settings
     softwareVersion: "v4.12.0-stable (Enterprise build)",
-    emailSmtpServer: "smtp.expertaid-pos.net:587",
+    emailSmtpServer: "smtp.expertpos-billing.net:587",
     transactionCategoryList: "Sales, Returns, Restocking, Vendor Settlement, Petty Cash",
     emailAlertsEnabled: true,
     aboutText: "SaaS Enterprise ERP platform with localized Indian taxation modules.",
@@ -93,7 +93,7 @@ export default function SettingsPanel({
     // E. Billing Settings
     billingGracePeriod: 14,
     discountAllowedMax: 25,
-    invoicePrefix: "INV-EA-2026-",
+    invoicePrefix: "INV-EP-2026-",
     billingTermsText: "Net 15 days. 2% interest per month on delayed payments.",
     autoSmsEnabled: true,
     defaultWarehouseCode: "WH-SOUTH-01",
@@ -122,12 +122,12 @@ export default function SettingsPanel({
 
     // J. Plugins Settings
     recaptchaKey: "6Lcxxxxxxxxxxxxxxxxxxxxxxxxx",
-    urlShortenerUrl: "https://shrt.expertaid.in/api",
+    urlShortenerUrl: "https://shrt.expertpos.in/api",
     smsGatewayProvider: "Twilio Enterprise SMS Router",
     currencyExchangeApiKey: "ex_api_live_xxxxxxxxxxx",
 
     // K. Templates Settings
-    emailTemplateBody: "Dear {customer_name}, thank you for shopping at ExpertAID. Your invoice {invoice_no} total is {invoice_total}.",
+    emailTemplateBody: "Dear {customer_name}, thank you for shopping at Expert POS. Your invoice {invoice_no} total is {invoice_total}.",
     smsTemplateBody: "Txn Alert: Paid {amount} on {date}. Ref: {invoice_no}.",
     printInvoiceTemplate: "Classic Thermal 80mm Layout with Custom GST breakdown",
     templateThemeAccent: "#2563EB",
@@ -335,7 +335,7 @@ export default function SettingsPanel({
       autoPrintReceipt: true,
       enableSound: true,
       receiptHeader: "OFFICIAL RETAIL CASH INVOICE",
-      receiptFooter: "Thank you for shopping! Powered by ExpertAid SaaS",
+      receiptFooter: "Thank you for shopping! Powered by Expert POS SaaS",
       maxDiscountAllowed: 25
     };
   });
@@ -470,7 +470,7 @@ export default function SettingsPanel({
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = `expertaid_${activeTenant.subdomain}_backup.json`;
+    link.download = `expertpos_${activeTenant.subdomain}_backup.json`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -697,7 +697,7 @@ export default function SettingsPanel({
                   className={`flex-1 bg-transparent border-0 text-slate-100 py-2 px-3 text-xs focus:outline-none placeholder-slate-700 font-sans ${currentRole !== UserRole.ADMIN ? "cursor-not-allowed text-slate-500" : ""}`}
                 />
                 <span className="bg-slate-900 border-l border-slate-800 text-[9.5px] font-bold text-slate-400 px-3 py-2 shrink-0 select-none">
-                  .expertaid.com
+                  .expertpos.com
                 </span>
               </div>
             </div>
@@ -1464,7 +1464,7 @@ export default function SettingsPanel({
                 🛡️ Backup &amp; Rollbacks
               </h3>
               <p className="text-[11px] text-slate-400 leading-relaxed leading-normal">
-                ExpertAid operates with zero-knowledge local client-side encryption. Secure exports pack full inventory sheets, sales journals, and custom registers to safeguard against loss.
+                Expert POS operates with zero-knowledge local client-side encryption. Secure exports pack full inventory sheets, sales journals, and custom registers to safeguard against loss.
               </p>
 
               <div className="flex flex-col gap-2 pt-1.5">

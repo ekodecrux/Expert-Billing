@@ -1,5 +1,5 @@
 {
-  "name": "EXPERTAID SMART BILLING HUB",
+  "name": "EXPERT POS SMART BILLING HUB",
   "description": "A high-performance Super Market Billing and POS Application with Stock and Store Management featuring AI-driven Stock Optimization and customer billing copilots.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]

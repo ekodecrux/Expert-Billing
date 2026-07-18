@@ -74,3 +74,25 @@
     display: none !important;
   }
 }
+
+/* Simulated Thermal Printer Rollout Animation */
+@keyframes printFeed {
+  0% {
+    max-height: 0px;
+    opacity: 0.1;
+    transform: translateY(-50px) scaleY(0.05);
+  }
+  10% {
+    max-height: 50px;
+    opacity: 0.8;
+  }
+  100% {
+    max-height: 1000px;
+    opacity: 1;
+    transform: translateY(0) scaleY(1);
+  }
+}
+
+.animate-printFeed {
+  animation: printFeed 1.4s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
