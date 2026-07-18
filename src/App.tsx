@@ -582,6 +582,21 @@ export default function App() {
       try {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed) && parsed.length > 0) {
+          let migrated = false;
+          const updated = parsed.map((t: any) => {
+            let name = t.name || "";
+            if (name.includes("ExpertAid") || name.includes("Expertaid") || name.includes("Expert-Aid")) {
+              migrated = true;
+              name = name.replace(/ExpertAid/g, "Expert POS")
+                         .replace(/Expertaid/g, "Expert POS")
+                         .replace(/Expert-Aid/g, "Expert POS");
+            }
+            return { ...t, name };
+          });
+          if (migrated) {
+            localStorage.setItem("expert_aid_tenants", JSON.stringify(updated));
+            return updated;
+          }
           return parsed;
         }
       } catch (e) {
@@ -4995,7 +5010,7 @@ export default function App() {
                               
                               <div className="text-center space-y-1 mb-4 font-sans">
                                 <h4 className="font-display font-black text-xs uppercase tracking-tight text-slate-950">
-                                  ⭐ EXPERT-AID HYPERMARKETS ⭐
+                                  ⭐ EXPERT POS HYPERMARKETS ⭐
                                 </h4>
                                 <p className="text-[9px] text-slate-500 font-mono font-semibold">
                                   {branches.find(b => b.id === selectedInv.storeBranchId)?.name || "Downtown Smart Hypermarket"}
@@ -5173,7 +5188,7 @@ export default function App() {
                                   const itemsText = selectedInv.items.map(it => `[${it.quantity} ${it.unit}] ${it.name} @ ₹${it.price} = ₹${(it.price * it.quantity).toFixed(2)}`).join("\n");
                                   const textCopy = `
 ========================================
-       EXPERT-AID HYPERMARKETS
+        EXPERT POS HYPERMARKETS
 ========================================
 Invoice ID: ${selectedInv.id}
 Timestamp:  ${selectedInv.date} ${selectedInv.time}
@@ -5703,7 +5718,7 @@ Payment Mode:   ${selectedInv.paymentMode}
             <div className="bg-amber-50/20 p-4 rounded-xl border border-slate-200 font-mono text-[11px] text-slate-800 space-y-3" id="invoice-receipt-theme">
               <div className="text-center font-sans space-y-1">
                 <h4 className="font-display font-black text-sm tracking-tight text-slate-900">
-                  EXPERT-AID HYPERMARKETS
+                  EXPERT POS HYPERMARKETS
                 </h4>
                 <p className="text-[10px] text-slate-500 font-mono">
                   {currentBranch?.name || "Branch #01 Outlet"}

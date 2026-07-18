@@ -223,7 +223,7 @@ export default function StaffRegistry({
 
   // Helper matching to filter credentials belonging specifically to this active tenant, plus branch control if MANAGER
   const filteredStaff = credentialsList.filter((cred) => {
-    if (cred.email === "superadmin@expertaid.com") return false;
+    if (cred.email === "superadmin@expertpos.com") return false;
     
     let isTenantMatch = false;
     
@@ -751,7 +751,7 @@ export default function StaffRegistry({
                 <input
                   type="email"
                   required
-                  placeholder={`name@${activeTenant.adminEmail.split("@")[1] || "expertaid.com"}`}
+                  placeholder={`name@${activeTenant.adminEmail.split("@")[1] || "expertpos.com"}`}
                   value={newEmail}
                   onChange={(e) => setNewEmail(e.target.value)}
                   className="w-full bg-white border border-stone-350 text-stone-800 rounded-xl py-2 px-3 text-xs focus:outline-none focus:border-stone-500 placeholder-stone-400 font-mono"
@@ -1581,7 +1581,7 @@ export default function StaffRegistry({
                     <input
                       type="email"
                       required
-                      placeholder="e.g. sharma.admin@expertaid.com"
+                      placeholder="e.g. sharma.admin@expertpos.com"
                       value={editStaffEmail}
                       onChange={(e) => setEditStaffEmail(e.target.value)}
                       className="w-full bg-white border border-stone-300 text-stone-850 rounded-xl py-2 pl-9 pr-4 text-xs font-semibold placeholder-stone-400 focus:outline-none focus:border-stone-500 focus:bg-white shadow-xs"

@@ -14,7 +14,7 @@ export default function SmartCopilot({ currentRole, currentBranch, products, onA
     {
       id: "init",
       sender: "copilot",
-      text: `👋 **Hello! I am your ExpertAid Smart Billing Co-pilot.**\n\nI can help you analyze inventory, suggest promotional coupon wording, construct quick product bundles, or solve expiring shelf-life items. \n\n*How can I assist you as **${currentRole}** today?*`,
+      text: `👋 **Hello! I am your Expert POS Smart Billing Co-pilot.**\n\nI can help you analyze inventory, suggest promotional coupon wording, construct quick product bundles, or solve expiring shelf-life items. \n\n*How can I assist you as **${currentRole}** today?*`,
       suggestions: [
         "Check expiring shelf-life items",
         "Generate a discount code strategy",

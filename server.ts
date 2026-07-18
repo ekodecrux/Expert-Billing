@@ -709,7 +709,7 @@ app.post("/api/copilot", async (req, res) => {
   }
 
   try {
-    const systemPrompt = `You are "Smart Billing Co-pilot" built inside the ExpertAid Smart Billing application for supermarkets.
+    const systemPrompt = `You are "Smart Billing Co-pilot" built inside the Expert POS Smart Billing application for supermarkets.
 The manager/cashier is asking you a question or asking to do a smart task.
 You have access to current dashboard state:
 - Low-stock warning products: ${JSON.stringify(context?.lowStockProducts || [])}
@@ -764,6 +764,6 @@ Maintain a smart, encouraging, conversational retail-manager tone. Keep formatti
   }
 
   app.listen(PORT, "0.0.0.0", () => {
-    console.log(`ExpertAid Smart Billing running on http://localhost:${PORT}`);
+    console.log(`Expert POS Smart Billing running on http://localhost:${PORT}`);
   });
 })();

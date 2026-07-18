@@ -551,10 +551,19 @@ function generateVectorPDFFallback(
   filename: string,
   layoutProfile: "standard-a4" | "thermal-80mm" | "thermal-58mm"
 ): boolean {
+  const cleanText = (str: string): string => {
+    if (!str) return "";
+    // Replace Indian Rupee symbol with "Rs." so it doesn't corrupt subsequent character encodings in jsPDF standard fonts
+    let cleaned = str.replace(/₹/g, "Rs.");
+    // Normalize non-breaking spaces and other potential corrupting symbols
+    cleaned = cleaned.replace(/\u00a0/g, " ");
+    return cleaned;
+  };
+
   try {
     if (elementId === "invoice-receipt-theme") {
       const titleEl = element.querySelector("h4");
-      const storeTitle = titleEl ? titleEl.textContent?.trim() : "EXPERT-AID HYPERMARKETS";
+      const storeTitle = titleEl ? titleEl.textContent?.trim() : "EXPERT POS HYPERMARKETS";
 
       const subtitleEls = element.querySelectorAll("p");
       const branchName = subtitleEls[0] ? subtitleEls[0].textContent?.trim() : "";
@@ -628,24 +637,24 @@ function generateVectorPDFFallback(
       pdf.setFontSize(10);
       let y = 20;
 
-      pdf.text(storeTitle || "EXPERT-AID HYPERMARKETS", pdfWidth / 2, y, { align: "center" });
+      pdf.text(cleanText(storeTitle || "EXPERT POS HYPERMARKETS"), pdfWidth / 2, y, { align: "center" });
       y += 12;
 
       pdf.setFont("courier", "normal");
       pdf.setFontSize(8);
       if (branchName) {
-        pdf.text(branchName, pdfWidth / 2, y, { align: "center" });
+        pdf.text(cleanText(branchName), pdfWidth / 2, y, { align: "center" });
         y += 10;
       }
       if (branchAddress) {
-        const splitAddress = pdf.splitTextToSize(branchAddress, pdfWidth - 20);
+        const splitAddress = pdf.splitTextToSize(cleanText(branchAddress), pdfWidth - 20);
         splitAddress.forEach((line: string) => {
           pdf.text(line, pdfWidth / 2, y, { align: "center" });
           y += 10;
         });
       }
       if (branchPhone) {
-        pdf.text(branchPhone, pdfWidth / 2, y, { align: "center" });
+        pdf.text(cleanText(branchPhone), pdfWidth / 2, y, { align: "center" });
         y += 10;
       }
 
@@ -655,9 +664,9 @@ function generateVectorPDFFallback(
 
       metaLines.forEach(m => {
         pdf.setFont("courier", "normal");
-        pdf.text(m.key, 10, y);
+        pdf.text(cleanText(m.key), 10, y);
         pdf.setFont("courier", "bold");
-        pdf.text(m.val, pdfWidth - 10, y, { align: "right" });
+        pdf.text(cleanText(m.val), pdfWidth - 10, y, { align: "right" });
         y += 11;
       });
 
@@ -675,7 +684,7 @@ function generateVectorPDFFallback(
 
       pdf.setFont("courier", "normal");
       items.forEach(it => {
-        const nameLines = pdf.splitTextToSize(it.name, pdfWidth - 90);
+        const nameLines = pdf.splitTextToSize(cleanText(it.name), pdfWidth - 90);
         const startY = y;
         nameLines.forEach((line: string) => {
           pdf.text(line, 10, y);
@@ -684,8 +693,8 @@ function generateVectorPDFFallback(
         
         const finalY = Math.max(y - 10, startY);
         pdf.setFont("courier", "bold");
-        pdf.text(it.qty, pdfWidth - 65, finalY, { align: "right" });
-        pdf.text(it.price, pdfWidth - 10, finalY, { align: "right" });
+        pdf.text(cleanText(it.qty), pdfWidth - 65, finalY, { align: "right" });
+        pdf.text(cleanText(it.price), pdfWidth - 10, finalY, { align: "right" });
         pdf.setFont("courier", "normal");
         y = Math.max(y, finalY + 11);
       });
@@ -698,14 +707,14 @@ function generateVectorPDFFallback(
         if (m.key.includes("TOTAL PAYABLE")) {
           pdf.setFont("courier", "bold");
           pdf.setFontSize(10);
-          pdf.text(m.key, 10, y);
-          pdf.text(m.val, pdfWidth - 10, y, { align: "right" });
+          pdf.text(cleanText(m.key), 10, y);
+          pdf.text(cleanText(m.val), pdfWidth - 10, y, { align: "right" });
           y += 13;
         } else {
           pdf.setFont("courier", "normal");
           pdf.setFontSize(8);
-          pdf.text(m.key, 10, y);
-          pdf.text(m.val, pdfWidth - 10, y, { align: "right" });
+          pdf.text(cleanText(m.key), 10, y);
+          pdf.text(cleanText(m.val), pdfWidth - 10, y, { align: "right" });
           y += 11;
         }
       });
@@ -785,7 +794,7 @@ function generateVectorPDFFallback(
       pdf.setTextColor(15, 23, 42); 
       pdf.text("INVOICE", 550, 40, { align: "right" });
       pdf.setFontSize(11);
-      pdf.text(`ID: ${invoiceId}`, 550, 55, { align: "right" });
+      pdf.text(`ID: ${cleanText(invoiceId)}`, 550, 55, { align: "right" });
 
       y += 25;
       pdf.line(40, y, 555, y);
@@ -801,19 +810,19 @@ function generateVectorPDFFallback(
       pdf.setFont("helvetica", "bold");
       pdf.setFontSize(12);
       pdf.setTextColor(15, 23, 42);
-      pdf.text(tenantName, 45, y);
+      pdf.text(cleanText(tenantName), 45, y);
       
       pdf.setFont("helvetica", "normal");
       pdf.setFontSize(10);
-      pdf.text(`Issued: ${issueDate}`, 320, y);
+      pdf.text(cleanText(`Issued: ${issueDate}`), 320, y);
       y += 14;
 
-      pdf.text(`Tenant ID: ${tenantId}`, 45, y);
-      pdf.text(`Due: ${dueDate}`, 320, y);
+      pdf.text(cleanText(`Tenant ID: ${tenantId}`), 45, y);
+      pdf.text(cleanText(`Due: ${dueDate}`), 320, y);
       y += 14;
 
       if (paymentMethod !== "N/A") {
-        pdf.text(`Payment Method: ${paymentMethod}`, 320, y);
+        pdf.text(cleanText(`Payment Method: ${paymentMethod}`), 320, y);
         y += 14;
       }
 
@@ -834,9 +843,9 @@ function generateVectorPDFFallback(
       pdf.setTextColor(15, 23, 42);
       items.forEach(it => {
         pdf.setFont("helvetica", "bold");
-        pdf.text(it.description, 40, y);
+        pdf.text(cleanText(it.description), 40, y);
         pdf.setFont("helvetica", "normal");
-        pdf.text(it.amount, 550, y, { align: "right" });
+        pdf.text(cleanText(it.amount), 550, y, { align: "right" });
         y += 20;
       });
 
@@ -850,15 +859,15 @@ function generateVectorPDFFallback(
           pdf.setFont("helvetica", "bold");
           pdf.setFontSize(12);
           pdf.setTextColor(37, 99, 235);
-          pdf.text(c.label, 320, y);
-          pdf.text(c.value, 550, y, { align: "right" });
+          pdf.text(cleanText(c.label), 320, y);
+          pdf.text(cleanText(c.value), 550, y, { align: "right" });
           pdf.setFontSize(10);
           y += 22;
         } else {
           pdf.setFont("helvetica", "normal");
           pdf.setTextColor(100, 116, 139);
-          pdf.text(c.label, 320, y);
-          pdf.text(c.value, 550, y, { align: "right" });
+          pdf.text(cleanText(c.label), 320, y);
+          pdf.text(cleanText(c.value), 550, y, { align: "right" });
           y += 16;
         }
       });
@@ -951,7 +960,7 @@ function generateVectorPDFFallback(
         pdf.rect(40, y - 10, 842 - 80, 18, "F");
         
         headers.forEach((h, i) => {
-          pdf.text(h, 45 + (i * colWidth), y + 2);
+          pdf.text(cleanText(h), 45 + (i * colWidth), y + 2);
         });
         y += 18;
 
@@ -967,7 +976,7 @@ function generateVectorPDFFallback(
             pdf.setFillColor(241, 245, 249);
             pdf.rect(40, y - 10, 842 - 80, 18, "F");
             headers.forEach((h, i) => {
-              pdf.text(h, 45 + (i * colWidth), y + 2);
+              pdf.text(cleanText(h), 45 + (i * colWidth), y + 2);
             });
             y += 18;
             pdf.setFont("helvetica", "normal");
@@ -980,7 +989,7 @@ function generateVectorPDFFallback(
 
           row.forEach((cell, cIdx) => {
             const val = cell.length > 30 ? cell.slice(0, 27) + "..." : cell;
-            pdf.text(val, 45 + (cIdx * colWidth), y);
+            pdf.text(cleanText(val), 45 + (cIdx * colWidth), y);
           });
           y += 15;
         });
