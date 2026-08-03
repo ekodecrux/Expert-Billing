@@ -79,6 +79,7 @@ import SuperAdminConsole from "./components/SuperAdminConsole";
 import StaffRegistry from "./components/StaffRegistry";
 import SettingsPanel from "./components/SettingsPanel";
 import { ExpertAidLogo } from "./components/ExpertAidLogo";
+import { ProductLabelGeneratorModal } from "./components/ProductLabelGeneratorModal";
 
 const PRESET_TENANTS: Tenant[] = [
   {
@@ -939,6 +940,8 @@ export default function App() {
   
   // Dialog & Form states
   const [activeBarcodeUrl, setActiveBarcodeUrl] = useState<string | null>(null);
+  const [isLabelModalOpen, setIsLabelModalOpen] = useState<boolean>(false);
+  const [labelModalProduct, setLabelModalProduct] = useState<Product | null>(null);
   const [showInvoicePrintPreview, setShowInvoicePrintPreview] = useState<Invoice | null>(null);
   const [selectedPrinterLayout, setSelectedPrinterLayout] = useState<"standard-a4" | "thermal-80mm" | "thermal-58mm">("thermal-80mm");
   const [categoryFilter, setCategoryFilter] = useState<string>("All");
@@ -2139,10 +2142,17 @@ export default function App() {
     }
   };
 
+  // Open full Product Label Generator Modal
+  const openLabelGeneratorModal = (prod: Product | null = null) => {
+    setLabelModalProduct(prod);
+    setIsLabelModalOpen(true);
+  };
+
   // Active product barcode generator UI view trigger
   const triggerBarcodeGenerator = (sku: string) => {
-    // Generate beautiful clean SVG simulation barcode lines
     setActiveBarcodeUrl(sku);
+    const prod = tenantProducts.find((p) => p.sku === sku) || null;
+    openLabelGeneratorModal(prod);
   };
 
   // Active products filter categorization
@@ -3240,16 +3250,27 @@ export default function App() {
                     </div>
                   </div>
 
-                  {/* Manual search query */}
-                  <div className="relative">
-                    <input
-                      type="text"
-                      placeholder="Search barcode, description, SKU..."
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                      className={`w-full pl-9 pr-4 py-2 border rounded-lg text-xs outline-none ${bgMode.inputBg} ${bgMode.border}`}
-                    />
-                    <Search className={`w-3.5 h-3.5 absolute left-3 top-3 ${bgMode.textMuted}`} />
+                  {/* Manual search query & Label Generator button */}
+                  <div className="flex items-center gap-2">
+                    <div className="relative flex-1">
+                      <input
+                        type="text"
+                        placeholder="Search barcode, description, SKU..."
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        className={`w-full pl-9 pr-4 py-2 border rounded-lg text-xs outline-none ${bgMode.inputBg} ${bgMode.border}`}
+                      />
+                      <Search className={`w-3.5 h-3.5 absolute left-3 top-3 ${bgMode.textMuted}`} />
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => openLabelGeneratorModal(null)}
+                      className="px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 shrink-0 transition-colors cursor-pointer shadow-sm"
+                      title="Open Product Barcode & Shelf Label Generator"
+                    >
+                      <Tag className="w-3.5 h-3.5" />
+                      <span>Print Labels</span>
+                    </button>
                   </div>
 
                   {/* Catalogue Grid */}
@@ -3283,9 +3304,22 @@ export default function App() {
                               <span className={`text-sm font-black font-mono ${bgMode.textHeading}`}>
                                 ₹{product.price.toFixed(2)}
                               </span>
-                              <span className="text-[10px] bg-emerald-500/10 text-emerald-400 px-1 rounded font-bold">
-                                GST {product.gstRate}%
-                              </span>
+                              <div className="flex items-center gap-1">
+                                <span className="text-[10px] bg-emerald-500/10 text-emerald-400 px-1 rounded font-bold">
+                                  GST {product.gstRate}%
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    openLabelGeneratorModal(product);
+                                  }}
+                                  className="p-1 rounded bg-slate-100 dark:bg-slate-800 hover:bg-emerald-500 hover:text-white transition-colors text-slate-500 cursor-pointer"
+                                  title="Generate & print barcode label for this product"
+                                >
+                                  <Tag className="w-3 h-3" />
+                                </button>
+                              </div>
                             </div>
                           </div>
                         );
@@ -3759,15 +3793,26 @@ export default function App() {
                     <h3 className="text-sm font-bold text-slate-800">Warehouse Inventory Tracking &amp; Replaces Logbook</h3>
                     <p className="text-xs text-slate-400 font-mono">Total tracking of {tenantProducts.length} products</p>
                   </div>
-                  <div className="relative w-full sm:w-80">
-                    <input
-                      type="text"
-                      placeholder="Search stock by name, SKU, barcode, supplier..."
-                      value={inventorySearchQuery}
-                      onChange={(e) => setInventorySearchQuery(e.target.value)}
-                      className="w-full bg-white border border-slate-200 rounded-lg py-1.5 pl-9 pr-4 text-xs focus:outline-none focus:border-slate-400 placeholder-slate-400 text-slate-800 font-sans shadow-sm"
-                    />
-                    <Search className="w-3.5 h-3.5 absolute left-3 top-2.5 text-slate-400" />
+                  <div className="flex items-center gap-2 w-full sm:w-auto">
+                    <div className="relative w-full sm:w-80">
+                      <input
+                        type="text"
+                        placeholder="Search stock by name, SKU, barcode, supplier..."
+                        value={inventorySearchQuery}
+                        onChange={(e) => setInventorySearchQuery(e.target.value)}
+                        className="w-full bg-white border border-slate-200 rounded-lg py-1.5 pl-9 pr-4 text-xs focus:outline-none focus:border-slate-400 placeholder-slate-400 text-slate-800 font-sans shadow-sm"
+                      />
+                      <Search className="w-3.5 h-3.5 absolute left-3 top-2.5 text-slate-400" />
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => openLabelGeneratorModal(null)}
+                      className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 shrink-0 transition-colors cursor-pointer shadow-sm"
+                      title="Generate and print shelf barcode labels"
+                    >
+                      <Tag className="w-3.5 h-3.5" />
+                      <span>Print Labels</span>
+                    </button>
                   </div>
                 </div>
 
@@ -4553,9 +4598,17 @@ export default function App() {
                 <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
                   <div className="flex justify-between items-center mb-4">
                     <div>
-                      <h3 className="text-sm font-bold text-slate-800">Dynamic Simulated Barcode Catalogue &amp; Pricing</h3>
-                      <p className="text-xs text-slate-400">Click SKU to view dynamic vector barcode representation</p>
+                      <h3 className="text-sm font-bold text-slate-800">Dynamic Barcode Catalogue &amp; Pricing</h3>
+                      <p className="text-xs text-slate-400">Click SKU or Printer icon to generate &amp; print high-resolution barcode labels</p>
                     </div>
+                    <button
+                      type="button"
+                      onClick={() => openLabelGeneratorModal(null)}
+                      className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-extrabold flex items-center gap-2 transition-colors cursor-pointer shadow-sm"
+                    >
+                      <Tag className="w-4 h-4" />
+                      <span>Print Shelf Labels / Stickers</span>
+                    </button>
                   </div>
 
                   <div className="grid grid-cols-2 gap-4 max-h-[500px] overflow-y-auto pr-2">
@@ -5875,6 +5928,16 @@ Payment Mode:   ${selectedInv.paymentMode}
           </div>
         </div>
       )}
+
+      {/* PRODUCT BARCODE & SHELF LABEL GENERATOR MODAL */}
+      <ProductLabelGeneratorModal
+        isOpen={isLabelModalOpen}
+        onClose={() => setIsLabelModalOpen(false)}
+        products={tenantProducts}
+        initialSelectedProduct={labelModalProduct}
+        storeName="EXPERT POS HYPERMARKETS"
+        currencySymbol="₹"
+      />
 
       {/* PRODUCT DELETION CONFIRMATION DIALOG (IFRAME SECURE MODAL) */}
       {productToDelete && (
