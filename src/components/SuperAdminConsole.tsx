@@ -154,6 +154,41 @@ export default function SuperAdminConsole({
   const [tenantNotes, setTenantNotes] = useState<string>("Workspace sandbox isolated successfully.");
   const [tenantLogo, setTenantLogo] = useState<string>("");
 
+  // Advanced Onboarding Wizard & Multi-tenant States
+  const [onboardingWizardStep, setOnboardingWizardStep] = useState<1 | 2 | 3 | 4>(1);
+  const [tenantCategory, setTenantCategory] = useState<string>("Supermarket & Grocery");
+  const [tenantAddress, setTenantAddress] = useState<string>("Commercial Complex, Sector 18");
+  const [tenantCity, setTenantCity] = useState<string>("New Delhi");
+  const [tenantAdminFullName, setTenantAdminFullName] = useState<string>("");
+  const [forcePasswordReset, setForcePasswordReset] = useState<boolean>(false);
+  const [tenantMaxStaff, setTenantMaxStaff] = useState<number>(10);
+  const [tenantCurrencySymbol, setTenantCurrencySymbol] = useState<string>("₹");
+  const [hardwareAllocated, setHardwareAllocated] = useState<string[]>([
+    "80mm Thermal Receipt Printer",
+    "Heavy Duty Cash Drawer",
+    "Wireless Laser Barcode Scanner"
+  ]);
+  const [featureModulesEnabled, setFeatureModulesEnabled] = useState<Record<string, boolean>>({
+    aiCopilot: true,
+    expiryTracking: true,
+    loyaltyPoints: true,
+    branchTransfers: true,
+    barcodeGenerator: true
+  });
+  const [seedSampleProducts, setSeedSampleProducts] = useState<boolean>(true);
+
+  // Modals & Popups for Client Onboarding
+  const [showOnboardingSuccessModal, setShowOnboardingSuccessModal] = useState<Tenant | null>(null);
+  const [showBulkImportModal, setShowBulkImportModal] = useState<boolean>(false);
+  const [bulkCsvInput, setBulkCsvInput] = useState<string>("");
+  const [resetCredTenant, setResetCredTenant] = useState<Tenant | null>(null);
+  const [resetCredPassword, setResetCredPassword] = useState<string>("");
+  const [resetCredUid, setResetCredUid] = useState<string>("");
+  const [showResetPasswordModal, setShowResetPasswordModal] = useState<boolean>(false);
+  const [filterTenantTier, setFilterTenantTier] = useState<string>("ALL");
+  const [filterTenantStatus, setFilterTenantStatus] = useState<string>("ALL");
+  const [filterTenantKyc, setFilterTenantKyc] = useState<string>("ALL");
+
   // Edit Client Form States
   const [editTenantName, setEditTenantName] = useState<string>("");
   const [editTenantSubdomain, setEditTenantSubdomain] = useState<string>("");
@@ -597,6 +632,7 @@ export default function SuperAdminConsole({
     };
     setPaymentsList(prev => [...prev, newOnboardingPayment]);
     
+    setShowOnboardingSuccessModal(newTenant);
     triggerNotification(`SaaS Slice for '${name}' provisioned successfully with Admin ID: ${loginId}!`, "success");
 
     // Reset Form
@@ -609,6 +645,135 @@ export default function SuperAdminConsole({
     setTenantGstin("");
     setTenantNotes("");
     setTenantLogo("");
+  };
+
+  // Bulk Client Onboarding CSV Importer Handler
+  const handleBulkImportClients = () => {
+    if (!bulkCsvInput.trim()) {
+      triggerNotification("Please paste CSV client records to import.", "warning");
+      return;
+    }
+
+    const lines = bulkCsvInput.trim().split("\n");
+    let importedCount = 0;
+    const newTenants: Tenant[] = [];
+    const newProfiles: AccessProfile[] = [];
+
+    lines.forEach((line, idx) => {
+      const parts = line.split(",").map(p => p.trim());
+      if (parts.length >= 2) {
+        const cName = parts[0] || `Client ${idx + 1}`;
+        const cEmail = parts[1] || `admin@client${idx + 1}.com`;
+        const cSubdomain = parts[2] || cName.toLowerCase().replace(/[^a-z0-9]/g, "").substring(0, 15) || `tenant${Date.now()}_${idx}`;
+        const cPhone = parts[3] || "+91 9800000000";
+        const cTier = (parts[4]?.toUpperCase() as "STARTER" | "GROWTH" | "ENTERPRISE") || "GROWTH";
+        const cSetupFee = Number(parts[5]) || 50000;
+        const cMonthlyFee = Number(parts[6]) || 3500;
+
+        if (!tenantsList.some(t => t.subdomain === cSubdomain || t.adminEmail === cEmail)) {
+          const tId = `TENANT-0${tenantsList.length + importedCount + 10}`;
+          const adminUid = cEmail.split("@")[0] || `admin_${cSubdomain}`;
+          
+          const tObj: Tenant = {
+            id: tId,
+            name: cName,
+            subdomain: cSubdomain,
+            adminEmail: cEmail,
+            phone: cPhone,
+            currency: "₹",
+            tier: cTier,
+            status: "ACTIVE",
+            createdAt: new Date().toISOString(),
+            colorTheme: "indigo",
+            maxBranches: 5,
+            maxProducts: 1000,
+            onboardingFeePaid: cSetupFee,
+            monthlySubscriptionFee: cMonthlyFee,
+            billingCycle: "MONTHLY",
+            subscriptionStartDate: new Date().toISOString().split('T')[0],
+            subscriptionEndDate: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+            contractDurationMonths: 12,
+            renewalStatus: "AUTO_RENEW",
+            onboardingSetupStatus: "COMPLETED",
+            hardwareProvisioned: ["80mm Thermal Printer"],
+            onboardingNotes: "Bulk CSV onboarded client workspace.",
+            clientVerificationStatus: "VERIFIED",
+            gstinRegNumber: "07EXPAID" + Math.floor(1000 + Math.random() * 9000) + "A1Z1"
+          };
+
+          const pObj: AccessProfile = {
+            role: UserRole.ADMIN,
+            title: `${cName} (Admin)`,
+            email: adminUid,
+            password: "Password@123",
+            name: `${cName} Admin`,
+            color: "emerald",
+            gradient: "from-emerald-500 to-teal-600",
+            bgHover: "hover:bg-emerald-500/5",
+            accent: "text-emerald-500",
+            border: "border-emerald-500/20",
+            glow: "shadow-emerald-500/10",
+            description: `Administrator for bulk onboarded client: ${cName}.`,
+            privileges: ["POS Sandbox access", "Audit profit & tax ledgers", "Modify products/suppliers", "Administer loyalty points"]
+          };
+
+          newTenants.push(tObj);
+          newProfiles.push(pObj);
+          importedCount++;
+        }
+      }
+    });
+
+    if (importedCount > 0) {
+      onUpdateTenants([...tenantsList, ...newTenants]);
+      onUpdateCredentials([...credentialsList, ...newProfiles]);
+      triggerNotification(`Successfully onboarded ${importedCount} corporate clients in bulk!`, "success");
+      setBulkCsvInput("");
+      setShowBulkImportModal(false);
+    } else {
+      triggerNotification("No new valid clients were found in CSV input or subdomains collided.", "warning");
+    }
+  };
+
+  // Reset Client Credentials Handler
+  const handleResetClientCredentials = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!resetCredTenant) return;
+    const uid = resetCredUid.trim().toLowerCase();
+    const password = resetCredPassword.trim();
+
+    if (!uid || !password) {
+      triggerNotification("Please fill in Admin UID and Password.", "warning");
+      return;
+    }
+
+    const updatedCreds = credentialsList.map(c => {
+      if (c.email.toLowerCase() === resetCredTenant.adminEmail.toLowerCase() ||
+          c.title.toLowerCase().includes(resetCredTenant.name.toLowerCase())) {
+        return {
+          ...c,
+          email: uid,
+          password: password
+        };
+      }
+      return c;
+    });
+
+    const updatedTenants = tenantsList.map(t => {
+      if (t.id === resetCredTenant.id) {
+        return {
+          ...t,
+          adminEmail: uid.includes("@") ? uid : t.adminEmail
+        };
+      }
+      return t;
+    });
+
+    onUpdateCredentials(updatedCreds);
+    onUpdateTenants(updatedTenants);
+    triggerNotification(`Credentials reset for '${resetCredTenant.name}'. Admin UID: ${uid}`, "success");
+    setShowResetPasswordModal(false);
+    setResetCredTenant(null);
   };
 
   // Save Edited Tenant Handler
@@ -927,6 +1092,7 @@ export default function SuperAdminConsole({
           <p className="text-[9px] text-[#4b5b9f] font-extrabold font-mono tracking-widest uppercase px-3 mb-2">Core Command Control</p>
           {[
             { id: "dashboard", label: "Dashboard", icon: Activity },
+            { id: "onboarding", label: "Client Onboarding", icon: Sparkles },
             { id: "clients", label: "Clients Directory", icon: Building },
             { id: "users", label: "User Directory", icon: Users },
             { id: "billing", label: "Billing & Ledger", icon: Coins },
@@ -1597,6 +1763,669 @@ export default function SuperAdminConsole({
               </div>
 
             </div>
+        ) : activeMenuTab === "onboarding" ? (
+          /* Client Onboarding Module View */
+          <div className="flex-1 p-6 lg:p-8 space-y-6 overflow-y-auto min-w-0" id="super-onboarding-module">
+            {/* Onboarding Header Banner */}
+            <div className="bg-gradient-to-r from-slate-900 via-blue-950 to-slate-900 text-white p-6 rounded-3xl shadow-xl border border-slate-800 relative overflow-hidden flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
+              <div className="space-y-2 max-w-2xl relative z-10">
+                <div className="flex items-center gap-2">
+                  <span className="px-2.5 py-1 rounded-full bg-blue-500/20 text-blue-300 font-mono text-[10px] font-bold uppercase tracking-wider border border-blue-500/30 flex items-center gap-1.5">
+                    <Sparkles className="w-3 h-3 text-amber-400" /> Client Onboarding Center
+                  </span>
+                  <span className="text-[10px] text-slate-400 font-mono">Multi-Tenant Database Isolation Engine</span>
+                </div>
+                <h1 className="text-2xl font-black text-white tracking-tight">Onboard New Corporate Client</h1>
+                <p className="text-xs text-slate-300 leading-relaxed font-medium">
+                  Provision new multi-tenant database sandboxes with custom domain handles (<code className="text-blue-300 font-mono">tenant.expertpos.com</code>), resource quotas, pricing contracts, and administrator security credentials.
+                </p>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-3 relative z-10">
+                <button
+                  type="button"
+                  onClick={() => setShowBulkImportModal(true)}
+                  className="px-4 py-2.5 bg-white/10 hover:bg-white/20 text-white border border-white/20 rounded-xl text-xs font-extrabold flex items-center gap-2 backdrop-blur-md transition-all cursor-pointer shadow-lg"
+                >
+                  <UploadCloud className="w-4 h-4 text-emerald-400" />
+                  <span>Bulk CSV Import</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveMenuTab("clients")}
+                  className="px-4 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-extrabold flex items-center gap-2 transition-all cursor-pointer shadow-lg shadow-blue-500/25"
+                >
+                  <Building className="w-4 h-4" />
+                  <span>View All Clients ({tenantsList.length})</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Top KPI Metrics Bar */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              <div className="bg-white p-4 rounded-2xl border border-slate-200/60 shadow-sm flex items-center justify-between">
+                <div>
+                  <p className="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest">Total Clients Onboarded</p>
+                  <p className="text-2xl font-black text-slate-900 mt-1">{tenantsList.length}</p>
+                  <p className="text-[10px] text-emerald-600 font-bold mt-0.5">Active Tenant Sandboxes</p>
+                </div>
+                <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center font-bold">
+                  <Building className="w-5 h-5" />
+                </div>
+              </div>
+
+              <div className="bg-white p-4 rounded-2xl border border-slate-200/60 shadow-sm flex items-center justify-between">
+                <div>
+                  <p className="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest">Total Setup Fees Revenue</p>
+                  <p className="text-2xl font-black text-slate-900 mt-1">₹ {totalOnboardingFeeSourced.toLocaleString()}</p>
+                  <p className="text-[10px] text-blue-600 font-bold mt-0.5">Provisioning Invoices Logged</p>
+                </div>
+                <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold">
+                  <Coins className="w-5 h-5" />
+                </div>
+              </div>
+
+              <div className="bg-white p-4 rounded-2xl border border-slate-200/60 shadow-sm flex items-center justify-between">
+                <div>
+                  <p className="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest">Active Subdomain Slices</p>
+                  <p className="text-2xl font-black text-slate-900 mt-1">{tenantsList.filter(t => t.status === "ACTIVE").length}</p>
+                  <p className="text-[10px] text-purple-600 font-bold mt-0.5">Live Database Instances</p>
+                </div>
+                <div className="w-10 h-10 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center font-bold">
+                  <Globe className="w-5 h-5" />
+                </div>
+              </div>
+
+              <div className="bg-white p-4 rounded-2xl border border-slate-200/60 shadow-sm flex items-center justify-between">
+                <div>
+                  <p className="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest">System Isolation Engine</p>
+                  <p className="text-2xl font-black text-emerald-600 mt-1">100% Operational</p>
+                  <p className="text-[10px] text-slate-400 font-bold mt-0.5">Multi-tenant Security Rule Active</p>
+                </div>
+                <div className="w-10 h-10 rounded-xl bg-teal-50 text-teal-600 flex items-center justify-center font-bold">
+                  <ShieldCheck className="w-5 h-5" />
+                </div>
+              </div>
+            </div>
+
+            {/* Split Content Layout: Wizard Form (Left) & Sandbox Live Card Preview (Right) */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
+              
+              {/* Left Column: 4-Step Onboarding Form Wizard (Takes 2 Cols) */}
+              <div className="lg:col-span-2 bg-white rounded-3xl border border-slate-200/80 shadow-md p-6 lg:p-8 space-y-6">
+                
+                {/* Step Indicator Tabs */}
+                <div className="flex items-center justify-between border-b border-slate-100 pb-5">
+                  {[
+                    { step: 1, label: "1. Business Profile", icon: Building },
+                    { step: 2, label: "2. Admin Security", icon: ShieldCheck },
+                    { step: 3, label: "3. Plan & Pricing", icon: Coins },
+                    { step: 4, label: "4. Quotas & Hardware", icon: Layers }
+                  ].map((s) => {
+                    const StepIcon = s.icon;
+                    const isActive = onboardingWizardStep === s.step;
+                    const isDone = onboardingWizardStep > s.step;
+                    return (
+                      <button
+                        key={s.step}
+                        type="button"
+                        onClick={() => setOnboardingWizardStep(s.step as any)}
+                        className={`flex items-center gap-2 text-xs font-black tracking-wide transition-all cursor-pointer ${
+                          isActive
+                            ? "text-blue-600 border-b-2 border-blue-600 pb-1"
+                            : isDone
+                            ? "text-emerald-600"
+                            : "text-slate-400 hover:text-slate-600"
+                        }`}
+                      >
+                        <div className={`w-6 h-6 rounded-lg flex items-center justify-center text-[10px] font-bold ${
+                          isActive ? "bg-blue-600 text-white" : isDone ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-500"
+                        }`}>
+                          {isDone ? <Check className="w-3.5 h-3.5" /> : s.step}
+                        </div>
+                        <span className="hidden sm:inline">{s.label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+
+                <form onSubmit={handleOnboardTenant} className="space-y-6">
+                  
+                  {/* STEP 1: BUSINESS IDENTITY & BRANDING */}
+                  {onboardingWizardStep === 1 && (
+                    <div className="space-y-5 animate-fadeIn">
+                      <div className="border-b border-slate-100 pb-3">
+                        <h3 className="text-base font-extrabold text-slate-900 flex items-center gap-2">
+                          <Building className="w-5 h-5 text-blue-600" />
+                          <span>Client Business Profile & Domain Isolation</span>
+                        </h3>
+                        <p className="text-xs text-slate-400 font-medium">Set corporate identity, category, and custom subdomain slug.</p>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div className="space-y-1.5 sm:col-span-2">
+                          <label className="text-[11px] font-extrabold text-slate-700 uppercase tracking-wider block">
+                            Corporate Client Name <span className="text-rose-500">*</span>
+                          </label>
+                          <input
+                            type="text"
+                            required
+                            placeholder="e.g. Metro Mart Supermarket Pvt. Ltd."
+                            value={tenantName}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              setTenantName(val);
+                              const autoSub = val.toLowerCase().replace(/[^a-z0-9]/g, "").substring(0, 15);
+                              setTenantSubdomain(autoSub);
+                            }}
+                            className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs font-bold text-slate-800 focus:bg-white focus:border-blue-500 focus:outline-none transition-all placeholder:font-normal placeholder:text-slate-400"
+                          />
+                        </div>
+
+                        <div className="space-y-1.5 sm:col-span-2">
+                          <label className="text-[11px] font-extrabold text-slate-700 uppercase tracking-wider block">
+                            Isolated Subdomain Slug (<code className="text-blue-600 font-mono">tenant.expertpos.com</code>)
+                          </label>
+                          <div className="flex items-center gap-2">
+                            <div className="relative flex-1">
+                              <input
+                                type="text"
+                                placeholder="metromart"
+                                value={tenantSubdomain}
+                                onChange={(e) => setTenantSubdomain(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ""))}
+                                className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-4 pr-32 py-2.5 text-xs font-mono font-bold text-blue-600 focus:bg-white focus:border-blue-500 focus:outline-none transition-all"
+                              />
+                              <span className="absolute right-3 top-2.5 text-xs text-slate-400 font-mono font-bold">.expertpos.com</span>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const gen = (tenantName || "tenant").toLowerCase().replace(/[^a-z0-9]/g, "").substring(0, 12) + Math.floor(10 + Math.random() * 89);
+                                setTenantSubdomain(gen);
+                              }}
+                              className="px-3 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-all cursor-pointer shrink-0"
+                            >
+                              Auto Slug
+                            </button>
+                          </div>
+                          {tenantSubdomain && (
+                            <p className="text-[10px] font-mono text-emerald-600 flex items-center gap-1 font-bold mt-1">
+                              <CheckCircle className="w-3 h-3" /> https://{tenantSubdomain}.expertpos.com is available for sandbox binding
+                            </p>
+                          )}
+                        </div>
+
+                        <div className="space-y-1.5">
+                          <label className="text-[11px] font-extrabold text-slate-700 uppercase tracking-wider block">Business Category / Vertical</label>
+                          <select
+                            value={tenantCategory}
+                            onChange={(e) => setTenantCategory(e.target.value)}
+                            className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs font-bold text-slate-800 focus:bg-white focus:border-blue-500 focus:outline-none transition-all cursor-pointer"
+                          >
+                            <option value="Supermarket & Grocery">Supermarket & Grocery</option>
+                            <option value="Pharmacy & Healthcare">Pharmacy & Healthcare</option>
+                            <option value="Apparel & Fashion">Apparel & Fashion</option>
+                            <option value="Electronics & Mobile">Electronics & Mobile</option>
+                            <option value="Hardware & Tools">Hardware & Tools</option>
+                            <option value="Restaurant & Cafe">Restaurant & Cafe</option>
+                            <option value="Wholesale Distribution">Wholesale Distribution</option>
+                            <option value="Specialty Retail">Specialty Retail</option>
+                          </select>
+                        </div>
+
+                        <div className="space-y-1.5">
+                          <label className="text-[11px] font-extrabold text-slate-700 uppercase tracking-wider block">GSTIN / Tax ID</label>
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="text"
+                              placeholder="07AAAAA0000A1Z5"
+                              value={tenantGstin}
+                              onChange={(e) => setTenantGstin(e.target.value.toUpperCase())}
+                              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs font-mono font-bold text-slate-800 focus:bg-white focus:border-blue-500 focus:outline-none transition-all"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => setTenantGstin("07EXPAID" + Math.floor(1000 + Math.random() * 9000) + "A1Z1")}
+                              className="px-2.5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-[10px] font-bold shrink-0 transition-all cursor-pointer"
+                            >
+                              Gen GSTIN
+                            </button>
+                          </div>
+                        </div>
+
+                        <div className="space-y-1.5">
+                          <label className="text-[11px] font-extrabold text-slate-700 uppercase tracking-wider block">
+                            Corporate Contact Email <span className="text-rose-500">*</span>
+                          </label>
+                          <input
+                            type="email"
+                            required
+                            placeholder="admin@metromart.com"
+                            value={tenantAdminEmail}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              setTenantAdminEmail(val);
+                              if (!tenantAdminLoginId) setTenantAdminLoginId(val);
+                            }}
+                            className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs font-bold text-slate-800 focus:bg-white focus:border-blue-500 focus:outline-none transition-all"
+                          />
+                        </div>
+
+                        <div className="space-y-1.5">
+                          <label className="text-[11px] font-extrabold text-slate-700 uppercase tracking-wider block">Contact Phone Number</label>
+                          <input
+                            type="text"
+                            placeholder="+91 98765 43210"
+                            value={tenantPhone}
+                            onChange={(e) => setTenantPhone(e.target.value)}
+                            className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs font-bold text-slate-800 focus:bg-white focus:border-blue-500 focus:outline-none transition-all"
+                          />
+                        </div>
+
+                        <div className="space-y-1.5 sm:col-span-2">
+                          <label className="text-[11px] font-extrabold text-slate-700 uppercase tracking-wider block">Company Logo URL / Asset</label>
+                          <input
+                            type="text"
+                            placeholder="https://images.unsplash.com/... or leave blank for auto logo"
+                            value={tenantLogo}
+                            onChange={(e) => setTenantLogo(e.target.value)}
+                            className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs font-bold text-slate-800 focus:bg-white focus:border-blue-500 focus:outline-none transition-all"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* STEP 2: ADMIN CREDENTIALS */}
+                  {onboardingWizardStep === 2 && (
+                    <div className="space-y-5 animate-fadeIn">
+                      <div className="border-b border-slate-100 pb-3">
+                        <h3 className="text-base font-extrabold text-slate-900 flex items-center gap-2">
+                          <ShieldCheck className="w-5 h-5 text-emerald-600" />
+                          <span>Client Administrator Credentials & Security</span>
+                        </h3>
+                        <p className="text-xs text-slate-400 font-medium">Configure initial administrator access profile for client tenant login.</p>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div className="space-y-1.5 sm:col-span-2">
+                          <label className="text-[11px] font-extrabold text-slate-700 uppercase tracking-wider block">Administrator Full Name</label>
+                          <input
+                            type="text"
+                            placeholder="e.g. Rajesh Sharma"
+                            value={tenantAdminFullName}
+                            onChange={(e) => setTenantAdminFullName(e.target.value)}
+                            className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs font-bold text-slate-800 focus:bg-white focus:border-blue-500 focus:outline-none transition-all"
+                          />
+                        </div>
+
+                        <div className="space-y-1.5">
+                          <label className="text-[11px] font-extrabold text-slate-700 uppercase tracking-wider block">
+                            Admin Login UID / Email <span className="text-rose-500">*</span>
+                          </label>
+                          <input
+                            type="text"
+                            required
+                            placeholder="metromart_admin or email"
+                            value={tenantAdminLoginId}
+                            onChange={(e) => setTenantAdminLoginId(e.target.value)}
+                            className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs font-mono font-bold text-slate-800 focus:bg-white focus:border-blue-500 focus:outline-none transition-all"
+                          />
+                        </div>
+
+                        <div className="space-y-1.5">
+                          <label className="text-[11px] font-extrabold text-slate-700 uppercase tracking-wider block">
+                            Initial Password <span className="text-rose-500">*</span>
+                          </label>
+                          <div className="flex items-center gap-2">
+                            <div className="relative flex-1">
+                              <input
+                                type={showFormPassword ? "text" : "password"}
+                                required
+                                placeholder="••••••••••••"
+                                value={tenantAdminPassword}
+                                onChange={(e) => setTenantAdminPassword(e.target.value)}
+                                className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-3.5 pr-10 py-2.5 text-xs font-mono font-bold text-slate-800 focus:bg-white focus:border-blue-500 focus:outline-none transition-all"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => setShowFormPassword(!showFormPassword)}
+                                className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-600"
+                              >
+                                {showFormPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                              </button>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const pass = "Pass@" + Math.floor(100000 + Math.random() * 900000);
+                                setTenantAdminPassword(pass);
+                                setShowFormPassword(true);
+                              }}
+                              className="px-3 py-2.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 rounded-xl text-xs font-bold transition-all cursor-pointer shrink-0 border border-emerald-200/50"
+                            >
+                              Auto Pass
+                            </button>
+                          </div>
+                        </div>
+
+                        <div className="sm:col-span-2 bg-slate-50 p-4 rounded-2xl border border-slate-200/60 space-y-3">
+                          <p className="text-[10px] font-extrabold text-slate-500 uppercase tracking-widest">Security Enforcement & Policies</p>
+                          <div className="flex flex-wrap items-center gap-6">
+                            <label className="flex items-center gap-2 text-xs font-bold text-slate-700 cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={forcePasswordReset}
+                                onChange={(e) => setForcePasswordReset(e.target.checked)}
+                                className="w-4 h-4 text-blue-600 rounded border-slate-300 focus:ring-blue-500"
+                              />
+                              <span>Force Password Change on First Login</span>
+                            </label>
+                            <label className="flex items-center gap-2 text-xs font-bold text-slate-700 cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={true}
+                                readOnly
+                                className="w-4 h-4 text-emerald-600 rounded border-slate-300 focus:ring-emerald-500"
+                              />
+                              <span>Enforce Multi-Tenant Data Isolation Rules</span>
+                            </label>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* STEP 3: SUBSCRIPTION & PRICING */}
+                  {onboardingWizardStep === 3 && (
+                    <div className="space-y-5 animate-fadeIn">
+                      <div className="border-b border-slate-100 pb-3">
+                        <h3 className="text-base font-extrabold text-slate-900 flex items-center gap-2">
+                          <Coins className="w-5 h-5 text-amber-600" />
+                          <span>Subscription Plan Tier & Onboarding Billing</span>
+                        </h3>
+                        <p className="text-xs text-slate-400 font-medium">Select plan tier, setup fees, and recurring billing agreement duration.</p>
+                      </div>
+
+                      {/* Tier Selector Cards */}
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                        {[
+                          { tier: "STARTER", price: 2500, branches: 1, skus: 500, desc: "Single outlet retail stores" },
+                          { tier: "GROWTH", price: 4500, branches: 5, skus: 5000, desc: "Multi-branch retail chains" },
+                          { tier: "ENTERPRISE", price: 8500, branches: 50, skus: 50000, desc: "Large corporate hypermarkets" }
+                        ].map((tCard) => {
+                          const isSel = tenantTier === tCard.tier;
+                          return (
+                            <div
+                              key={tCard.tier}
+                              onClick={() => {
+                                setTenantTier(tCard.tier as any);
+                                setTenantSubscriptionFee(tCard.price);
+                                setTenantMaxBranches(tCard.branches);
+                                setTenantMaxProducts(tCard.skus);
+                              }}
+                              className={`p-4 rounded-2xl border-2 transition-all cursor-pointer relative ${
+                                isSel
+                                  ? "border-blue-600 bg-blue-50/40 shadow-md shadow-blue-500/10"
+                                  : "border-slate-200 bg-white hover:border-slate-300"
+                              }`}
+                            >
+                              {isSel && (
+                                <span className="absolute top-3 right-3 bg-blue-600 text-white rounded-full p-1">
+                                  <Check className="w-3 h-3" />
+                                </span>
+                              )}
+                              <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">{tCard.tier} PLAN</span>
+                              <p className="text-xl font-black text-slate-900 mt-1">₹ {tCard.price.toLocaleString()}<span className="text-xs font-normal text-slate-400">/mo</span></p>
+                              <p className="text-[11px] text-slate-500 font-medium mt-1 leading-snug">{tCard.desc}</p>
+                              <div className="mt-3 pt-3 border-t border-slate-200/60 text-[10px] font-bold text-slate-600 space-y-1">
+                                <p className="flex items-center gap-1"><Check className="w-3 h-3 text-emerald-500" /> Max Branches: {tCard.branches}</p>
+                                <p className="flex items-center gap-1"><Check className="w-3 h-3 text-emerald-500" /> Max Product SKUs: {tCard.skus.toLocaleString()}</p>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
+                        <div className="space-y-1.5">
+                          <label className="text-[11px] font-extrabold text-slate-700 uppercase tracking-wider block">Onboarding & Provisioning Setup Fee (₹)</label>
+                          <input
+                            type="number"
+                            value={tenantOnboardingFee}
+                            onChange={(e) => setTenantOnboardingFee(Number(e.target.value))}
+                            className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs font-mono font-bold text-slate-900 focus:bg-white focus:border-blue-500 focus:outline-none transition-all"
+                          />
+                        </div>
+
+                        <div className="space-y-1.5">
+                          <label className="text-[11px] font-extrabold text-slate-700 uppercase tracking-wider block">Monthly Subscription Fee (₹)</label>
+                          <input
+                            type="number"
+                            value={tenantSubscriptionFee}
+                            onChange={(e) => setTenantSubscriptionFee(Number(e.target.value))}
+                            className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs font-mono font-bold text-slate-900 focus:bg-white focus:border-blue-500 focus:outline-none transition-all"
+                          />
+                        </div>
+
+                        <div className="space-y-1.5">
+                          <label className="text-[11px] font-extrabold text-slate-700 uppercase tracking-wider block">Billing Cycle Frequency</label>
+                          <select
+                            value={tenantBillingCycle}
+                            onChange={(e) => setTenantBillingCycle(e.target.value as any)}
+                            className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs font-bold text-slate-800 focus:bg-white focus:border-blue-500 focus:outline-none transition-all cursor-pointer"
+                          >
+                            <option value="MONTHLY">MONTHLY (Standard)</option>
+                            <option value="QUARTERLY">QUARTERLY (5% Discount)</option>
+                            <option value="ANNUAL">ANNUAL (15% Discount)</option>
+                          </select>
+                        </div>
+
+                        <div className="space-y-1.5">
+                          <label className="text-[11px] font-extrabold text-slate-700 uppercase tracking-wider block">Contract Tenure (Months)</label>
+                          <select
+                            value={tenantContractDuration}
+                            onChange={(e) => setTenantContractDuration(Number(e.target.value))}
+                            className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs font-bold text-slate-800 focus:bg-white focus:border-blue-500 focus:outline-none transition-all cursor-pointer"
+                          >
+                            <option value={6}>6 Months Contract</option>
+                            <option value={12}>12 Months (1 Year Standard)</option>
+                            <option value={24}>24 Months (2 Years)</option>
+                            <option value={36}>36 Months (3 Years Enterprise)</option>
+                          </select>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* STEP 4: QUOTAS, HARDWARE & MODULES */}
+                  {onboardingWizardStep === 4 && (
+                    <div className="space-y-5 animate-fadeIn">
+                      <div className="border-b border-slate-100 pb-3">
+                        <h3 className="text-base font-extrabold text-slate-900 flex items-center gap-2">
+                          <Layers className="w-5 h-5 text-purple-600" />
+                          <span>Resource Limits, Hardware & Module Provisioning</span>
+                        </h3>
+                        <p className="text-xs text-slate-400 font-medium">Fine-tune system resource limits, hardware accessory bundles, and feature modules.</p>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                        <div className="space-y-1.5">
+                          <label className="text-[11px] font-extrabold text-slate-700 uppercase tracking-wider block">Max Branch Quota</label>
+                          <input
+                            type="number"
+                            value={tenantMaxBranches}
+                            onChange={(e) => setTenantMaxBranches(Number(e.target.value))}
+                            className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs font-bold text-slate-900 focus:bg-white focus:border-blue-500 focus:outline-none transition-all"
+                          />
+                        </div>
+
+                        <div className="space-y-1.5">
+                          <label className="text-[11px] font-extrabold text-slate-700 uppercase tracking-wider block">Max Product SKU Quota</label>
+                          <input
+                            type="number"
+                            value={tenantMaxProducts}
+                            onChange={(e) => setTenantMaxProducts(Number(e.target.value))}
+                            className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs font-bold text-slate-900 focus:bg-white focus:border-blue-500 focus:outline-none transition-all"
+                          />
+                        </div>
+
+                        <div className="space-y-1.5">
+                          <label className="text-[11px] font-extrabold text-slate-700 uppercase tracking-wider block">Max Staff Users</label>
+                          <input
+                            type="number"
+                            value={tenantMaxStaff}
+                            onChange={(e) => setTenantMaxStaff(Number(e.target.value))}
+                            className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs font-bold text-slate-900 focus:bg-white focus:border-blue-500 focus:outline-none transition-all"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Feature Module Toggles */}
+                      <div className="space-y-2 pt-2">
+                        <label className="text-[11px] font-extrabold text-slate-700 uppercase tracking-wider block">Enabled Feature Modules</label>
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+                          {[
+                            { key: "aiCopilot", label: "AI Smart Assistant" },
+                            { key: "expiryTracking", label: "Expiry & Batch Tracking" },
+                            { key: "loyaltyPoints", label: "Customer Loyalty System" },
+                            { key: "branchTransfers", label: "Inter-Branch Stock Transfers" },
+                            { key: "barcodeGenerator", label: "Custom Barcode Generator" }
+                          ].map((mod) => (
+                            <label key={mod.key} className="flex items-center gap-2 p-2.5 bg-slate-50 rounded-xl border border-slate-200/60 text-xs font-bold text-slate-700 cursor-pointer hover:bg-slate-100">
+                              <input
+                                type="checkbox"
+                                checked={!!featureModulesEnabled[mod.key]}
+                                onChange={(e) => setFeatureModulesEnabled({ ...featureModulesEnabled, [mod.key]: e.target.checked })}
+                                className="w-4 h-4 text-blue-600 rounded border-slate-300 focus:ring-blue-500"
+                              />
+                              <span>{mod.label}</span>
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Seed Sample Products Checkbox */}
+                      <div className="bg-emerald-50/60 p-4 rounded-2xl border border-emerald-200/60 flex items-center justify-between">
+                        <div>
+                          <p className="text-xs font-extrabold text-emerald-950">Pre-populate Sample Product Catalog</p>
+                          <p className="text-[11px] text-emerald-700 font-medium mt-0.5">Automatically seed store inventory tailored to category "{tenantCategory}".</p>
+                        </div>
+                        <input
+                          type="checkbox"
+                          checked={seedSampleProducts}
+                          onChange={(e) => setSeedSampleProducts(e.target.checked)}
+                          className="w-5 h-5 text-emerald-600 rounded border-slate-300 focus:ring-emerald-500 cursor-pointer"
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Wizard Step Navigation Control Buttons */}
+                  <div className="pt-6 border-t border-slate-100 flex items-center justify-between">
+                    {onboardingWizardStep > 1 ? (
+                      <button
+                        type="button"
+                        onClick={() => setOnboardingWizardStep((onboardingWizardStep - 1) as any)}
+                        className="px-4 py-2.5 border border-slate-200 hover:bg-slate-100 rounded-xl text-xs font-bold text-slate-600 transition-all cursor-pointer"
+                      >
+                        ← Back
+                      </button>
+                    ) : <div />}
+
+                    {onboardingWizardStep < 4 ? (
+                      <button
+                        type="button"
+                        onClick={() => setOnboardingWizardStep((onboardingWizardStep + 1) as any)}
+                        className="px-5 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-extrabold shadow-md flex items-center gap-1.5 transition-all cursor-pointer"
+                      >
+                        <span>Next Step →</span>
+                      </button>
+                    ) : (
+                      <button
+                        type="submit"
+                        className="px-6 py-3 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white rounded-xl text-xs font-black shadow-lg shadow-emerald-500/25 flex items-center gap-2 transition-all cursor-pointer"
+                      >
+                        <Sparkles className="w-4 h-4 text-amber-300" />
+                        <span>Provision & Onboard Client</span>
+                      </button>
+                    )}
+                  </div>
+
+                </form>
+              </div>
+
+              {/* Right Column: Live Client Sandbox Card Preview */}
+              <div className="bg-slate-900 text-white rounded-3xl border border-slate-800 p-6 space-y-6 shadow-xl sticky top-6">
+                <div className="flex items-center justify-between border-b border-slate-800 pb-4">
+                  <div className="flex items-center gap-2">
+                    <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-ping"></span>
+                    <h3 className="text-xs font-extrabold text-slate-300 uppercase tracking-widest">Live Tenant Sandbox Card</h3>
+                  </div>
+                  <span className="text-[10px] font-mono text-emerald-400 font-bold bg-emerald-950 px-2 py-0.5 rounded border border-emerald-800">
+                    ISOLATED SLICE
+                  </span>
+                </div>
+
+                <div className="space-y-4">
+                  <div className="flex items-center gap-3 bg-slate-800/80 p-3.5 rounded-2xl border border-slate-700/60">
+                    <div className="w-11 h-11 rounded-xl bg-blue-600 text-white font-black flex items-center justify-center text-sm shadow-md shrink-0">
+                      {tenantLogo ? <img src={tenantLogo} alt="" className="w-full h-full object-cover rounded-xl" /> : (tenantName ? tenantName.substring(0, 2).toUpperCase() : "EX")}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="font-extrabold text-white text-sm truncate">{tenantName || "Corporate Client Name"}</p>
+                      <p className="text-[10px] font-mono text-blue-400 truncate mt-0.5">https://{tenantSubdomain || "subdomain"}.expertpos.com</p>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2 text-xs">
+                    <div className="bg-slate-800/50 p-2.5 rounded-xl border border-slate-800">
+                      <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Selected Tier</p>
+                      <p className="font-extrabold text-amber-400 mt-0.5">{tenantTier} PLAN</p>
+                    </div>
+                    <div className="bg-slate-800/50 p-2.5 rounded-xl border border-slate-800">
+                      <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Category</p>
+                      <p className="font-bold text-slate-200 mt-0.5 truncate">{tenantCategory}</p>
+                    </div>
+                  </div>
+
+                  <div className="bg-slate-950 p-3.5 rounded-2xl border border-slate-800/80 space-y-2 font-mono text-xs">
+                    <p className="text-[9px] text-slate-400 uppercase tracking-widest font-sans font-bold">Admin Credentials Preview</p>
+                    <div className="flex justify-between items-center text-slate-300">
+                      <span className="text-[10px] text-slate-500">UID:</span>
+                      <span className="text-blue-300 font-bold">{tenantAdminLoginId || "admin_uid"}</span>
+                    </div>
+                    <div className="flex justify-between items-center text-slate-300">
+                      <span className="text-[10px] text-slate-500">Pass:</span>
+                      <span className="text-emerald-400 font-bold">{tenantAdminPassword ? "••••••••••" : "Not Set"}</span>
+                    </div>
+                  </div>
+
+                  <div className="space-y-1.5 pt-2 border-t border-slate-800 text-xs">
+                    <div className="flex justify-between text-slate-400">
+                      <span>Setup Fee:</span>
+                      <span className="font-mono text-white font-bold">₹ {tenantOnboardingFee.toLocaleString()}</span>
+                    </div>
+                    <div className="flex justify-between text-slate-400">
+                      <span>Monthly Subscription:</span>
+                      <span className="font-mono text-white font-bold">₹ {tenantSubscriptionFee.toLocaleString()}/mo</span>
+                    </div>
+                    <div className="flex justify-between text-slate-400">
+                      <span>Contract Tenure:</span>
+                      <span className="font-mono text-slate-300">{tenantContractDuration} Months</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="pt-2">
+                  <p className="text-[10px] text-slate-400 leading-relaxed text-center">
+                    Clicking "Provision Client" will bind new database schema, generate credentials, and seed initial onboarding invoices.
+                  </p>
+                </div>
+              </div>
+
+            </div>
+          </div>
         ) : activeMenuTab === "clients" ? (
           /* Clients page layout with split columns: Directory list (Column 1) and Onboarding panel (Column 2) */
           <div className="flex-1 flex flex-col lg:flex-row min-h-0 overflow-hidden" id="super-clients-split">
@@ -5332,6 +6161,248 @@ export default function SuperAdminConsole({
               >
                 {confirmModal.confirmText}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ONBOARDING SUCCESS WELCOME PACK MODAL */}
+      {showOnboardingSuccessModal && (
+        <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md z-50 flex items-center justify-center p-4">
+          <div className="bg-slate-900 text-white w-full max-w-lg rounded-3xl overflow-hidden shadow-2xl border border-slate-700 animate-scaleIn space-y-0">
+            <div className="p-6 bg-gradient-to-r from-emerald-600 via-teal-600 to-slate-900 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-white/20 text-white flex items-center justify-center shadow-inner">
+                  <CheckCircle className="w-6 h-6 text-emerald-300" />
+                </div>
+                <div>
+                  <span className="text-[9px] font-mono font-bold text-emerald-200 uppercase tracking-widest bg-emerald-950/60 px-2 py-0.5 rounded border border-emerald-500/30">
+                    ISOLATION SLICE BOUND
+                  </span>
+                  <h3 className="text-lg font-black text-white mt-0.5">Client Onboarded Successfully</h3>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowOnboardingSuccessModal(false)}
+                className="p-2 hover:bg-white/10 rounded-xl transition-all text-slate-300 hover:text-white cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-5">
+              <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800 space-y-3 font-mono text-xs">
+                <p className="text-[10px] text-slate-400 font-sans font-extrabold uppercase tracking-widest">Client Portal Credentials Summary</p>
+                <div className="flex justify-between items-center text-slate-200">
+                  <span className="text-slate-500">Corporate Name:</span>
+                  <span className="font-bold text-white">{showOnboardingSuccessModal.tenantName}</span>
+                </div>
+                <div className="flex justify-between items-center text-slate-200">
+                  <span className="text-slate-500">Tenant Domain:</span>
+                  <span className="font-bold text-blue-400">https://{showOnboardingSuccessModal.tenantSubdomain}.expertpos.com</span>
+                </div>
+                <div className="flex justify-between items-center text-slate-200">
+                  <span className="text-slate-500">Admin Login UID:</span>
+                  <span className="font-bold text-emerald-400">{showOnboardingSuccessModal.adminLoginId}</span>
+                </div>
+                <div className="flex justify-between items-center text-slate-200">
+                  <span className="text-slate-500">Password:</span>
+                  <span className="font-bold text-amber-400">{showOnboardingSuccessModal.adminPassword}</span>
+                </div>
+                <div className="flex justify-between items-center text-slate-200">
+                  <span className="text-slate-500">Plan Tier:</span>
+                  <span className="font-bold text-purple-400">{showOnboardingSuccessModal.tier} PLAN</span>
+                </div>
+              </div>
+
+              <div className="bg-slate-800/60 p-4 rounded-2xl border border-slate-700/60 text-xs text-slate-300 space-y-2">
+                <p className="font-bold text-white flex items-center gap-1.5">
+                  <Sparkles className="w-4 h-4 text-amber-400" /> Automated Onboarding Directives Executed:
+                </p>
+                <ul className="list-disc list-inside text-[11px] space-y-1 text-slate-300">
+                  <li>Provisioned isolated multi-tenant database slice and GSTIN record.</li>
+                  <li>Bound corporate portal address handle to global load balancer.</li>
+                  <li>Logged initial onboarding setup fee invoice (₹ {showOnboardingSuccessModal.onboardingFee.toLocaleString()}).</li>
+                </ul>
+              </div>
+
+              <div className="flex flex-col sm:flex-row gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const text = `EXPERT POS CLIENT ONBOARDING PACK\n--------------------------------\nClient Name: ${showOnboardingSuccessModal.tenantName}\nDomain: https://${showOnboardingSuccessModal.tenantSubdomain}.expertpos.com\nAdmin Login: ${showOnboardingSuccessModal.adminLoginId}\nPassword: ${showOnboardingSuccessModal.adminPassword}\nPlan: ${showOnboardingSuccessModal.tier}\nGSTIN: ${showOnboardingSuccessModal.gstin}`;
+                    navigator.clipboard.writeText(text);
+                    alert("Onboarding Welcome Credentials copied to clipboard!");
+                  }}
+                  className="flex-1 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-extrabold flex items-center justify-center gap-2 transition-all cursor-pointer shadow-lg shadow-blue-500/20"
+                >
+                  <Copy className="w-4 h-4" />
+                  <span>Copy Credentials Pack</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowOnboardingSuccessModal(false)}
+                  className="px-5 py-3 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-xs font-bold transition-all cursor-pointer"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* BULK CSV CLIENT IMPORT MODAL */}
+      {showBulkImportModal && (
+        <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md z-50 flex items-center justify-center p-4">
+          <div className="bg-white text-slate-800 w-full max-w-xl rounded-3xl overflow-hidden shadow-2xl border border-slate-200 animate-scaleIn">
+            <div className="p-6 bg-slate-900 text-white flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-blue-600 text-white flex items-center justify-center font-bold">
+                  <UploadCloud className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-black uppercase tracking-wider">Bulk CSV Client Onboarder</h3>
+                  <p className="text-[10px] text-slate-400">Import multiple corporate clients simultaneously</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowBulkImportModal(false)}
+                className="p-1.5 hover:bg-slate-800 rounded-lg text-slate-400 hover:text-white transition-all cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-5">
+              <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200/80 space-y-2">
+                <p className="text-xs font-bold text-slate-800 flex items-center justify-between">
+                  <span>CSV File Standard Specification</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const csvContent = "tenantName,subdomain,category,adminEmail,adminLoginId,adminPassword,tier\nMetro Mart,metromart,Supermarket & Grocery,admin@metromart.com,metromart_admin,Pass@123456,GROWTH\nCity Pharma,citypharma,Pharmacy & Healthcare,admin@citypharma.com,citypharma_admin,Pass@654321,STARTER";
+                      const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+                      const url = URL.createObjectURL(blob);
+                      const link = document.createElement("a");
+                      link.setAttribute("href", url);
+                      link.setAttribute("download", "sample_client_onboarding.csv");
+                      link.click();
+                    }}
+                    className="text-[10px] font-bold text-blue-600 hover:underline flex items-center gap-1 cursor-pointer"
+                  >
+                    <Download className="w-3 h-3" /> Download Sample CSV
+                  </button>
+                </p>
+                <p className="text-[11px] text-slate-500 leading-relaxed">
+                  Provide headers: <code className="text-blue-600 font-mono font-bold">tenantName, subdomain, category, adminEmail, adminLoginId, adminPassword, tier</code>
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-[11px] font-extrabold text-slate-700 uppercase tracking-wider block">Paste CSV Data or Drag File</label>
+                <textarea
+                  rows={6}
+                  placeholder={`tenantName,subdomain,category,adminEmail,adminLoginId,adminPassword,tier\nMetro Mart,metromart,Supermarket,admin@metromart.com,metromart_admin,Pass@123456,GROWTH`}
+                  value={bulkCsvRawText}
+                  onChange={(e) => setBulkCsvRawText(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-2xl p-4 text-xs font-mono font-bold text-slate-800 focus:bg-white focus:border-blue-500 focus:outline-none transition-all placeholder:font-normal placeholder:text-slate-400"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowBulkImportModal(false)}
+                  className="px-4 py-2.5 border border-slate-200 hover:bg-slate-100 rounded-xl text-xs font-bold text-slate-600 transition-all cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleBulkImportClients}
+                  className="px-5 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-extrabold flex items-center gap-2 transition-all cursor-pointer shadow-md shadow-blue-500/20"
+                >
+                  <Sparkles className="w-4 h-4 text-amber-300" />
+                  <span>Execute Bulk Onboarding</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* RESET CLIENT CREDENTIALS MODAL */}
+      {showResetPasswordModal && (
+        <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md z-50 flex items-center justify-center p-4">
+          <div className="bg-white text-slate-800 w-full max-w-md rounded-3xl overflow-hidden shadow-2xl border border-slate-200 animate-scaleIn">
+            <div className="p-6 bg-slate-900 text-white flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-amber-500 text-slate-950 flex items-center justify-center font-black">
+                  <ShieldCheck className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-xs font-black uppercase tracking-wider text-slate-200">Reset Credentials</h3>
+                  <p className="text-[10px] text-slate-400 font-mono truncate">{showResetPasswordModal.tenantName}</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowResetPasswordModal(null)}
+                className="p-1.5 hover:bg-slate-800 rounded-lg text-slate-400 hover:text-white transition-all cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-4">
+              <div className="space-y-1.5">
+                <label className="text-[11px] font-extrabold text-slate-700 uppercase tracking-wider block">Admin Login UID</label>
+                <input
+                  type="text"
+                  value={resetModalAdminId}
+                  onChange={(e) => setResetModalAdminId(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs font-mono font-bold text-slate-800 focus:bg-white focus:border-blue-500 focus:outline-none transition-all"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-[11px] font-extrabold text-slate-700 uppercase tracking-wider block">New Secret Password</label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    value={resetModalNewPassword}
+                    onChange={(e) => setResetModalNewPassword(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs font-mono font-bold text-slate-800 focus:bg-white focus:border-blue-500 focus:outline-none transition-all"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setResetModalNewPassword("Pass@" + Math.floor(100000 + Math.random() * 900000))}
+                    className="px-3 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-all cursor-pointer shrink-0"
+                  >
+                    Gen
+                  </button>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-3 pt-3">
+                <button
+                  type="button"
+                  onClick={() => setShowResetPasswordModal(null)}
+                  className="px-4 py-2 border border-slate-200 hover:bg-slate-100 rounded-xl text-xs font-bold text-slate-600 transition-all cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleResetClientCredentials}
+                  className="px-5 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-xl text-xs font-extrabold transition-all cursor-pointer shadow-md shadow-amber-500/20"
+                >
+                  Confirm Reset Credentials
+                </button>
+              </div>
             </div>
           </div>
         </div>
