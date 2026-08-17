@@ -5,7 +5,7 @@ import {
   Edit, X, Check, Mail, Lock, User, ShieldAlert,
   Calendar, Star, Award, Briefcase, PlusCircle, Clock, CheckCircle2, AlertCircle, FileMinus
 } from "lucide-react";
-import { UserRole, Tenant, StoreBranch } from "../types";
+import { UserRole, Tenant, StoreBranch, normalizeUserRole } from "../types";
 
 export interface AccessProfile {
   role: UserRole;
@@ -89,8 +89,9 @@ export default function StaffRegistry({
   };
 
   const [activeSubView, setActiveSubView] = useState<"list" | "register">("list");
+  const isManagerUser = normalizeUserRole(currentRole) === UserRole.MANAGER;
   const [newStaffBranchId, setNewStaffBranchId] = useState<string>(() => {
-    if (currentRole === UserRole.MANAGER && currentBranch) {
+    if (isManagerUser && currentBranch) {
       return currentBranch.id;
     }
     return "";
@@ -246,7 +247,7 @@ export default function StaffRegistry({
     if (!isTenantMatch) return false;
 
     // 4. Branch Restriction for Managers: managers only view/manage staff assigned to their branch
-    if (currentRole === UserRole.MANAGER && currentBranch) {
+    if (isManagerUser && currentBranch) {
       return cred.storeBranchId === currentBranch.id;
     }
 
@@ -405,7 +406,7 @@ export default function StaffRegistry({
     setNewPassword("");
     setNewRole(UserRole.CASHIER);
     setNewTitle("Cashier Billing Only");
-    setNewStaffBranchId(currentRole === UserRole.MANAGER && currentBranch ? currentBranch.id : "");
+    setNewStaffBranchId(isManagerUser && currentBranch ? currentBranch.id : "");
     setPrivilegeList(["POS checkout scanning", "Configure item quantities", "Associate loyalty members", "UPI, Cash, or Card prints"]);
     setCustomPrivilegeInput("");
 
@@ -782,7 +783,7 @@ export default function StaffRegistry({
               <select
                 value={newStaffBranchId}
                 onChange={(e) => setNewStaffBranchId(e.target.value)}
-                disabled={currentRole === UserRole.MANAGER}
+                disabled={isManagerUser}
                 className="w-full bg-white border border-stone-350 text-stone-850 rounded-xl py-2 px-3 text-xs focus:outline-none focus:border-stone-500 text-stone-800 font-sans cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
               >
                 <option value="">Global / All Branches (No Restriction)</option>
@@ -793,7 +794,7 @@ export default function StaffRegistry({
                 ))}
               </select>
               <p className="text-[10px] text-stone-400 mt-1">
-                {currentRole === UserRole.MANAGER 
+                {isManagerUser 
                   ? "Locked to your managed branch." 
                   : newRole === UserRole.ADMIN 
                     ? "Admins can access and reconcile data from all branches." 

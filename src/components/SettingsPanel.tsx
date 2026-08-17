@@ -4,9 +4,10 @@ import {
   Volume2, VolumeX, RefreshCw, Trash2, Key, List, 
   Settings, CheckCircle, Smartphone, Globe, Plus, Trash, Users,
   Eye, Edit, X, Check, Mail, Lock, ShieldAlert,
-  Sliders, Briefcase, Package, Clock, Plug, Layout, Zap, Percent, Cpu, Laptop, ChevronRight, Receipt, DollarSign
+  Sliders, Briefcase, Package, Clock, Plug, Layout, Zap, Percent, Cpu, Laptop, ChevronRight, Receipt, DollarSign,
+  Upload, Image as ImageIcon, Building, RotateCcw, Camera, Sparkles
 } from "lucide-react";
-import { UserRole, Tenant, Product, Customer, Invoice, Expense, Supplier, StoreBranch } from "../types";
+import { UserRole, normalizeUserRole, Tenant, Product, Customer, Invoice, Expense, Supplier, StoreBranch } from "../types";
 
 export interface AppSettings {
   autoPrintReceipt: boolean;
@@ -25,6 +26,8 @@ interface SettingsPanelProps {
   onUpdateCredentials: (newList: any[]) => void;
   activeTenant: Tenant;
   onUpdateTenant: (updatedTenant: Tenant) => void;
+  opsSettings?: AppSettings;
+  onUpdateOpsSettings?: (settings: AppSettings) => void;
   triggerNotification: (msg: string, type: "success" | "warning") => void;
   productCategories: string[];
   onUpdateProductCategories: (categories: string[]) => void;
@@ -47,6 +50,8 @@ export default function SettingsPanel({
   onUpdateCredentials,
   activeTenant,
   onUpdateTenant,
+  opsSettings: propOpsSettings,
+  onUpdateOpsSettings,
   triggerNotification,
   productCategories,
   onUpdateProductCategories,
@@ -314,15 +319,26 @@ export default function SettingsPanel({
     }
   };
 
-  // --- Tenant corporate state variables ---
+  // Tenant corporate state variables
   const [tenantName, setTenantName] = useState(activeTenant.name);
-  const [tenantPhone, setTenantPhone] = useState(activeTenant.phone);
+  const [tenantEmail, setTenantEmail] = useState(activeTenant.adminEmail || "");
+  const [tenantPhone, setTenantPhone] = useState(activeTenant.phone || "");
+  const [tenantGstin, setTenantGstin] = useState(activeTenant.gstinRegNumber || "");
   const [tenantSubdomain, setTenantSubdomain] = useState(activeTenant.subdomain);
   const [tenantCurrency, setTenantCurrency] = useState(activeTenant.currency);
   const [tenantTheme, setTenantTheme] = useState(activeTenant.colorTheme);
+  const [tenantLogo, setTenantLogo] = useState(activeTenant.companyLogo || "");
+  const [isDraggingLogo, setIsDraggingLogo] = useState(false);
+  const [isSavingTenant, setIsSavingTenant] = useState(false);
+
+  const logoFileInputRef = React.useRef<HTMLInputElement | null>(null);
+  const lastLoadedTenantIdRef = React.useRef<string>(activeTenant?.id);
+
+  const isAdmin = normalizeUserRole(currentRole) === UserRole.ADMIN || String(currentRole).toUpperCase().includes("ADMIN") || currentUserEmail.toLowerCase().includes("admin");
 
   // --- POS Operational state variables ---
   const [opsSettings, setOpsSettings] = useState<AppSettings>(() => {
+    if (propOpsSettings) return propOpsSettings;
     const saved = localStorage.getItem("expert_aid_terminal_settings");
     if (saved) {
       try {
@@ -339,6 +355,12 @@ export default function SettingsPanel({
       maxDiscountAllowed: 25
     };
   });
+
+  useEffect(() => {
+    if (propOpsSettings) {
+      setOpsSettings(propOpsSettings);
+    }
+  }, [propOpsSettings]);
 
   // Database stats state
   const [stats, setStats] = useState({
@@ -382,16 +404,31 @@ export default function SettingsPanel({
     if (existingCred) {
       setProfPassword(existingCred.password || "");
     }
-  }, [currentCashierName, currentUserEmail, credentialsList]);
+  }, [currentCashierName, currentUserEmail]);
 
-  // Sync tenant details when activeTenant swap happens
+  // Sync tenant details when activeTenant changes
   useEffect(() => {
-    setTenantName(activeTenant.name);
-    setTenantPhone(activeTenant.phone);
-    setTenantSubdomain(activeTenant.subdomain);
-    setTenantCurrency(activeTenant.currency);
-    setTenantTheme(activeTenant.colorTheme);
-  }, [activeTenant]);
+    if (activeTenant) {
+      lastLoadedTenantIdRef.current = activeTenant.id;
+      setTenantName(activeTenant.name);
+      setTenantEmail(activeTenant.adminEmail || "");
+      setTenantPhone(activeTenant.phone || "");
+      setTenantGstin(activeTenant.gstinRegNumber || "");
+      setTenantSubdomain(activeTenant.subdomain);
+      setTenantCurrency(activeTenant.currency);
+      setTenantTheme(activeTenant.colorTheme);
+      setTenantLogo(activeTenant.companyLogo || "");
+    }
+  }, [
+    activeTenant?.id,
+    activeTenant?.name,
+    activeTenant?.adminEmail,
+    activeTenant?.phone,
+    activeTenant?.gstinRegNumber,
+    activeTenant?.companyLogo,
+    activeTenant?.colorTheme,
+    activeTenant?.currency
+  ]);
 
   const handleSaveProfile = (e: React.FormEvent) => {
     e.preventDefault();
@@ -421,34 +458,87 @@ export default function SettingsPanel({
     triggerNotification("Your security credentials & user profile settings updated successfully!", "success");
   };
 
-  const handleSaveTenant = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (currentRole !== UserRole.ADMIN) {
-      triggerNotification("Access Denied: Store workspace configurations are restricted to Administrators.", "warning");
+  const handleSaveTenant = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!isAdmin) {
+      triggerNotification("Access Denied: Company details and store configurations are restricted to Administrators.", "warning");
       return;
     }
 
     if (!tenantName.trim()) {
-      triggerNotification("Store name cannot be empty.", "warning");
+      triggerNotification("Company name cannot be empty.", "warning");
       return;
     }
+
+    setIsSavingTenant(true);
 
     const updatedTenant: Tenant = {
       ...activeTenant,
       name: tenantName.trim(),
+      adminEmail: tenantEmail.trim(),
       phone: tenantPhone.trim(),
-      subdomain: tenantSubdomain.trim().toLowerCase().replace(/[^a-z0-t0-9-]/g, ""),
+      gstinRegNumber: tenantGstin.trim().toUpperCase(),
+      subdomain: tenantSubdomain.trim().toLowerCase().replace(/[^a-z0-9-]/g, ""),
       currency: tenantCurrency,
-      colorTheme: tenantTheme
+      colorTheme: tenantTheme,
+      companyLogo: tenantLogo.trim()
     };
 
     onUpdateTenant(updatedTenant);
-    triggerNotification("Store Corporate Settings deployed and updated across the node workspace!", "success");
+    triggerNotification("Company details, settings, and branding logo saved successfully!", "success");
+    setTimeout(() => setIsSavingTenant(false), 600);
+  };
+
+  const handleLogoFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 5 * 1024 * 1024) {
+      triggerNotification("Image file size should be less than 5MB.", "warning");
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const result = event.target?.result as string;
+      if (result) {
+        setTenantLogo(result);
+        triggerNotification("Company logo uploaded successfully! Click 'Save Company Details & Logo' to apply.", "success");
+      }
+    };
+    reader.readAsDataURL(file);
+    e.target.value = "";
+  };
+
+  const handleLogoDrop = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    setIsDraggingLogo(false);
+    if (!isAdmin) return;
+    const file = e.dataTransfer.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      triggerNotification("Please drop a valid image file (PNG, JPG, SVG, WebP).", "warning");
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      triggerNotification("Image file size should be less than 5MB.", "warning");
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const result = event.target?.result as string;
+      if (result) {
+        setTenantLogo(result);
+        triggerNotification("Company logo dropped and loaded! Click 'Save Company Details & Logo' to apply.", "success");
+      }
+    };
+    reader.readAsDataURL(file);
   };
 
   const handleSavePOSSettings = (e: React.FormEvent) => {
     e.preventDefault();
     localStorage.setItem("expert_aid_terminal_settings", JSON.stringify(opsSettings));
+    onUpdateOpsSettings?.(opsSettings);
     triggerNotification("Point of Sale (POS) operational terminal preferences saved!", "success");
     
     // Broadcast setting changes for receipt rendering and sound configs
@@ -585,21 +675,21 @@ export default function SettingsPanel({
         /* ================= SUB-TAB: USER PROFILE SETTINGS ================= */
         <form onSubmit={handleSaveProfile} className="space-y-6 max-w-xl">
           <div className="space-y-4">
-            <div className="flex items-center gap-3 p-4 bg-slate-950 rounded-2xl border border-slate-800">
-              <div className="w-12 h-12 rounded-xl bg-purple-600/10 text-purple-400 flex items-center justify-center text-lg font-black shrink-0 border border-purple-500/10">
+            <div className="flex items-center gap-3 p-4 bg-slate-50 rounded-2xl border border-slate-200">
+              <div className="w-12 h-12 rounded-xl bg-purple-600/10 text-purple-700 flex items-center justify-center text-lg font-black shrink-0 border border-purple-200">
                 {currentCashierName.substring(0,2).toUpperCase()}
               </div>
               <div>
-                <p className="font-extrabold text-sm text-white leading-snug">{currentCashierName}</p>
+                <p className="font-extrabold text-sm text-slate-900 leading-snug">{currentCashierName}</p>
                 <div className="flex items-center gap-2 mt-1">
-                  <span className="text-[10px] text-slate-400 font-mono select-all shrink-0 bg-slate-900 border border-slate-800 px-1.5 py-0.5 rounded leading-none uppercase">{currentRole}</span>
+                  <span className="text-[10px] text-slate-700 font-mono select-all shrink-0 bg-white border border-slate-200 px-2 py-0.5 rounded leading-none uppercase font-bold">{currentRole}</span>
                   <p className="text-[10px] text-slate-500 font-medium">{currentUserEmail}</p>
                 </div>
               </div>
             </div>
 
             <div>
-              <label className="block text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1.5 font-sans">
+              <label className="block text-[11px] text-slate-600 font-bold uppercase tracking-wider mb-1.5 font-sans">
                 Full Display Name / Identity Signature
               </label>
               <input
@@ -607,32 +697,32 @@ export default function SettingsPanel({
                 required
                 value={profName}
                 onChange={(e) => setProfName(e.target.value)}
-                className="w-full bg-slate-950 border border-slate-800 text-slate-100 rounded-xl py-2 px-3 text-xs focus:outline-none focus:border-slate-600 placeholder-slate-700 font-sans"
+                className="w-full bg-white border border-slate-300 text-slate-900 rounded-xl py-2 px-3 text-xs focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-600 placeholder-slate-400 font-sans shadow-2xs"
               />
             </div>
 
             <div>
-              <label className="block text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1.5 font-sans">
+              <label className="block text-[11px] text-slate-600 font-bold uppercase tracking-wider mb-1.5 font-sans">
                 Terminal Email Address/ID (Locked for security)
               </label>
               <input
                 type="text"
                 disabled
                 value={profEmail}
-                className="w-full bg-slate-950 border border-slate-800/80 text-slate-500 rounded-xl py-2 px-3 text-xs focus:outline-none cursor-not-allowed font-mono"
+                className="w-full bg-slate-100 border border-slate-200 text-slate-500 rounded-xl py-2 px-3 text-xs focus:outline-none cursor-not-allowed font-mono"
               />
-              <p className="text-[9px] text-slate-500 mt-1">To update your coordinate email, please request support from the SaaS tenant sovereign.</p>
+              <p className="text-[10px] text-slate-500 mt-1">To update your coordinate email, please request support from the SaaS tenant sovereign.</p>
             </div>
 
             <div>
               <div className="flex justify-between items-center mb-1.5">
-                <label className="block text-[10px] text-slate-400 font-bold uppercase tracking-wider font-sans">
+                <label className="block text-[11px] text-slate-600 font-bold uppercase tracking-wider font-sans">
                   Change Access Password Key
                 </label>
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="text-[9px] text-slate-400 hover:text-slate-300 font-bold"
+                  className="text-[10px] text-purple-600 hover:text-purple-800 font-bold"
                 >
                   {showPassword ? "Hide password" : "Show password"}
                 </button>
@@ -642,7 +732,7 @@ export default function SettingsPanel({
                 placeholder="Enter new security password to use inside terminals..."
                 value={profPassword}
                 onChange={(e) => setProfPassword(e.target.value)}
-                className="w-full bg-slate-950 border border-slate-800 text-slate-100 rounded-xl py-2 px-3 text-xs focus:outline-none focus:border-slate-600 placeholder-slate-700 font-mono"
+                className="w-full bg-white border border-slate-300 text-slate-900 rounded-xl py-2 px-3 text-xs focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-600 placeholder-slate-400 font-mono shadow-2xs"
               />
             </div>
           </div>
@@ -650,7 +740,7 @@ export default function SettingsPanel({
           <div className="pt-2">
             <button
               type="submit"
-              className="bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs py-2 px-5 rounded-xl shadow-lg shadow-purple-600/10 transition-all flex items-center gap-2 cursor-pointer uppercase tracking-wider font-sans whitespace-nowrap"
+              className="bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs py-2.5 px-6 rounded-xl shadow-md transition-all flex items-center gap-2 cursor-pointer uppercase tracking-wider font-sans whitespace-nowrap"
             >
               <Save className="w-4 h-4 shrink-0" />
               Update Profile Credentials
@@ -661,125 +751,345 @@ export default function SettingsPanel({
 
       {activeSubTab === "tenant" && (
         /* ================= SUB-TAB: BRANDING AND STORE CONFIG ================= */
-        <form onSubmit={handleSaveTenant} className="space-y-6 max-w-2xl">
-          <div className="p-4 bg-emerald-500/5 text-emerald-400 rounded-xl border border-emerald-500/10 text-xs leading-relaxed font-medium">
-            💡 <strong className="text-white">Store Configurations Manager:</strong> Modifying store properties here updates the primary workspace settings immediately. You can choose color palettes, set custom labels, and alter base currency units.
+        <form onSubmit={handleSaveTenant} className="space-y-6 max-w-3xl">
+          <div className="p-4 bg-emerald-50 text-emerald-800 rounded-xl border border-emerald-200 text-xs leading-relaxed font-medium flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <Sparkles className="w-4 h-4 shrink-0 text-emerald-600" />
+              <div>
+                <strong className="text-emerald-950 font-bold">Company Profile & Store Settings:</strong> As an Administrator, you can customize your corporate details, store name, GSTIN, currency, and upload your official logo.
+              </div>
+            </div>
+            {isAdmin && (
+              <button
+                type="button"
+                onClick={() => handleSaveTenant()}
+                disabled={isSavingTenant}
+                className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-bold text-xs rounded-lg shadow-sm flex items-center gap-1.5 shrink-0 transition-all cursor-pointer"
+              >
+                <Save className="w-3.5 h-3.5" />
+                <span>{isSavingTenant ? "Saving..." : "Save Now"}</span>
+              </button>
+            )}
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-            <div>
-              <label className="block text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1.5 font-sans">
-                Corporate Store Name
-              </label>
-              <input
-                type="text"
-                required
-                disabled={currentRole !== UserRole.ADMIN}
-                value={tenantName}
-                onChange={(e) => setTenantName(e.target.value)}
-                placeholder="Store Name"
-                className={`w-full bg-slate-950 border border-slate-800 text-slate-100 rounded-xl py-2 px-3 text-xs focus:outline-none focus:border-slate-600 placeholder-slate-700 font-sans ${currentRole !== UserRole.ADMIN ? "cursor-not-allowed text-slate-500 bg-slate-950/60" : ""}`}
-              />
-            </div>
-
-            <div>
-              <label className="block text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1.5 font-sans">
-                Corporate Domain Gateway
-              </label>
-              <div className="flex items-center bg-slate-950 border border-slate-800 rounded-xl focus-within:border-slate-600 overflow-hidden font-sans">
-                <input
-                  type="text"
-                  required
-                  disabled={currentRole !== UserRole.ADMIN}
-                  value={tenantSubdomain}
-                  onChange={(e) => setTenantSubdomain(e.target.value)}
-                  placeholder="domain-prefix"
-                  className={`flex-1 bg-transparent border-0 text-slate-100 py-2 px-3 text-xs focus:outline-none placeholder-slate-700 font-sans ${currentRole !== UserRole.ADMIN ? "cursor-not-allowed text-slate-500" : ""}`}
-                />
-                <span className="bg-slate-900 border-l border-slate-800 text-[9.5px] font-bold text-slate-400 px-3 py-2 shrink-0 select-none">
-                  .expertpos.com
-                </span>
+          {/* Company Logo Section */}
+          <div className="bg-slate-50 p-5 rounded-2xl border border-slate-200 space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-200 pb-3">
+              <div>
+                <h3 className="text-xs font-black text-slate-900 uppercase tracking-widest flex items-center gap-2 font-mono">
+                  <ImageIcon className="w-4 h-4 text-purple-600" />
+                  Company Branding Logo
+                </h3>
+                <p className="text-[10px] text-slate-500 mt-0.5">
+                  Upload or drop your company logo to display across store navigation headers, receipts, invoices, and reports.
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                {tenantLogo && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setTenantLogo("");
+                      triggerNotification("Company logo removed. Remember to click Save to apply.", "warning");
+                    }}
+                    className="px-2.5 py-1 bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 rounded-lg text-[10px] font-bold flex items-center gap-1 transition-all cursor-pointer"
+                  >
+                    <Trash2 className="w-3 h-3" />
+                    <span>Remove Logo</span>
+                  </button>
+                )}
               </div>
             </div>
 
-            <div>
-              <label className="block text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1.5 font-sans">
-                Contact Phone Header
-              </label>
-              <input
-                type="text"
-                disabled={currentRole !== UserRole.ADMIN}
-                value={tenantPhone}
-                onChange={(e) => setTenantPhone(e.target.value)}
-                placeholder="Store Phone"
-                className={`w-full bg-slate-950 border border-slate-800 text-slate-100 rounded-xl py-2 px-3 text-xs focus:outline-none focus:border-slate-600 placeholder-slate-700 font-mono ${currentRole !== UserRole.ADMIN ? "cursor-not-allowed text-slate-500 bg-slate-950/60" : ""}`}
-              />
-            </div>
-
-            <div>
-              <label className="block text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1.5 font-sans">
-                Base Currency Symbol (Global)
-              </label>
-              <select
-                disabled={currentRole !== UserRole.ADMIN}
-                value={tenantCurrency}
-                onChange={(e) => setTenantCurrency(e.target.value)}
-                className={`w-full bg-slate-950 border border-slate-800 text-slate-100 rounded-xl py-2 px-3 text-xs focus:outline-none focus:border-slate-600 text-slate-300 font-sans cursor-pointer ${currentRole !== UserRole.ADMIN ? "cursor-not-allowed text-slate-500 bg-slate-950/60" : ""}`}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-5 items-center">
+              {/* Logo Preview & Drag-Drop Box */}
+              <div 
+                onDragOver={(e) => { e.preventDefault(); setIsDraggingLogo(true); }}
+                onDragLeave={() => setIsDraggingLogo(false)}
+                onDrop={handleLogoDrop}
+                onClick={() => isAdmin && logoFileInputRef.current?.click()}
+                className={`flex flex-col items-center justify-center p-3 bg-white border-2 border-dashed rounded-xl space-y-2 cursor-pointer transition-all ${
+                  isDraggingLogo 
+                    ? "border-purple-600 bg-purple-50/50 scale-[1.02]" 
+                    : "border-slate-300 hover:border-purple-400 hover:bg-slate-50/50"
+                }`}
+                title="Click or drag & drop an image to upload logo"
               >
-                <option value="₹">₹ - Indian Rupee (INR)</option>
-                <option value="$">$ - US Dollar (USD)</option>
-                <option value="€">€ - Euro (EUR)</option>
-                <option value="£">£ - British Pound (GBP)</option>
-                <option value="¥">¥ - Japanese Yen (JPY)</option>
-                <option value="AED">AED - UAE Dirham</option>
-                <option value="SAR">SAR - Saudi Riyal</option>
-                <option value="৳">৳ - Bangladeshi Taka (BDT)</option>
-              </select>
+                <div className="flex items-center justify-between w-full px-1">
+                  <span className="text-[9.5px] font-bold uppercase text-slate-500 tracking-wider">Logo Preview</span>
+                  <span className="text-[9px] text-purple-600 font-bold">Click/Drop to upload</span>
+                </div>
+                <div className="flex gap-3 items-center">
+                  {/* Light background preview */}
+                  <div className="w-16 h-16 bg-slate-50 rounded-xl p-2 border border-slate-300 shadow-sm flex items-center justify-center overflow-hidden">
+                    {tenantLogo ? (
+                      <img
+                        src={tenantLogo}
+                        alt="Company Logo Preview Light"
+                        className="w-full h-full object-contain"
+                        referrerPolicy="no-referrer"
+                      />
+                    ) : (
+                      <span className="text-slate-800 font-black text-sm uppercase">
+                        {tenantName ? tenantName.substring(0, 2) : "LOGO"}
+                      </span>
+                    )}
+                  </div>
+                  {/* Dark background preview */}
+                  <div className="w-16 h-16 bg-slate-900 rounded-xl p-2 border border-slate-700 shadow-sm flex items-center justify-center overflow-hidden">
+                    {tenantLogo ? (
+                      <img
+                        src={tenantLogo}
+                        alt="Company Logo Preview Dark"
+                        className="w-full h-full object-contain"
+                        referrerPolicy="no-referrer"
+                      />
+                    ) : (
+                      <span className="text-purple-300 font-black text-sm uppercase">
+                        {tenantName ? tenantName.substring(0, 2) : "LOGO"}
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <span className="text-[8.5px] text-slate-500 italic">Light & Dark display preview</span>
+              </div>
+
+              {/* File Upload Controls */}
+              <div className="md:col-span-2 space-y-3">
+                <div>
+                  <label className="block text-[11px] text-slate-700 font-bold uppercase tracking-wider mb-1.5 font-sans">
+                    Upload Logo File (PNG / JPG / SVG / WebP)
+                  </label>
+                  <div className="flex items-center gap-3">
+                    <input
+                      ref={logoFileInputRef}
+                      type="file"
+                      accept="image/png, image/jpeg, image/jpg, image/svg+xml, image/webp, image/*"
+                      disabled={!isAdmin}
+                      onChange={handleLogoFileUpload}
+                      className="hidden"
+                    />
+                    <button
+                      type="button"
+                      disabled={!isAdmin}
+                      onClick={() => logoFileInputRef.current?.click()}
+                      className={`px-4 py-2 bg-purple-600 hover:bg-purple-700 active:scale-95 text-white rounded-xl text-xs font-extrabold flex items-center gap-2 transition-all shadow-md cursor-pointer ${
+                        !isAdmin ? "opacity-50 cursor-not-allowed" : ""
+                      }`}
+                    >
+                      <Upload className="w-4 h-4" />
+                      <span>Choose Logo File</span>
+                    </button>
+                    <span className="text-[10px] text-slate-500 font-medium">Supports drag & drop, Max 5MB</span>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-[11px] text-slate-700 font-bold uppercase tracking-wider mb-1.5 font-sans">
+                    Or Enter Logo Image URL / Base64 Data
+                  </label>
+                  <input
+                    type="text"
+                    disabled={!isAdmin}
+                    value={tenantLogo}
+                    onChange={(e) => setTenantLogo(e.target.value)}
+                    placeholder="https://example.com/logo.png or data:image/png..."
+                    className={`w-full bg-white border border-slate-300 text-slate-900 rounded-xl py-2 px-3 text-xs focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-600 placeholder-slate-400 font-mono shadow-2xs ${!isAdmin ? "cursor-not-allowed text-slate-500 bg-slate-100" : ""}`}
+                  />
+                </div>
+
+                {/* Quick Presets */}
+                <div>
+                  <label className="block text-[10px] text-slate-500 font-bold uppercase tracking-wider mb-1 font-sans">
+                    Sample Logo Presets
+                  </label>
+                  <div className="flex flex-wrap gap-2">
+                    {[
+                      { name: "Retail Mall", url: "https://images.unsplash.com/photo-1534452203293-494d7ddbf7e0?w=120&auto=format&fit=crop&q=80" },
+                      { name: "Electronics", url: "https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?w=120&auto=format&fit=crop&q=80" },
+                      { name: "Grocery Superstore", url: "https://images.unsplash.com/photo-1542838132-92c53300491e?w=120&auto=format&fit=crop&q=80" },
+                      { name: "Apparel & Fashion", url: "https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=120&auto=format&fit=crop&q=80" }
+                    ].map((preset, idx) => (
+                      <button
+                        type="button"
+                        key={idx}
+                        disabled={!isAdmin}
+                        onClick={() => {
+                          setTenantLogo(preset.url);
+                          triggerNotification(`Selected ${preset.name} sample logo!`, "success");
+                        }}
+                        className="px-2.5 py-1 bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 rounded-lg text-[10px] font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-2xs"
+                      >
+                        <Camera className="w-3 h-3 text-purple-600" />
+                        <span>{preset.name}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
 
-          <div>
-            <label className="block text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-2 font-sans">
+          {/* Company Details & Contact Info */}
+          <div className="bg-slate-50 p-5 rounded-2xl border border-slate-200 space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-200 pb-2">
+              <h3 className="text-xs font-black text-slate-900 uppercase tracking-widest flex items-center gap-2 font-mono">
+                <Building className="w-4 h-4 text-emerald-600" />
+                Company Details & Contact Information
+              </h3>
+              {isAdmin && (
+                <span className="text-[10px] bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-md font-bold">
+                  Editing Enabled (Admin)
+                </span>
+              )}
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+              <div>
+                <label className="block text-[11px] text-slate-700 font-bold uppercase tracking-wider mb-1.5 font-sans">
+                  Corporate Company / Store Name *
+                </label>
+                <input
+                  type="text"
+                  required
+                  disabled={!isAdmin}
+                  value={tenantName}
+                  onChange={(e) => setTenantName(e.target.value)}
+                  placeholder="Company / Store Name"
+                  className={`w-full bg-white border border-slate-300 text-slate-900 rounded-xl py-2.5 px-3 text-xs focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-600 placeholder-slate-400 font-medium font-sans shadow-2xs ${!isAdmin ? "cursor-not-allowed text-slate-500 bg-slate-100" : ""}`}
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] text-slate-700 font-bold uppercase tracking-wider mb-1.5 font-sans">
+                  Contact Email Address *
+                </label>
+                <input
+                  type="email"
+                  required
+                  disabled={!isAdmin}
+                  value={tenantEmail}
+                  onChange={(e) => setTenantEmail(e.target.value)}
+                  placeholder="contact@company.com"
+                  className={`w-full bg-white border border-slate-300 text-slate-900 rounded-xl py-2.5 px-3 text-xs focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-600 placeholder-slate-400 font-mono shadow-2xs ${!isAdmin ? "cursor-not-allowed text-slate-500 bg-slate-100" : ""}`}
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] text-slate-700 font-bold uppercase tracking-wider mb-1.5 font-sans">
+                  Contact Phone Number
+                </label>
+                <input
+                  type="text"
+                  disabled={!isAdmin}
+                  value={tenantPhone}
+                  onChange={(e) => setTenantPhone(e.target.value)}
+                  placeholder="+91 9876543210"
+                  className={`w-full bg-white border border-slate-300 text-slate-900 rounded-xl py-2.5 px-3 text-xs focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-600 placeholder-slate-400 font-mono shadow-2xs ${!isAdmin ? "cursor-not-allowed text-slate-500 bg-slate-100" : ""}`}
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] text-slate-700 font-bold uppercase tracking-wider mb-1.5 font-sans">
+                  GSTIN / Tax Reg. Number
+                </label>
+                <input
+                  type="text"
+                  disabled={!isAdmin}
+                  value={tenantGstin}
+                  onChange={(e) => setTenantGstin(e.target.value)}
+                  placeholder="07AAAAA1111A1Z1"
+                  className={`w-full bg-white border border-slate-300 text-slate-900 rounded-xl py-2.5 px-3 text-xs focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-600 placeholder-slate-400 font-mono uppercase font-semibold shadow-2xs ${!isAdmin ? "cursor-not-allowed text-slate-500 bg-slate-100" : ""}`}
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] text-slate-700 font-bold uppercase tracking-wider mb-1.5 font-sans">
+                  Corporate Domain Gateway
+                </label>
+                <div className="flex items-center bg-white border border-slate-300 rounded-xl focus-within:ring-2 focus-within:ring-purple-500/20 focus-within:border-purple-600 overflow-hidden font-sans shadow-2xs">
+                  <input
+                    type="text"
+                    required
+                    disabled={!isAdmin}
+                    value={tenantSubdomain}
+                    onChange={(e) => setTenantSubdomain(e.target.value)}
+                    placeholder="domain-prefix"
+                    className={`flex-1 bg-transparent border-0 text-slate-900 py-2.5 px-3 text-xs focus:outline-none placeholder-slate-400 font-sans ${!isAdmin ? "cursor-not-allowed text-slate-500" : ""}`}
+                  />
+                  <span className="bg-slate-100 border-l border-slate-300 text-[10px] font-bold text-slate-600 px-3 py-2.5 shrink-0 select-none">
+                    .expertpos.com
+                  </span>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[11px] text-slate-700 font-bold uppercase tracking-wider mb-1.5 font-sans">
+                  Base Currency Symbol (Global)
+                </label>
+                <select
+                  disabled={!isAdmin}
+                  value={tenantCurrency}
+                  onChange={(e) => setTenantCurrency(e.target.value)}
+                  className={`w-full bg-white border border-slate-300 text-slate-900 rounded-xl py-2.5 px-3 text-xs focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-600 font-sans cursor-pointer shadow-2xs ${!isAdmin ? "cursor-not-allowed text-slate-500 bg-slate-100" : ""}`}
+                >
+                  <option value="₹">₹ - Indian Rupee (INR)</option>
+                  <option value="$">$ - US Dollar (USD)</option>
+                  <option value="€">€ - Euro (EUR)</option>
+                  <option value="£">£ - British Pound (GBP)</option>
+                  <option value="¥">¥ - Japanese Yen (JPY)</option>
+                  <option value="AED">AED - UAE Dirham</option>
+                  <option value="SAR">SAR - Saudi Riyal</option>
+                  <option value="৳">৳ - Bangladeshi Taka (BDT)</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          {/* Theme Palette */}
+          <div className="bg-slate-50 p-5 rounded-2xl border border-slate-200 space-y-3">
+            <label className="block text-[11px] text-slate-700 font-bold uppercase tracking-wider font-sans">
               Corporate Palette Hue / Theme Color Accent
             </label>
             <div className="grid grid-cols-5 gap-3 max-w-lg">
               {[
-                { id: "emerald", label: "Emerald Green", bg: "bg-emerald-500", text: "text-emerald-400" },
-                { id: "indigo", label: "Indigo Mist", bg: "bg-indigo-500", text: "text-indigo-400" },
-                { id: "amber", label: "Amber Orange", bg: "bg-amber-500", text: "text-amber-400" },
-                { id: "rose", label: "Rose Pink", bg: "bg-rose-500", text: "text-rose-400" },
-                { id: "violet", label: "Violet Purple", bg: "bg-purple-500", text: "text-purple-400" }
+                { id: "emerald", label: "Emerald Green", bg: "bg-emerald-500", text: "text-emerald-600" },
+                { id: "indigo", label: "Indigo Mist", bg: "bg-indigo-500", text: "text-indigo-600" },
+                { id: "amber", label: "Amber Orange", bg: "bg-amber-500", text: "text-amber-600" },
+                { id: "rose", label: "Rose Pink", bg: "bg-rose-500", text: "text-rose-600" },
+                { id: "violet", label: "Violet Purple", bg: "bg-purple-500", text: "text-purple-600" }
               ].map((themeOpt) => (
                 <button
                   type="button"
                   key={themeOpt.id}
-                  disabled={currentRole !== UserRole.ADMIN}
+                  disabled={!isAdmin}
                   onClick={() => setTenantTheme(themeOpt.id)}
                   className={`border rounded-xl p-3 flex flex-col items-center justify-center gap-1.5 text-center cursor-pointer transition-all ${
                     tenantTheme === themeOpt.id 
-                    ? "bg-slate-950 border-slate-400 shadow shadow-white/5 font-extrabold" 
-                    : "bg-slate-950/40 border-slate-800 hover:border-slate-700 text-slate-400"
+                    ? "bg-white border-purple-600 ring-2 ring-purple-500/20 shadow font-extrabold text-slate-900" 
+                    : "bg-white border-slate-200 hover:border-slate-300 text-slate-600"
                   }`}
                 >
                   <span className={`w-5 h-5 rounded-full ${themeOpt.bg} shrink-0 shadow-inner`}></span>
-                  <span className="text-[9px] uppercase tracking-wide truncate max-w-full">{themeOpt.label.split(" ")[0]}</span>
+                  <span className="text-[9.5px] uppercase tracking-wide truncate max-w-full font-bold">{themeOpt.label.split(" ")[0]}</span>
                 </button>
               ))}
             </div>
           </div>
 
-          <div className="pt-2">
-            {currentRole === UserRole.ADMIN ? (
+          <div className="pt-2 flex items-center justify-between">
+            {isAdmin ? (
               <button
                 type="submit"
-                className="bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs py-2 px-5 rounded-xl shadow-lg shadow-purple-600/10 transition-all flex items-center gap-2 cursor-pointer uppercase tracking-wider font-sans"
+                disabled={isSavingTenant}
+                className="bg-purple-600 hover:bg-purple-700 active:scale-95 text-white font-bold text-xs py-2.5 px-6 rounded-xl shadow-md transition-all flex items-center gap-2 cursor-pointer uppercase tracking-wider font-sans"
               >
                 <Save className="w-4 h-4 shrink-0" />
-                Save Store Settings
+                <span>{isSavingTenant ? "Saving Changes..." : "Save Company Details & Logo"}</span>
               </button>
             ) : (
-              <p className="text-[10px] text-slate-500 italic">
-                🔒 You must log in as terminal <strong className="text-slate-400">ADMIN</strong> or <strong className="text-slate-400">SUPERADMIN</strong> to swap colors, logos, or change global currency settings.
+              <p className="text-[11px] text-slate-500 italic">
+                🔒 You must log in as terminal <strong className="text-slate-700">ADMIN</strong> or <strong className="text-slate-700">SUPERADMIN</strong> to change company details or upload logos.
               </p>
             )}
           </div>
@@ -789,13 +1099,13 @@ export default function SettingsPanel({
       {activeSubTab === "categories" && (
         /* ================= SUB-TAB: PRODUCT CATEGORIES BRANDING ================= */
         <div className="space-y-6 max-w-2xl font-sans">
-          <div className="p-4 bg-purple-500/5 text-purple-400 rounded-xl border border-purple-500/10 text-xs leading-relaxed font-medium mt-2">
-            💡 <strong className="text-white">Product Categories Manager:</strong> Create and prune product taxonomy brackets. Brackets declared here instantly populate product onboarding registries and listing catalogues.
+          <div className="p-4 bg-purple-50 text-purple-800 rounded-xl border border-purple-200 text-xs leading-relaxed font-medium mt-2">
+            💡 <strong className="text-purple-950 font-bold">Product Categories Manager:</strong> Create and prune product taxonomy brackets. Brackets declared here instantly populate product onboarding registries and listing catalogues.
           </div>
 
-          <div className="bg-slate-950 p-5 rounded-2xl border border-slate-800 space-y-4 animate-fadeIn">
-            <h3 className="text-xs font-black text-white uppercase tracking-widest flex items-center gap-1.5 font-mono">
-              <Plus className="w-4 h-4 text-purple-400" /> Create Custom Category Range
+          <div className="bg-slate-50 p-5 rounded-2xl border border-slate-200 space-y-4 animate-fadeIn">
+            <h3 className="text-xs font-black text-slate-900 uppercase tracking-widest flex items-center gap-1.5 font-mono">
+              <Plus className="w-4 h-4 text-purple-600" /> Create Custom Category Range
             </h3>
             
             <div className="flex gap-3 max-w-md">
@@ -818,7 +1128,7 @@ export default function SettingsPanel({
                     triggerNotification(`Added custom category bracket "${catToAdd}" successfully!`, "success");
                   }
                 }}
-                className="flex-1 bg-slate-900 border border-slate-800 text-slate-100 rounded-xl py-2 px-3 text-xs focus:outline-none focus:border-slate-700 placeholder-slate-600 font-sans"
+                className="flex-1 bg-white border border-slate-300 text-slate-900 rounded-xl py-2 px-3 text-xs focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-600 placeholder-slate-400 font-sans shadow-2xs"
               />
               <button
                 type="button"
@@ -836,7 +1146,7 @@ export default function SettingsPanel({
                   setNewCategoryName("");
                   triggerNotification(`Added custom category bracket "${catToAdd}" successfully!`, "success");
                 }}
-                className="bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs py-2 px-4 rounded-xl shadow-lg shadow-purple-600/10 transition-all flex items-center gap-1.5 cursor-pointer uppercase tracking-wider font-sans whitespace-nowrap"
+                className="bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs py-2 px-4 rounded-xl shadow-md transition-all flex items-center gap-1.5 cursor-pointer uppercase tracking-wider font-sans whitespace-nowrap"
               >
                 <Plus className="w-3.5 h-3.5" />
                 Add
@@ -845,29 +1155,29 @@ export default function SettingsPanel({
             <p className="text-[10px] text-slate-500">Press Enter or click Add to save the bracket to inventory defaults.</p>
           </div>
 
-          <div className="bg-slate-950 p-5 rounded-2xl border border-slate-800 space-y-4">
-            <h3 className="text-xs font-black text-white hover:text-purple-400 transition-colors uppercase tracking-widest flex items-center gap-1.5 font-mono">
-              <List className="w-4 h-4 text-purple-400" /> Catalogued Brackets ({productCategories.length})
+          <div className="bg-slate-50 p-5 rounded-2xl border border-slate-200 space-y-4">
+            <h3 className="text-xs font-black text-slate-900 uppercase tracking-widest flex items-center gap-1.5 font-mono">
+              <List className="w-4 h-4 text-purple-600" /> Catalogued Brackets ({productCategories.length})
             </h3>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {productCategories.map((cat, index) => (
                 <div 
                   key={cat + index} 
-                  className="bg-slate-900 border border-slate-800 p-3 rounded-xl flex items-center justify-between hover:border-slate-700/80 transition-all group"
+                  className="bg-white border border-slate-200 p-3 rounded-xl flex items-center justify-between hover:border-slate-300 transition-all shadow-2xs group"
                 >
                   <div className="flex items-center gap-2.5 min-w-0">
-                    <span className="w-7 h-7 rounded-lg bg-slate-950 flex items-center justify-center text-slate-400 group-hover:bg-purple-500/10 group-hover:text-purple-400 transition-colors text-[10px] font-mono font-bold shrink-0">
+                    <span className="w-7 h-7 rounded-lg bg-slate-100 flex items-center justify-center text-slate-600 group-hover:bg-purple-50 group-hover:text-purple-700 transition-colors text-[10px] font-mono font-bold shrink-0">
                       {String(index + 1).padStart(2, "0")}
                     </span>
-                    <span className="text-xs font-extrabold text-white truncate">{cat}</span>
+                    <span className="text-xs font-extrabold text-slate-900 truncate">{cat}</span>
                   </div>
 
                   <div className="flex items-center gap-1 shrink-0">
                     <button
                       type="button"
                       onClick={() => setViewingCategory(cat)}
-                      className="p-1 text-slate-400 hover:text-indigo-400 hover:bg-slate-800 rounded transition-colors cursor-pointer border border-transparent hover:border-slate-850"
+                      className="p-1 text-slate-500 hover:text-indigo-600 hover:bg-slate-100 rounded transition-colors cursor-pointer"
                       title="View category details"
                     >
                       <Eye className="w-3.5 h-3.5" />
@@ -876,7 +1186,7 @@ export default function SettingsPanel({
                     <button
                       type="button"
                       onClick={() => startEditCategory(cat)}
-                      className="p-1 text-slate-400 hover:text-amber-400 hover:bg-slate-800 rounded transition-colors cursor-pointer border border-transparent hover:border-slate-850"
+                      className="p-1 text-slate-500 hover:text-amber-600 hover:bg-slate-100 rounded transition-colors cursor-pointer"
                       title="Edit category info"
                     >
                       <Edit className="w-3.5 h-3.5" />
@@ -885,7 +1195,7 @@ export default function SettingsPanel({
                     <button
                       type="button"
                       onClick={() => setDeletingCategory(cat)}
-                      className="p-1 text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 rounded transition-colors cursor-pointer border border-transparent hover:border-rose-500/20"
+                      className="p-1 text-slate-500 hover:text-rose-600 hover:bg-rose-50 rounded transition-colors cursor-pointer"
                       title="Delete category range"
                     >
                       <Trash className="w-3.5 h-3.5" />
@@ -901,8 +1211,8 @@ export default function SettingsPanel({
       {activeSubTab === "suppliers" && (
         /* ================= SUB-TAB: VENDORS & SUPPLIERS ================= */
         <div className="space-y-6 max-w-4xl font-sans">
-          <div className="p-4 bg-purple-500/5 text-purple-400 rounded-xl border border-purple-500/10 text-xs leading-relaxed font-medium mt-2">
-            💡 <strong className="text-white">Vendor & Supplier Hub:</strong> Configure your distribution partner rosters. Registries configured here automatically refresh dynamic item onboarding source listings and inventory cost-of-goods ledgers.
+          <div className="p-4 bg-purple-50 text-purple-800 rounded-xl border border-purple-200 text-xs leading-relaxed font-medium mt-2">
+            💡 <strong className="text-purple-950 font-bold">Vendor & Supplier Hub:</strong> Configure your distribution partner rosters. Registries configured here automatically refresh dynamic item onboarding source listings and inventory cost-of-goods ledgers.
           </div>
 
           <form 
@@ -944,68 +1254,68 @@ export default function SettingsPanel({
                 triggerNotification("Failed to upload supplier parameters.", "warning");
               }
             }}
-            className="bg-slate-950 p-6 rounded-2xl border border-slate-800 space-y-4 animate-fadeIn"
+            className="bg-slate-50 p-6 rounded-2xl border border-slate-200 space-y-4 animate-fadeIn"
           >
-            <h3 className="text-xs font-black text-white uppercase tracking-widest flex items-center gap-1.5 font-mono">
-              <Plus className="w-4 h-4 text-purple-400" /> Register New Distributor/Vendor
+            <h3 className="text-xs font-black text-slate-900 uppercase tracking-widest flex items-center gap-1.5 font-mono">
+              <Plus className="w-4 h-4 text-purple-600" /> Register New Distributor/Vendor
             </h3>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="block text-[11px] font-mono text-slate-400 font-bold uppercase tracking-wider mb-1.5">Company/Vendor Name *</label>
+                <label className="block text-[11px] font-sans text-slate-600 font-bold uppercase tracking-wider mb-1.5">Company/Vendor Name *</label>
                 <input
                   type="text"
                   placeholder="e.g. Supreme Agro Foods Ltd."
                   value={supName}
                   onChange={(e) => setSupName(e.target.value)}
-                  className="w-full bg-slate-900 border border-slate-800 text-slate-100 rounded-xl py-2 px-3 text-xs focus:outline-none focus:border-slate-700 placeholder-slate-600 font-sans"
+                  className="w-full bg-white border border-slate-300 text-slate-900 rounded-xl py-2 px-3 text-xs focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-600 placeholder-slate-400 font-sans shadow-2xs"
                   required
                 />
               </div>
 
               <div>
-                <label className="block text-[11px] font-mono text-slate-400 font-bold uppercase tracking-wider mb-1.5">Primary Contact Agent *</label>
+                <label className="block text-[11px] font-sans text-slate-600 font-bold uppercase tracking-wider mb-1.5">Primary Contact Agent *</label>
                 <input
                   type="text"
                   placeholder="e.g. Rajesh Kumar"
                   value={supContact}
                   onChange={(e) => setSupContact(e.target.value)}
-                  className="w-full bg-slate-900 border border-slate-800 text-slate-100 rounded-xl py-2 px-3 text-xs focus:outline-none focus:border-slate-700 placeholder-slate-600 font-sans"
+                  className="w-full bg-white border border-slate-300 text-slate-900 rounded-xl py-2 px-3 text-xs focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-600 placeholder-slate-400 font-sans shadow-2xs"
                   required
                 />
               </div>
 
               <div>
-                <label className="block text-[11px] font-mono text-slate-400 font-bold uppercase tracking-wider mb-1.5">Communication Phone *</label>
+                <label className="block text-[11px] font-sans text-slate-600 font-bold uppercase tracking-wider mb-1.5">Communication Phone *</label>
                 <input
                   type="text"
                   placeholder="e.g. 9876543210"
                   value={supPhone}
                   onChange={(e) => setSupPhone(e.target.value)}
-                  className="w-full bg-slate-900 border border-slate-800 text-slate-100 rounded-xl py-2 px-3 text-xs focus:outline-none focus:border-slate-700 placeholder-slate-600 font-sans"
+                  className="w-full bg-white border border-slate-300 text-slate-900 rounded-xl py-2 px-3 text-xs focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-600 placeholder-slate-400 font-sans shadow-2xs"
                   required
                 />
               </div>
 
               <div>
-                <label className="block text-[11px] font-mono text-slate-400 font-bold uppercase tracking-wider mb-1.5">Corporate Email Address</label>
+                <label className="block text-[11px] font-sans text-slate-600 font-bold uppercase tracking-wider mb-1.5">Corporate Email Address</label>
                 <input
                   type="email"
                   placeholder="e.g. sales@supremeagro.com"
                   value={supEmail}
                   onChange={(e) => setSupEmail(e.target.value)}
-                  className="w-full bg-slate-900 border border-slate-800 text-slate-100 rounded-xl py-2 px-3 text-xs focus:outline-none focus:border-slate-700 placeholder-slate-600 font-sans"
+                  className="w-full bg-white border border-slate-300 text-slate-900 rounded-xl py-2 px-3 text-xs focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-600 placeholder-slate-400 font-sans shadow-2xs"
                 />
               </div>
 
               <div className="md:col-span-2">
-                <label className="block text-[11px] font-mono text-slate-400 font-bold uppercase tracking-wider mb-1.5">GSTIN / Tax Registration Number</label>
+                <label className="block text-[11px] font-sans text-slate-600 font-bold uppercase tracking-wider mb-1.5">GSTIN / Tax Registration Number</label>
                 <input
                   type="text"
                   placeholder="e.g. 07AAAAA1111A1Z1"
                   value={supGstin}
                   onChange={(e) => setSupGstin(e.target.value)}
-                  className="w-full bg-slate-900 border border-slate-850 text-slate-100 rounded-xl py-2 px-3 text-xs focus:outline-none focus:border-slate-750 placeholder-slate-600 font-mono uppercase font-semibold"
+                  className="w-full bg-white border border-slate-300 text-slate-900 rounded-xl py-2 px-3 text-xs focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-600 placeholder-slate-400 font-mono uppercase font-semibold shadow-2xs"
                 />
               </div>
             </div>
@@ -1013,7 +1323,7 @@ export default function SettingsPanel({
             <div className="flex justify-end pt-2">
               <button
                 type="submit"
-                className="bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs py-2 px-5 rounded-xl shadow-lg shadow-purple-600/10 transition-all flex items-center gap-1.5 cursor-pointer uppercase tracking-wider font-sans whitespace-nowrap"
+                className="bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs py-2.5 px-6 rounded-xl shadow-md transition-all flex items-center gap-1.5 cursor-pointer uppercase tracking-wider font-sans whitespace-nowrap"
               >
                 <Plus className="w-3.5 h-3.5" />
                 Register Partner
@@ -1021,9 +1331,9 @@ export default function SettingsPanel({
             </div>
           </form>
 
-          <div className="bg-slate-950 p-6 rounded-2xl border border-slate-800 space-y-4">
-            <h3 className="text-xs font-black text-white uppercase tracking-widest flex items-center gap-1.5 font-mono pb-2 border-b border-slate-900">
-              <Users className="w-4 h-4 text-purple-400" /> Active Vendor & Distributor Partners ({suppliers?.length || 0})
+          <div className="bg-slate-50 p-6 rounded-2xl border border-slate-200 space-y-4">
+            <h3 className="text-xs font-black text-slate-900 uppercase tracking-widest flex items-center gap-1.5 font-mono pb-2 border-b border-slate-200">
+              <Users className="w-4 h-4 text-purple-600" /> Active Vendor & Distributor Partners ({suppliers?.length || 0})
             </h3>
 
             {(!suppliers || suppliers.length === 0) ? (
@@ -1033,19 +1343,19 @@ export default function SettingsPanel({
                 {suppliers.map((sup, index) => (
                   <div 
                     key={sup.id || index}
-                    className="bg-slate-900 border border-slate-800/80 p-4 rounded-xl flex flex-col justify-between hover:border-slate-700 transition-all group relative"
+                    className="bg-white border border-slate-200 p-4 rounded-xl flex flex-col justify-between hover:border-slate-300 transition-all shadow-2xs group relative"
                   >
                     <div className="space-y-2">
                       <div className="flex items-start justify-between gap-4">
                         <div className="min-w-0 pr-24 font-sans">
-                          <p className="text-xs font-black text-white truncate font-sans">{sup.name}</p>
-                          <p className="text-[10px] text-slate-400 font-mono mt-0.5">ID: {sup.id}</p>
+                          <p className="text-xs font-black text-slate-900 truncate font-sans">{sup.name}</p>
+                          <p className="text-[10px] text-slate-500 font-mono mt-0.5">ID: {sup.id}</p>
                         </div>
                         <div className="flex items-center gap-1 shrink-0 absolute right-3 top-3">
                           <button
                             type="button"
                             onClick={() => setViewingSupplier(sup)}
-                            className="p-1.5 text-slate-400 hover:text-indigo-400 hover:bg-slate-800 rounded-lg transition-colors cursor-pointer border border-transparent hover:border-slate-850"
+                            className="p-1.5 text-slate-500 hover:text-indigo-600 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer"
                             title={`Detailed vendor claims index for ${sup.name}`}
                           >
                             <Eye className="w-3.5 h-3.5" />
@@ -1054,7 +1364,7 @@ export default function SettingsPanel({
                           <button
                             type="button"
                             onClick={() => startEditSupplier(sup)}
-                            className="p-1.5 text-slate-400 hover:text-amber-400 hover:bg-slate-800 rounded-lg transition-colors cursor-pointer border border-transparent hover:border-slate-850"
+                            className="p-1.5 text-slate-500 hover:text-amber-600 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer"
                             title={`Edit vendor record for ${sup.name}`}
                           >
                             <Edit className="w-3.5 h-3.5" />
@@ -1063,7 +1373,7 @@ export default function SettingsPanel({
                           <button
                             type="button"
                             onClick={() => setDeletingSupplier(sup)}
-                            className="p-1.5 text-slate-400 hover:text-rose-450 hover:bg-rose-500/10 rounded-lg transition-colors cursor-pointer border border-transparent hover:border-rose-500/20"
+                            className="p-1.5 text-slate-500 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
                             title={`Discard vendor partner ${sup.name}`}
                           >
                             <Trash className="w-3.5 h-3.5" />
@@ -1071,25 +1381,25 @@ export default function SettingsPanel({
                         </div>
                       </div>
 
-                      <div className="grid grid-cols-2 gap-y-1.5 gap-x-3 text-[10px] text-slate-400 pt-2 border-t border-slate-800/40">
+                      <div className="grid grid-cols-2 gap-y-1.5 gap-x-3 text-[10px] text-slate-600 pt-2 border-t border-slate-100">
                         <div>
-                          <span className="block text-[8px] uppercase tracking-wider text-slate-500 font-mono">Contact Agent</span>
-                          <span className="font-bold text-slate-300">{sup.contact || "—"}</span>
+                          <span className="block text-[8px] uppercase tracking-wider text-slate-500 font-sans font-bold">Contact Agent</span>
+                          <span className="font-bold text-slate-800">{sup.contact || "—"}</span>
                         </div>
                         <div>
-                          <span className="block text-[8px] uppercase tracking-wider text-slate-500 font-mono">Phone No.</span>
-                          <span className="font-bold text-slate-300 font-mono">{sup.phone || "—"}</span>
+                          <span className="block text-[8px] uppercase tracking-wider text-slate-500 font-sans font-bold">Phone No.</span>
+                          <span className="font-bold text-slate-800 font-mono">{sup.phone || "—"}</span>
                         </div>
                         {sup.email && (
                           <div className="col-span-2">
-                            <span className="block text-[8px] uppercase tracking-wider text-slate-500 font-mono">Email Address</span>
-                            <span className="text-purple-400 font-semibold truncate block max-w-full font-mono">{sup.email}</span>
+                            <span className="block text-[8px] uppercase tracking-wider text-slate-500 font-sans font-bold">Email Address</span>
+                            <span className="text-purple-700 font-semibold truncate block max-w-full font-mono">{sup.email}</span>
                           </div>
                         )}
                         {sup.gstin && (
                           <div className="col-span-2">
-                            <span className="block text-[8px] uppercase tracking-wider text-slate-500 font-mono">GSTIN ID</span>
-                            <span className="text-slate-200 font-mono uppercase select-all font-semibold">{sup.gstin}</span>
+                            <span className="block text-[8px] uppercase tracking-wider text-slate-500 font-sans font-bold">GSTIN ID</span>
+                            <span className="text-slate-900 font-mono uppercase select-all font-semibold">{sup.gstin}</span>
                           </div>
                         )}
                       </div>
@@ -1105,8 +1415,8 @@ export default function SettingsPanel({
       {activeSubTab === "branches" && (
         /* ================= SUB-TAB: STORE BRANCHES ================= */
         <div className="space-y-6 max-w-4xl font-sans">
-          <div className="p-4 bg-emerald-500/5 text-emerald-400 rounded-xl border border-emerald-500/10 text-xs leading-relaxed font-medium mt-2">
-            💡 <strong className="text-white">Multi-Branch System Hub:</strong> Configure your brand's physical location nodes and retail warehouses. Each branch manages its active drawers, local sales, and utility registers independently.
+          <div className="p-4 bg-emerald-50 text-emerald-800 rounded-xl border border-emerald-200 text-xs leading-relaxed font-medium mt-2">
+            💡 <strong className="text-emerald-950 font-bold">Multi-Branch System Hub:</strong> Configure your brand's physical location nodes and retail warehouses. Each branch manages its active drawers, local sales, and utility registers independently.
           </div>
 
           <form 
@@ -1147,61 +1457,61 @@ export default function SettingsPanel({
                 triggerNotification("Failed to upload branch parameters.", "warning");
               }
             }}
-            className="bg-slate-950 p-6 rounded-2xl border border-slate-800 space-y-4 animate-fadeIn"
+            className="bg-slate-50 p-6 rounded-2xl border border-slate-200 space-y-4 animate-fadeIn"
           >
-            <div className="flex justify-between items-center pb-2 border-b border-slate-900">
-              <h3 className="text-xs font-black text-white uppercase tracking-widest flex items-center gap-1.5 font-mono">
-                <Plus className="w-4 h-4 text-emerald-400" /> Provision New Location Branch Node
+            <div className="flex justify-between items-center pb-2 border-b border-slate-200">
+              <h3 className="text-xs font-black text-slate-900 uppercase tracking-widest flex items-center gap-1.5 font-mono">
+                <Plus className="w-4 h-4 text-emerald-600" /> Provision New Location Branch Node
               </h3>
-              <span className="text-[10px] font-mono bg-slate-800 text-slate-300 px-2 py-0.5 rounded font-bold uppercase tracking-wider">
+              <span className="text-[10px] font-mono bg-slate-200 text-slate-800 px-2 py-0.5 rounded font-bold uppercase tracking-wider">
                 QUOTA: {branches?.length || 0} / {activeTenant.maxBranches} NODES
               </span>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="block text-[11px] font-mono text-slate-400 font-bold uppercase tracking-wider mb-1.5 font-sans">Branch / Outlet Name *</label>
+                <label className="block text-[11px] font-sans text-slate-600 font-bold uppercase tracking-wider mb-1.5">Branch / Outlet Name *</label>
                 <input
                   type="text"
                   placeholder="e.g. Westside Express Grocery"
                   value={brName}
                   onChange={(e) => setBrName(e.target.value)}
-                  className="w-full bg-slate-900 border border-slate-800 text-slate-100 rounded-xl py-2 px-3 text-xs focus:outline-none focus:border-slate-700 placeholder-slate-600 font-sans"
+                  className="w-full bg-white border border-slate-300 text-slate-900 rounded-xl py-2 px-3 text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 placeholder-slate-400 font-sans shadow-2xs"
                   required
                 />
               </div>
 
               <div>
-                <label className="block text-[11px] font-mono text-slate-400 font-bold uppercase tracking-wider mb-1.5 font-sans">Contact Phone No.</label>
+                <label className="block text-[11px] font-sans text-slate-600 font-bold uppercase tracking-wider mb-1.5">Contact Phone No.</label>
                 <input
                   type="text"
                   placeholder="e.g. 011-87654321"
                   value={brPhone}
                   onChange={(e) => setBrPhone(e.target.value)}
-                  className="w-full bg-slate-900 border border-slate-800 text-slate-100 rounded-xl py-2 px-3 text-xs focus:outline-none focus:border-slate-700 placeholder-slate-600 font-sans"
+                  className="w-full bg-white border border-slate-300 text-slate-900 rounded-xl py-2 px-3 text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 placeholder-slate-400 font-sans shadow-2xs"
                 />
               </div>
 
               <div>
-                <label className="block text-[11px] font-mono text-slate-400 font-bold uppercase tracking-wider mb-1.5 font-sans">Full Physical Address *</label>
+                <label className="block text-[11px] font-sans text-slate-600 font-bold uppercase tracking-wider mb-1.5">Full Physical Address *</label>
                 <input
                   type="text"
                   placeholder="e.g. Shop 4, Lotus Circle View Lane"
                   value={brAddress}
                   onChange={(e) => setBrAddress(e.target.value)}
-                  className="w-full bg-slate-900 border border-slate-800 text-slate-100 rounded-xl py-2 px-3 text-xs focus:outline-none focus:border-slate-700 placeholder-slate-600 font-sans"
+                  className="w-full bg-white border border-slate-300 text-slate-900 rounded-xl py-2 px-3 text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 placeholder-slate-400 font-sans shadow-2xs"
                   required
                 />
               </div>
 
               <div>
-                <label className="block text-[11px] font-mono text-slate-400 font-bold uppercase tracking-wider mb-1.5 font-sans">Town / City *</label>
+                <label className="block text-[11px] font-sans text-slate-600 font-bold uppercase tracking-wider mb-1.5">Town / City *</label>
                 <input
                   type="text"
                   placeholder="e.g. New Delhi"
                   value={brCity}
                   onChange={(e) => setBrCity(e.target.value)}
-                  className="w-full bg-slate-900 border border-slate-800 text-slate-100 rounded-xl py-2 px-3 text-xs focus:outline-none focus:border-slate-700 placeholder-slate-600 font-sans"
+                  className="w-full bg-white border border-slate-300 text-slate-900 rounded-xl py-2 px-3 text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 placeholder-slate-400 font-sans shadow-2xs"
                   required
                 />
               </div>
@@ -1211,10 +1521,10 @@ export default function SettingsPanel({
               <button
                 type="submit"
                 disabled={branches && branches.length >= activeTenant.maxBranches}
-                className={`font-bold text-xs py-2 px-5 rounded-xl transition-all flex items-center gap-1.5 cursor-pointer uppercase tracking-wider font-sans whitespace-nowrap ${
+                className={`font-bold text-xs py-2.5 px-6 rounded-xl transition-all flex items-center gap-1.5 cursor-pointer uppercase tracking-wider font-sans whitespace-nowrap ${
                   branches && branches.length >= activeTenant.maxBranches
-                    ? "bg-slate-800 text-slate-500 cursor-not-allowed"
-                    : "bg-emerald-600 hover:bg-emerald-700 text-white shadow-lg shadow-emerald-600/10"
+                    ? "bg-slate-200 text-slate-400 cursor-not-allowed"
+                    : "bg-emerald-600 hover:bg-emerald-700 text-white shadow-md"
                 }`}
               >
                 <Plus className="w-3.5 h-3.5" />
@@ -1223,9 +1533,9 @@ export default function SettingsPanel({
             </div>
           </form>
 
-          <div className="bg-slate-950 p-6 rounded-2xl border border-slate-800 space-y-4">
-            <h3 className="text-xs font-black text-white uppercase tracking-widest flex items-center gap-1.5 font-mono pb-2 border-b border-slate-900">
-              <Globe className="w-4 h-4 text-emerald-400" /> Active Branch Nodes ({branches?.length || 0})
+          <div className="bg-slate-50 p-6 rounded-2xl border border-slate-200 space-y-4">
+            <h3 className="text-xs font-black text-slate-900 uppercase tracking-widest flex items-center gap-1.5 font-mono pb-2 border-b border-slate-200">
+              <Globe className="w-4 h-4 text-emerald-600" /> Active Branch Nodes ({branches?.length || 0})
             </h3>
 
             {(!branches || branches.length === 0) ? (
@@ -1235,19 +1545,19 @@ export default function SettingsPanel({
                 {branches.map((b, idx) => (
                   <div 
                     key={b.id || idx}
-                    className="bg-slate-900 border border-slate-800/85 p-4 rounded-xl flex flex-col justify-between hover:border-slate-700 transition-all group relative"
+                    className="bg-white border border-slate-200 p-4 rounded-xl flex flex-col justify-between hover:border-slate-300 transition-all shadow-2xs group relative"
                   >
                     <div className="space-y-2">
                       <div className="flex items-start justify-between gap-4">
                         <div className="min-w-0 pr-24 font-sans">
-                          <p className="text-xs font-black text-white truncate font-sans">{b.name}</p>
-                          <p className="text-[10px] text-slate-400 font-mono mt-0.5">Node ID: {b.id}</p>
+                          <p className="text-xs font-black text-slate-900 truncate font-sans">{b.name}</p>
+                          <p className="text-[10px] text-slate-500 font-mono mt-0.5">Node ID: {b.id}</p>
                         </div>
                         <div className="flex items-center gap-1 shrink-0 absolute right-3 top-3">
                           <button
                             type="button"
                             onClick={() => setViewingBranch(b)}
-                            className="p-1.5 text-slate-400 hover:text-indigo-400 hover:bg-slate-800 rounded-lg transition-colors cursor-pointer border border-transparent hover:border-slate-850"
+                            className="p-1.5 text-slate-500 hover:text-indigo-600 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer"
                             title={`Detailed location record for ${b.name}`}
                           >
                             <Eye className="w-3.5 h-3.5" />
@@ -1256,7 +1566,7 @@ export default function SettingsPanel({
                           <button
                             type="button"
                             onClick={() => startEditBranch(b)}
-                            className="p-1.5 text-slate-400 hover:text-amber-400 hover:bg-slate-800 rounded-lg transition-colors cursor-pointer border border-transparent hover:border-slate-850"
+                            className="p-1.5 text-slate-500 hover:text-amber-600 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer"
                             title={`Edit location descriptor for ${b.name}`}
                           >
                             <Edit className="w-3.5 h-3.5" />
@@ -1266,7 +1576,7 @@ export default function SettingsPanel({
                             <button
                               type="button"
                               onClick={() => setDeletingBranch(b)}
-                              className="p-1.5 text-slate-400 hover:text-rose-450 hover:bg-rose-500/10 rounded-lg transition-colors cursor-pointer border border-transparent hover:border-rose-500/20"
+                              className="p-1.5 text-slate-500 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
                               title={`Discard branch location ${b.name}`}
                             >
                               <Trash className="w-3.5 h-3.5" />
@@ -1275,25 +1585,25 @@ export default function SettingsPanel({
                         </div>
                       </div>
 
-                      <div className="grid grid-cols-1 gap-y-1 text-[10px] text-slate-400 pt-2 border-t border-slate-800/40 font-sans">
+                      <div className="grid grid-cols-1 gap-y-1 text-[10px] text-slate-600 pt-2 border-t border-slate-100 font-sans">
                         <div>
-                          <span className="text-[8px] uppercase tracking-wider text-slate-500 font-mono block">Branch Address</span>
-                          <span className="font-semibold text-slate-300">{b.address || "—"}</span>
+                          <span className="text-[8px] uppercase tracking-wider text-slate-500 font-sans font-bold block">Branch Address</span>
+                          <span className="font-semibold text-slate-800">{b.address || "—"}</span>
                         </div>
                         <div>
-                          <span className="text-[8px] uppercase tracking-wider text-slate-500 font-mono block">Location / City</span>
-                          <span className="font-mono text-slate-300">{b.city || "—"}</span>
+                          <span className="text-[8px] uppercase tracking-wider text-slate-500 font-sans font-bold block">Location / City</span>
+                          <span className="font-mono text-slate-800">{b.city || "—"}</span>
                         </div>
                         <div>
-                          <span className="text-[8px] uppercase tracking-wider text-slate-500 font-mono block">Direct Helpline</span>
-                          <span className="font-mono text-slate-300">{b.phone || "—"}</span>
+                          <span className="text-[8px] uppercase tracking-wider text-slate-500 font-sans font-bold block">Direct Helpline</span>
+                          <span className="font-mono text-slate-800">{b.phone || "—"}</span>
                         </div>
                       </div>
 
-                      <div className="pt-3 border-t border-slate-800/60 mt-1 flex items-center justify-between">
+                      <div className="pt-3 border-t border-slate-100 mt-1 flex items-center justify-between">
                         {currentBranch?.id === b.id ? (
-                          <span className="inline-flex items-center gap-1.5 text-[9.5px] font-bold text-emerald-450 bg-emerald-500/10 border border-emerald-500/25 px-2.5 py-1 rounded">
-                            <Check className="w-3.5 h-3.5" /> Selected Operating Outlet
+                          <span className="inline-flex items-center gap-1.5 text-[10px] font-bold text-emerald-800 bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-lg">
+                            <Check className="w-3.5 h-3.5 text-emerald-600" /> Selected Operating Outlet
                           </span>
                         ) : (
                           <button
@@ -1303,9 +1613,9 @@ export default function SettingsPanel({
                                 onSwitchBranch(b.id);
                               }
                             }}
-                            className="text-[9.5px] text-stone-200 font-bold bg-[#1e4d3e]/70 hover:bg-[#1e4d3e] border border-stone-400/35 rounded px-2.5 py-1.25 transition-all flex items-center gap-1 cursor-pointer"
+                            className="text-[10px] text-emerald-700 font-bold bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-lg px-2.5 py-1.25 transition-all flex items-center gap-1 cursor-pointer"
                           >
-                            <Globe className="w-3 h-3 text-emerald-400" /> Switch &amp; Operate Branch
+                            <Globe className="w-3 h-3 text-emerald-600" /> Switch &amp; Operate Branch
                           </button>
                         )}
                       </div>
@@ -1322,29 +1632,29 @@ export default function SettingsPanel({
         /* ================= SUB-TAB: POS OPERATIONAL PREFERENCES ================= */
         <form onSubmit={handleSavePOSSettings} className="space-y-6 max-w-2xl font-sans">
           <div className="space-y-4">
-            <h3 className="text-xs font-black text-white uppercase tracking-widest flex items-center gap-1.5 font-mono">
-              <Printer className="w-4 h-4 text-purple-400" /> POS Operational Settings
+            <h3 className="text-xs font-black text-slate-900 uppercase tracking-widest flex items-center gap-1.5 font-mono">
+              <Printer className="w-4 h-4 text-purple-600" /> POS Operational Settings
             </h3>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-5 p-5 bg-slate-950 rounded-2xl border border-slate-800">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5 p-5 bg-slate-50 rounded-2xl border border-slate-200">
               <div className="space-y-4">
-                <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+                <div className="flex items-center justify-between pb-3 border-b border-slate-200">
                   <div>
-                    <span className="text-xs font-extrabold text-white block">Auto-Print Cash Receipts</span>
-                    <span className="text-[10px] text-slate-400">Trigger invoice print triggers on POS Checkout checkout</span>
+                    <span className="text-xs font-extrabold text-slate-900 block">Auto-Print Cash Receipts</span>
+                    <span className="text-[10px] text-slate-500">Trigger invoice print on POS Checkout</span>
                   </div>
                   <input
                     type="checkbox"
                     checked={opsSettings.autoPrintReceipt}
                     onChange={(e) => setOpsSettings({ ...opsSettings, autoPrintReceipt: e.target.checked })}
-                    className="w-4 h-4 rounded border-slate-700 bg-slate-900 cursor-pointer accent-purple-600"
+                    className="w-4 h-4 rounded border-slate-300 text-purple-600 cursor-pointer accent-purple-600"
                   />
                 </div>
 
-                <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+                <div className="flex items-center justify-between pb-3 border-b border-slate-200">
                   <div>
-                    <span className="text-xs font-extrabold text-white block">Scanner Beep Sound FX</span>
-                    <span className="text-[10px] text-slate-400">Trigger standard POS click and success alert audio tones</span>
+                    <span className="text-xs font-extrabold text-slate-900 block">Scanner Beep Sound FX</span>
+                    <span className="text-[10px] text-slate-500">Trigger POS click and alert audio tones</span>
                   </div>
                   <div className="flex items-center gap-2">
                     <button
@@ -1352,8 +1662,8 @@ export default function SettingsPanel({
                       onClick={() => setOpsSettings({ ...opsSettings, enableSound: !opsSettings.enableSound })}
                       className={`p-1.5 rounded-lg border cursor-pointer transition-colors ${
                         opsSettings.enableSound 
-                          ? "bg-purple-600/10 text-purple-400 border-purple-500/10" 
-                          : "bg-slate-900 text-slate-500 border-slate-800"
+                          ? "bg-purple-50 text-purple-700 border-purple-200" 
+                          : "bg-white text-slate-400 border-slate-200"
                       }`}
                     >
                       {opsSettings.enableSound ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
@@ -1363,8 +1673,8 @@ export default function SettingsPanel({
 
                 <div>
                   <div className="flex justify-between items-center mb-1">
-                    <span className="text-xs font-extrabold text-white block">Maximum Checkout Discount Allowed</span>
-                    <span className="text-xs font-mono font-bold text-amber-500">{opsSettings.maxDiscountAllowed}%</span>
+                    <span className="text-xs font-extrabold text-slate-900 block">Maximum Checkout Discount</span>
+                    <span className="text-xs font-mono font-bold text-amber-600">{opsSettings.maxDiscountAllowed}%</span>
                   </div>
                   <input
                     type="range"
@@ -1373,15 +1683,15 @@ export default function SettingsPanel({
                     step="5"
                     value={opsSettings.maxDiscountAllowed}
                     onChange={(e) => setOpsSettings({ ...opsSettings, maxDiscountAllowed: parseInt(e.target.value) })}
-                    className="w-full accent-purple-500 bg-slate-900 cursor-pointer"
+                    className="w-full accent-purple-600 bg-slate-200 cursor-pointer"
                   />
-                  <span className="text-[9.5px] text-slate-400 block mt-1">Prevents staff from entering high retail discounts. Master overrides allowed for Admin.</span>
+                  <span className="text-[10px] text-slate-500 block mt-1">Prevents cashier staff from entering excessively high retail discounts.</span>
                 </div>
               </div>
 
               <div className="space-y-4">
                 <div>
-                  <label className="block text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1.5">
+                  <label className="block text-[11px] text-slate-600 font-bold uppercase tracking-wider mb-1.5 font-sans">
                     Receipt Header Memo Title
                   </label>
                   <input
@@ -1389,23 +1699,23 @@ export default function SettingsPanel({
                     required
                     value={opsSettings.receiptHeader}
                     onChange={(e) => setOpsSettings({ ...opsSettings, receiptHeader: e.target.value.toUpperCase() })}
-                    className="w-full bg-slate-900 border border-slate-800 text-slate-200 rounded-xl py-2 px-3 text-xs focus:outline-none focus:border-slate-700 font-mono"
+                    className="w-full bg-white border border-slate-300 text-slate-900 rounded-xl py-2 px-3 text-xs focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-600 font-mono shadow-2xs"
                   />
-                  <span className="text-[8.5px] text-slate-500 block mt-1">Example: OFFICIAL RETAIL CASH INVOICE</span>
+                  <span className="text-[10px] text-slate-400 block mt-1">Example: OFFICIAL RETAIL CASH INVOICE</span>
                 </div>
 
                 <div>
-                  <label className="block text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1.5">
-                    Receipt Footer Disclaimer / Welcome Back Greeting
+                  <label className="block text-[11px] text-slate-600 font-bold uppercase tracking-wider mb-1.5 font-sans">
+                    Receipt Footer Disclaimer / Greeting
                   </label>
                   <input
                     type="text"
                     required
                     value={opsSettings.receiptFooter}
                     onChange={(e) => setOpsSettings({ ...opsSettings, receiptFooter: e.target.value })}
-                    className="w-full bg-slate-900 border border-slate-800 text-slate-200 rounded-xl py-2 px-3 text-xs focus:outline-none focus:border-slate-700 font-mono"
+                    className="w-full bg-white border border-slate-300 text-slate-900 rounded-xl py-2 px-3 text-xs focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-600 font-mono shadow-2xs"
                   />
-                  <span className="text-[8.5px] text-slate-500 block mt-1">Example: Thank you for shopping with us! No returns after 7 days.</span>
+                  <span className="text-[10px] text-slate-400 block mt-1">Example: Thank you for shopping with us! No returns after 7 days.</span>
                 </div>
               </div>
             </div>
@@ -1414,10 +1724,10 @@ export default function SettingsPanel({
           <div className="pt-2">
             <button
               type="submit"
-              className="bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs py-2 px-5 rounded-xl shadow-lg shadow-purple-600/10 transition-all flex items-center gap-2 cursor-pointer uppercase tracking-wider"
+              className="bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs py-2.5 px-6 rounded-xl shadow-md transition-all flex items-center gap-2 cursor-pointer uppercase tracking-wider font-sans"
             >
               <Save className="w-4 h-4 shrink-0" />
-              Save Operational settings
+              Save Operational Settings
             </button>
           </div>
         </form>
@@ -1428,42 +1738,42 @@ export default function SettingsPanel({
         <div className="space-y-6 max-w-2xl font-sans">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
             {/* Database stats */}
-            <div className="bg-slate-950 rounded-2xl border border-slate-800 p-5 space-y-4">
-              <h3 className="text-xs font-black text-white hover:text-purple-400 transition-colors uppercase tracking-widest flex items-center gap-1.5 font-mono">
-                <Database className="w-4 h-4 text-purple-400" /> Database Cache Metrics
+            <div className="bg-slate-50 rounded-2xl border border-slate-200 p-5 space-y-4">
+              <h3 className="text-xs font-black text-slate-900 uppercase tracking-widest flex items-center gap-1.5 font-mono">
+                <Database className="w-4 h-4 text-purple-600" /> Database Cache Metrics
               </h3>
 
               <div className="grid grid-cols-2 gap-3 text-xs font-mono">
-                <div className="bg-slate-900 border border-slate-800/80 p-3 rounded-xl">
-                  <span className="text-slate-500 text-[9px] uppercase tracking-wider block font-bold">Catalogue count</span>
-                  <span className="text-white text-base font-extrabold block mt-1">{stats.products} products</span>
+                <div className="bg-white border border-slate-200 p-3 rounded-xl shadow-2xs">
+                  <span className="text-slate-500 text-[9px] uppercase tracking-wider block font-bold font-sans">Catalogue Count</span>
+                  <span className="text-slate-900 text-base font-extrabold block mt-1">{stats.products} products</span>
                 </div>
-                <div className="bg-slate-900 border border-slate-800/80 p-3 rounded-xl">
-                  <span className="text-slate-500 text-[9px] uppercase tracking-wider block font-bold">CRM Files</span>
-                  <span className="text-white text-base font-extrabold block mt-1">{stats.customers} clients</span>
+                <div className="bg-white border border-slate-200 p-3 rounded-xl shadow-2xs">
+                  <span className="text-slate-500 text-[9px] uppercase tracking-wider block font-bold font-sans">CRM Directory</span>
+                  <span className="text-slate-900 text-base font-extrabold block mt-1">{stats.customers} clients</span>
                 </div>
-                <div className="bg-slate-900 border border-slate-800/80 p-3 rounded-xl">
-                  <span className="text-slate-500 text-[9px] uppercase tracking-wider block font-bold">Invoices Log</span>
-                  <span className="text-white text-base font-extrabold block mt-1">{stats.invoices} bills</span>
+                <div className="bg-white border border-slate-200 p-3 rounded-xl shadow-2xs">
+                  <span className="text-slate-500 text-[9px] uppercase tracking-wider block font-bold font-sans">Invoices Log</span>
+                  <span className="text-slate-900 text-base font-extrabold block mt-1">{stats.invoices} bills</span>
                 </div>
-                <div className="bg-slate-900 border border-slate-800/80 p-3 rounded-xl">
-                  <span className="text-slate-500 text-[9px] uppercase tracking-wider block font-bold">Cache load</span>
-                  <span className="text-white text-base font-extrabold block mt-1">{stats.storageSizeKb} KB</span>
+                <div className="bg-white border border-slate-200 p-3 rounded-xl shadow-2xs">
+                  <span className="text-slate-500 text-[9px] uppercase tracking-wider block font-bold font-sans">Cache Load</span>
+                  <span className="text-slate-900 text-base font-extrabold block mt-1">{stats.storageSizeKb} KB</span>
                 </div>
               </div>
 
-              <div className="flex gap-2 text-[10px] text-slate-400 font-medium">
-                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 shrink-0 self-center animate-pulse"></span>
-                <span>Offline Safe Local Sync Ledger Connected and Active (Green state)</span>
+              <div className="flex gap-2 text-[10px] text-slate-600 font-medium items-center">
+                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 shrink-0 animate-pulse"></span>
+                <span>Local Sync Ledger Connected and Active (Normal State)</span>
               </div>
             </div>
 
             {/* Backups trigger */}
-            <div className="bg-slate-950 rounded-2xl border border-slate-800 p-5 space-y-4">
-              <h3 className="text-xs font-black text-rose-400 uppercase tracking-widest flex items-center gap-1.5 font-mono">
+            <div className="bg-slate-50 rounded-2xl border border-slate-200 p-5 space-y-4">
+              <h3 className="text-xs font-black text-rose-700 uppercase tracking-widest flex items-center gap-1.5 font-mono">
                 🛡️ Backup &amp; Rollbacks
               </h3>
-              <p className="text-[11px] text-slate-400 leading-relaxed leading-normal">
+              <p className="text-[11px] text-slate-600 leading-relaxed">
                 Expert POS operates with zero-knowledge local client-side encryption. Secure exports pack full inventory sheets, sales journals, and custom registers to safeguard against loss.
               </p>
 
@@ -1471,7 +1781,7 @@ export default function SettingsPanel({
                 <button
                   type="button"
                   onClick={handleExportBackup}
-                  className="w-full bg-slate-800 hover:bg-slate-700/80 text-white border border-slate-700 font-bold text-xs py-2 px-4 rounded-xl transition-all flex items-center justify-center gap-2 cursor-pointer"
+                  className="w-full bg-white hover:bg-slate-50 text-slate-800 border border-slate-300 font-bold text-xs py-2 px-4 rounded-xl transition-all flex items-center justify-center gap-2 cursor-pointer shadow-2xs"
                 >
                   📥 Export Database Backup
                 </button>
@@ -1479,7 +1789,7 @@ export default function SettingsPanel({
                 <button
                   type="button"
                   onClick={handleClearSystemData}
-                  className="w-full bg-rose-950 hover:bg-rose-900 text-rose-300 border border-rose-800/60 font-bold text-xs py-2 px-4 rounded-xl transition-all flex items-center justify-center gap-2 cursor-pointer"
+                  className="w-full bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 font-bold text-xs py-2 px-4 rounded-xl transition-all flex items-center justify-center gap-2 cursor-pointer"
                 >
                   <Trash2 className="w-3.5 h-3.5" /> Purge Cache Records
                 </button>
@@ -2593,10 +2903,10 @@ export default function SettingsPanel({
 
             {/* Form */}
             <form onSubmit={handleSaveEditedBranch}>
-              <div className="p-6 space-y-4 max-h-[60vh] overflow-y-auto font-sans">
+              <div className="p-6 space-y-4 max-h-[60vh] overflow-y-auto font-sans bg-white">
                 {/* Branch Name */}
                 <div>
-                  <label className="block text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1 font-sans">
+                  <label className="block text-[11px] text-slate-600 font-bold uppercase tracking-wider mb-1 font-sans">
                     Branch Name *
                   </label>
                   <div className="relative">
@@ -2606,15 +2916,15 @@ export default function SettingsPanel({
                       placeholder="e.g. Westside Super Store"
                       value={editBrName}
                       onChange={(e) => setEditBrName(e.target.value)}
-                      className="w-full bg-slate-900 border border-slate-800 text-white rounded-xl py-2 pl-9 pr-4 text-xs font-semibold placeholder-slate-500 focus:outline-none focus:border-slate-705 transition-all shadow-inner font-sans"
+                      className="w-full bg-white border border-slate-300 text-slate-900 rounded-xl py-2 pl-9 pr-4 text-xs font-semibold placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 transition-all font-sans shadow-2xs"
                     />
-                    <Store className="w-4 h-4 absolute left-3 top-2.5 text-slate-500" />
+                    <Store className="w-4 h-4 absolute left-3 top-2.5 text-slate-400" />
                   </div>
                 </div>
 
                 {/* Direct Helpline */}
                 <div>
-                  <label className="block text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1 font-sans">
+                  <label className="block text-[11px] text-slate-600 font-bold uppercase tracking-wider mb-1 font-sans">
                     Direct Helpline / Phone
                   </label>
                   <div className="relative font-sans">
@@ -2623,16 +2933,16 @@ export default function SettingsPanel({
                       placeholder="e.g. +91 11-4321-8765"
                       value={editBrPhone}
                       onChange={(e) => setEditBrPhone(e.target.value)}
-                      className="w-full bg-slate-900 border border-slate-800 text-white rounded-xl py-2 pl-9 pr-4 text-xs font-semibold placeholder-slate-500 focus:outline-none focus:border-slate-705 focus:bg-slate-950 transition-all font-sans"
+                      className="w-full bg-white border border-slate-300 text-slate-900 rounded-xl py-2 pl-9 pr-4 text-xs font-semibold placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 transition-all font-sans shadow-2xs"
                     />
-                    <Smartphone className="w-4 h-4 absolute left-3 top-2.5 text-slate-500" />
+                    <Smartphone className="w-4 h-4 absolute left-3 top-2.5 text-slate-400" />
                   </div>
                 </div>
 
                 <div className="grid grid-cols-1 gap-3">
                   {/* Full Location Address */}
                   <div>
-                    <label className="block text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1 font-sans">
+                    <label className="block text-[11px] text-slate-600 font-bold uppercase tracking-wider mb-1 font-sans">
                       Physical Address *
                     </label>
                     <input
@@ -2641,13 +2951,13 @@ export default function SettingsPanel({
                       placeholder="e.g. Shop 4, Lotus Circle View"
                       value={editBrAddress}
                       onChange={(e) => setEditBrAddress(e.target.value)}
-                      className="w-full bg-slate-900 border border-slate-800 text-white rounded-xl py-2 px-3 text-xs font-semibold focus:outline-none focus:border-slate-705 focus:bg-slate-950 font-sans"
+                      className="w-full bg-white border border-slate-300 text-slate-900 rounded-xl py-2 px-3 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 font-sans shadow-2xs"
                     />
                   </div>
 
                   {/* City */}
                   <div>
-                    <label className="block text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1 font-sans">
+                    <label className="block text-[11px] text-slate-600 font-bold uppercase tracking-wider mb-1 font-sans">
                       Town / City *
                     </label>
                     <input
@@ -2656,18 +2966,18 @@ export default function SettingsPanel({
                       placeholder="e.g. Mumbai"
                       value={editBrCity}
                       onChange={(e) => setEditBrCity(e.target.value)}
-                      className="w-full bg-slate-900 border border-slate-800 text-slate-200 rounded-xl py-2 px-3 text-xs font-semibold focus:outline-none focus:border-slate-705 focus:bg-slate-950 font-sans"
+                      className="w-full bg-white border border-slate-300 text-slate-900 rounded-xl py-2 px-3 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 font-sans shadow-2xs"
                     />
                   </div>
                 </div>
               </div>
 
               {/* Action buttons footer */}
-              <div className="px-6 py-4 bg-slate-950 border-t border-slate-800/80 flex justify-end gap-2 text-xs font-sans">
+              <div className="px-6 py-4 bg-slate-50 border-t border-slate-200 flex justify-end gap-2 text-xs font-sans">
                 <button 
                   type="button"
                   onClick={() => setEditingBranch(null)}
-                  className="bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold px-4 py-2 rounded-xl transition-all font-sans cursor-pointer"
+                  className="bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 font-bold px-4 py-2 rounded-xl transition-all font-sans cursor-pointer shadow-2xs"
                 >
                   Discard Changes
                 </button>
@@ -2685,44 +2995,44 @@ export default function SettingsPanel({
 
       {/* ================= MODAL: STORE BRANCH ACCESS DISCARD OVERLAY ================= */}
       {deletingBranch && (
-        <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/80 backdrop-blur-sm py-12 px-4 flex items-center justify-center no-print" id="branch-discard-modal">
-          <div className="bg-slate-900 border border-slate-850 text-white max-w-md w-full rounded-2xl shadow-2xl relative overflow-hidden font-sans ring-8 ring-slate-950/40 animate-fadeIn">
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-sm py-12 px-4 flex items-center justify-center no-print" id="branch-discard-modal">
+          <div className="bg-white border border-slate-200 text-slate-900 max-w-md w-full rounded-2xl shadow-2xl relative overflow-hidden font-sans animate-fadeIn">
             {/* Top red header warning */}
             <div className="h-1.5 bg-rose-600"></div>
 
             <div className="p-6 space-y-4">
               <div className="flex items-start gap-3">
-                <div className="w-10 h-10 rounded-xl bg-rose-500/10 text-rose-400 border border-rose-500/20 flex items-center justify-center shrink-0">
+                <div className="w-10 h-10 rounded-xl bg-rose-50 text-rose-600 border border-rose-200 flex items-center justify-center shrink-0">
                   <ShieldAlert className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="text-sm font-bold text-white tracking-tight leading-none font-sans">Decommission Branch Node</h3>
-                  <p className="text-[11px] text-slate-400 mt-1.5 font-sans">You are about to discard this physical/operation outlet from unified system ledger directories.</p>
+                  <h3 className="text-sm font-bold text-slate-900 tracking-tight leading-none font-sans">Decommission Branch Node</h3>
+                  <p className="text-[11px] text-slate-500 mt-1.5 font-sans">You are about to discard this physical/operation outlet from unified system ledger directories.</p>
                 </div>
               </div>
 
-              <div className="p-3.5 bg-slate-950/60 border border-slate-805 rounded-xl space-y-2">
-                <p className="text-xs font-sans text-slate-300 font-bold">Discard Branch Context:</p>
-                <div className="grid grid-cols-2 gap-y-1.5 text-[10.5px] font-mono text-slate-400">
+              <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl space-y-2">
+                <p className="text-xs font-sans text-slate-900 font-bold">Discard Branch Context:</p>
+                <div className="grid grid-cols-2 gap-y-1.5 text-[10.5px] font-mono text-slate-600">
                   <span className="font-sans font-medium text-slate-500 text-left font-sans">Branch Node:</span>
-                  <span className="text-white font-bold font-sans text-right">{deletingBranch.name}</span>
+                  <span className="text-slate-900 font-bold font-sans text-right">{deletingBranch.name}</span>
                   <span className="font-sans font-medium text-slate-500 text-left font-sans">Town / City:</span>
-                  <span className="text-white font-sans text-right">{deletingBranch.city || "—"}</span>
+                  <span className="text-slate-900 font-sans text-right">{deletingBranch.city || "—"}</span>
                   <span className="font-sans font-medium text-slate-500 text-left font-sans">Direct Helpline:</span>
-                  <span className="text-rose-400 font-bold text-right text-[10px] uppercase font-mono">{deletingBranch.phone || "—"}</span>
+                  <span className="text-rose-600 font-bold text-right text-[10px] uppercase font-mono">{deletingBranch.phone || "—"}</span>
                 </div>
               </div>
 
-              <p className="text-[10.5px] text-slate-400 leading-normal leading-relaxed font-sans">
+              <p className="text-[10.5px] text-slate-600 leading-normal leading-relaxed font-sans">
                 Removing this store coordinates denies any further cashier logins, sale entries, drawer sheets or reporting metrics on behalf of this specific location ID. All legacy logs of this branch will remain archived, but new operations will be locked.
               </p>
             </div>
 
-            <div className="px-6 py-4 bg-slate-950 border-t border-slate-800/80 flex justify-end gap-2 text-xs font-sans">
+            <div className="px-6 py-4 bg-slate-50 border-t border-slate-200 flex justify-end gap-2 text-xs font-sans">
               <button
                 type="button"
                 onClick={() => setDeletingBranch(null)}
-                className="bg-slate-800 text-slate-300 hover:bg-slate-700 font-bold px-4 py-2 rounded-xl transition-all cursor-pointer font-sans"
+                className="bg-white text-slate-700 hover:bg-slate-100 border border-slate-300 font-bold px-4 py-2 rounded-xl transition-all cursor-pointer font-sans shadow-2xs"
               >
                 No, Retain Outlet
               </button>
@@ -2737,7 +3047,7 @@ export default function SettingsPanel({
                   }
                   setDeletingBranch(null);
                 }}
-                className="bg-rose-600 text-white hover:bg-rose-700 font-bold px-4 py-2 rounded-xl transition-all shadow-lg shadow-rose-600/10 cursor-pointer flex items-center gap-1 uppercase tracking-wider font-sans"
+                className="bg-rose-600 text-white hover:bg-rose-700 font-bold px-4 py-2 rounded-xl transition-all shadow-md cursor-pointer flex items-center gap-1 uppercase tracking-wider font-sans"
               >
                 <Trash className="w-3.5 h-3.5" /> Yes, Discard Node
               </button>

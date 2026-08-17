@@ -52,7 +52,14 @@ import {
   Cloud,
   Headphones,
   HelpCircle,
-  Folder
+  Folder,
+  Menu,
+  X,
+  Barcode,
+  Link2,
+  ExternalLink,
+  ArrowRight,
+  Globe
 } from "lucide-react";
 
 import {
@@ -67,9 +74,11 @@ import {
   StockAdjustment,
   PaymentMode,
   UserRole,
+  normalizeUserRole,
   MeasurementUnit,
   Tenant,
   StockTransfer,
+  AppSettings,
   printElementById,
   saveElementAsPDF
 } from "./types";
@@ -403,7 +412,24 @@ const PRESET_CREDENTIALS = [
   },
   {
     role: UserRole.ADMIN,
-    title: "Admin Full Control",
+    title: "Client Admin (ABC Retailers)",
+    email: "contact@abcretailers.com",
+    password: "AbcRetailersAdmin2026",
+    name: "ABC Retailers Administrator",
+    color: "amber",
+    gradient: "from-amber-500 to-orange-600",
+    bgHover: "hover:bg-amber-500/5",
+    accent: "text-amber-500",
+    border: "border-amber-500/20",
+    glow: "shadow-amber-500/10",
+    description: "Client Store Administrator with full operational governance across POS billing, product catalog, inventory, CRM, staff onboarding, and branding configurations.",
+    privileges: ["POS Sandbox access", "Audit profit & tax ledgers", "Modify products/suppliers", "Administer loyalty points", "Store branding & settings"],
+    phone: "+91 9988776655",
+    tenantId: "TENANT-003"
+  },
+  {
+    role: UserRole.ADMIN,
+    title: "Client Admin (Expert POS Hub)",
     email: "admin@expertpos.com",
     password: "AdminOverrideX99",
     name: "John Doe (Admin)",
@@ -415,7 +441,8 @@ const PRESET_CREDENTIALS = [
     glow: "shadow-emerald-500/10",
     description: "Full master key to POS checkout, financial ledgers, inventory catalogue, CRM, expense logs, and AI Copilot.",
     privileges: ["POS Sandbox access", "Audit profit & tax ledgers", "Modify products/suppliers", "Administer loyalty points", "Direct DB sync states"],
-    phone: "+91 9911223344"
+    phone: "+91 9911223344",
+    tenantId: "TENANT-001"
   },
   {
     role: UserRole.MANAGER,
@@ -540,6 +567,9 @@ function playThermalPrintSound() {
 }
 
 export default function App() {
+  // Mobile responsive sidebar drawer state
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState<boolean>(false);
+
   // State from server DB
   const [products, setProducts] = useState<Product[]>([]);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
@@ -891,7 +921,19 @@ export default function App() {
     const saved = localStorage.getItem("expert_aid_credentials");
     if (saved) {
       try {
-        return JSON.parse(saved);
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          const merged = [...parsed];
+          for (const preset of PRESET_CREDENTIALS) {
+            if (!merged.some((c: any) => c.email && c.email.toLowerCase() === preset.email.toLowerCase())) {
+              merged.push(preset);
+            }
+          }
+          return merged.map((c: any) => ({
+            ...c,
+            role: normalizeUserRole(c.role)
+          }));
+        }
       } catch (e) {
         console.error("Failed to restore credentials directory:", e);
       }
@@ -903,8 +945,49 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<string>("pos");
   const [currentBranch, setCurrentBranch] = useState<StoreBranch | null>(null);
   const [currentRole, setCurrentRole] = useState<UserRole>(UserRole.ADMIN);
-  const [currentCashierName, setCurrentCashierName] = useState<string>("John Doe");
+  const [currentCashierName, setCurrentCashierName] = useState<string>(() => {
+    return localStorage.getItem("expert_aid_active_cashier_name") || "John Doe";
+  });
   const [loadingState, setLoadingState] = useState<boolean>(true);
+
+  // Terminal & hardware operational preferences
+  const [opsSettings, setOpsSettings] = useState<AppSettings>(() => {
+    const saved = localStorage.getItem("expert_aid_terminal_settings");
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch (e) {}
+    }
+    return {
+      autoPrintReceipt: true,
+      enableSound: true,
+      receiptHeader: "OFFICIAL RETAIL CASH INVOICE",
+      receiptFooter: "Thank you for shopping! Powered by Expert POS SaaS",
+      maxDiscountAllowed: 25
+    };
+  });
+
+  const handleUpdateCashierName = (name: string) => {
+    setCurrentCashierName(name);
+    localStorage.setItem("expert_aid_active_cashier_name", name);
+  };
+
+  useEffect(() => {
+    const handleSettingsUpdate = () => {
+      const saved = localStorage.getItem("expert_aid_terminal_settings");
+      if (saved) {
+        try {
+          const parsed = JSON.parse(saved);
+          setOpsSettings(parsed);
+          if (typeof parsed.enableSound === "boolean") {
+            setSoundEnabled(parsed.enableSound);
+          }
+        } catch (e) {}
+      }
+    };
+    window.addEventListener("expert_aid_settings_updated", handleSettingsUpdate);
+    return () => window.removeEventListener("expert_aid_settings_updated", handleSettingsUpdate);
+  }, []);
 
   // User Authentication Portal States
   const [isLoggedIn, setIsLoggedIn] = useState<boolean>(false);
@@ -923,12 +1006,15 @@ export default function App() {
     return localStorage.getItem("expert_pos_login_bg_mode") || "cosmic-aurora";
   });
 
-  const isSuperAdmin = currentUserEmail.toLowerCase() === "superadmin@expertpos.com" && currentRole === UserRole.ADMIN && currentCashierName.toLowerCase().includes("super");
+  const isSuperAdmin = currentUserEmail.toLowerCase() === "superadmin@expertpos.com";
 
   // Active POS cart states
   const [cartItems, setCartItems] = useState<InvoiceItem[]>([]);
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [barcodeSearch, setBarcodeSearch] = useState<string>("");
+  const [skuSearchInput, setSkuSearchInput] = useState<string>("");
+  const [skuQuantityInput, setSkuQuantityInput] = useState<number>(1);
+  const [selectedSkuProduct, setSelectedSkuProduct] = useState<Product | null>(null);
   const [inventorySearchQuery, setInventorySearchQuery] = useState<string>("");
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [billingCustomerName, setBillingCustomerName] = useState<string>("");
@@ -1050,7 +1136,7 @@ export default function App() {
     loadState();
   }, []);
 
-  // Dynamic URL-based tenant / client detection
+  // Dynamic URL-based tenant / client detection & Auto-Login from Single Universal Link
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const tenantParam = params.get("subdomain") || params.get("tenant") || params.get("client");
@@ -1067,27 +1153,86 @@ export default function App() {
     }
 
     const searchKeys = [tenantParam, hashParam, hostSubdomain].filter(Boolean) as string[];
-    if (searchKeys.length === 0) return;
+    if (searchKeys.length > 0) {
+      let matchedTenant: Tenant | undefined = undefined;
+      for (const key of searchKeys) {
+        const cleanKey = key.toLowerCase().trim();
+        matchedTenant = tenantsList.find(
+          (t) => t.subdomain.toLowerCase() === cleanKey || t.id.toLowerCase() === cleanKey
+        );
+        if (matchedTenant) break;
+      }
 
-    let matchedTenant: Tenant | undefined = undefined;
-    for (const key of searchKeys) {
-      const cleanKey = key.toLowerCase().trim();
-      matchedTenant = tenantsList.find(
-        (t) => t.subdomain.toLowerCase() === cleanKey || t.id.toLowerCase() === cleanKey
+      if (matchedTenant && matchedTenant.id !== activeTenantId) {
+        setActiveTenantId(matchedTenant.id);
+        localStorage.setItem("expert_aid_active_tenant_id", matchedTenant.id);
+        triggerNotification(`Auto-configured client workspace to "${matchedTenant.name}" based on URL environment!`, "success");
+      }
+    }
+
+    // Role-based Auto-Login via Single Link Query Param (e.g. ?role=superadmin, ?role=cashier, ?role=manager, ?user=admin)
+    const roleParam = params.get("role") || params.get("user") || params.get("autologin") || params.get("login_as");
+    const emailParam = params.get("email") || params.get("login");
+    const passParam = params.get("password") || params.get("pass");
+
+    if (roleParam) {
+      const cleanRole = roleParam.toLowerCase().trim();
+      let targetCred: typeof PRESET_CREDENTIALS[0] | undefined;
+
+      if (cleanRole.includes("super") || cleanRole === "sa") {
+        targetCred = PRESET_CREDENTIALS.find((c) => c.email.includes("superadmin"));
+      } else if (cleanRole === "admin" || cleanRole === "administrator") {
+        targetCred = PRESET_CREDENTIALS.find((c) => c.email === "admin@expertpos.com");
+      } else if (cleanRole.includes("manage")) {
+        targetCred = PRESET_CREDENTIALS.find((c) => c.role === UserRole.MANAGER);
+      } else if (cleanRole.includes("cashier") || cleanRole === "pos" || cleanRole === "billing") {
+        targetCred = PRESET_CREDENTIALS.find((c) => c.role === UserRole.CASHIER);
+      } else if (cleanRole.includes("store") || cleanRole.includes("inventory") || cleanRole === "keeper" || cleanRole === "warehouse") {
+        targetCred = PRESET_CREDENTIALS.find((c) => c.role === UserRole.STORE_KEEPER);
+      }
+
+      if (targetCred) {
+        handleQuickLogin(targetCred);
+        triggerNotification(`Unified Portal Auto-Login: Authenticated as ${targetCred.title}!`, "success");
+      }
+    } else if (emailParam && passParam) {
+      const match = credentialsList.find(
+        (cred) => cred.email.toLowerCase() === emailParam.trim().toLowerCase() && cred.password === passParam.trim()
       );
-      if (matchedTenant) break;
-    }
+      if (match) {
+        setCurrentRole(normalizeUserRole(match.role));
+        setCurrentCashierName(match.name);
+        setCurrentUserEmail(match.email);
+        setIsLoggedIn(true);
 
-    if (matchedTenant && matchedTenant.id !== activeTenantId) {
-      setActiveTenantId(matchedTenant.id);
-      localStorage.setItem("expert_aid_active_tenant_id", matchedTenant.id);
-      triggerNotification(`Auto-configured client workspace to "${matchedTenant.name}" based on URL environment!`, "success");
+        if (match.storeBranchId) {
+          const branchMatch = branches.find((b) => b.id === match.storeBranchId);
+          if (branchMatch) {
+            setCurrentBranch(branchMatch);
+            localStorage.setItem("expert_aid_current_branch", JSON.stringify(branchMatch));
+          }
+        }
+
+        const effectiveRole = normalizeUserRole(match.role);
+        if (match.email.toLowerCase() === "superadmin@expertpos.com") {
+          setActiveTab("super-admin");
+        } else if (effectiveRole === UserRole.MANAGER) {
+          setActiveTab("analytics");
+        } else if (effectiveRole === UserRole.STORE_KEEPER) {
+          setActiveTab("inventory");
+        } else if (effectiveRole === UserRole.CASHIER) {
+          setActiveTab("pos");
+        } else {
+          setActiveTab("pos");
+        }
+
+        triggerNotification(`Single-Link Direct Login: Welcome back, ${match.name}!`, "success");
+      }
     }
-  }, [tenantsList, activeTenantId]);
+  }, [tenantsList, activeTenantId, credentialsList, branches]);
 
   useEffect(() => {
     if (isLoggedIn) {
-      const isSuperAdmin = currentUserEmail.toLowerCase() === "superadmin@expertpos.com" && currentRole === UserRole.ADMIN && currentCashierName.toLowerCase().includes("super");
       if (isSuperAdmin) {
         const allowedTabs = ["super-admin", "staff-registry", "analytics"];
         if (!allowedTabs.includes(activeTab)) {
@@ -1095,7 +1240,7 @@ export default function App() {
         }
       }
     }
-  }, [isLoggedIn, currentUserEmail, currentRole, currentCashierName, activeTab]);
+  }, [isLoggedIn, isSuperAdmin, activeTab]);
 
   const triggerNotification = (text: string, type: "success" | "warning" = "success") => {
     setNotifText(text);
@@ -1121,8 +1266,10 @@ export default function App() {
     );
 
     if (match) {
-      setCurrentRole(match.role);
+      const normalizedRole = normalizeUserRole(match.role);
+      setCurrentRole(normalizedRole);
       setCurrentCashierName(match.name);
+      localStorage.setItem("expert_aid_active_cashier_name", match.name);
       setCurrentUserEmail(match.email);
       setIsLoggedIn(true);
 
@@ -1135,13 +1282,15 @@ export default function App() {
         }
       }
       
-      // Auto-route based on permissions
+      // Auto-route to respective application based on role & permissions
       if (match.email.toLowerCase() === "superadmin@expertpos.com") {
         setActiveTab("super-admin");
-      } else if (match.role === UserRole.CASHIER) {
-        setActiveTab("pos");
-      } else if (match.role === UserRole.STORE_KEEPER) {
+      } else if (normalizedRole === UserRole.MANAGER) {
+        setActiveTab("analytics");
+      } else if (normalizedRole === UserRole.STORE_KEEPER) {
         setActiveTab("inventory");
+      } else if (normalizedRole === UserRole.CASHIER) {
+        setActiveTab("pos");
       } else {
         setActiveTab("pos");
       }
@@ -1189,17 +1338,21 @@ export default function App() {
   const handleQuickLogin = (cred: typeof PRESET_CREDENTIALS[0]) => {
     setLoginUserId(cred.email);
     setLoginPassword(cred.password);
-    setCurrentRole(cred.role);
+    const normalizedRole = normalizeUserRole(cred.role);
+    setCurrentRole(normalizedRole);
     setCurrentCashierName(cred.name);
+    localStorage.setItem("expert_aid_active_cashier_name", cred.name);
     setCurrentUserEmail(cred.email);
     setIsLoggedIn(true);
 
     if (cred.email.toLowerCase() === "superadmin@expertpos.com") {
       setActiveTab("super-admin");
-    } else if (cred.role === UserRole.CASHIER) {
-      setActiveTab("pos");
-    } else if (cred.role === UserRole.STORE_KEEPER) {
+    } else if (normalizedRole === UserRole.MANAGER) {
+      setActiveTab("analytics");
+    } else if (normalizedRole === UserRole.STORE_KEEPER) {
       setActiveTab("inventory");
+    } else if (normalizedRole === UserRole.CASHIER) {
+      setActiveTab("pos");
     } else {
       setActiveTab("pos");
     }
@@ -1238,7 +1391,8 @@ export default function App() {
   const handleImpersonateClient = (email: string) => {
     const match = credentialsList.find(c => c.email.toLowerCase() === email.toLowerCase());
     if (match) {
-      setCurrentRole(match.role);
+      const normalizedRole = normalizeUserRole(match.role);
+      setCurrentRole(normalizedRole);
       setCurrentCashierName(match.name);
       setCurrentUserEmail(match.email);
       setIsLoggedIn(true);
@@ -1333,7 +1487,7 @@ export default function App() {
 
   // Switch role restriction handling
   const checkAccess = (allowedList: UserRole[]) => {
-    return allowedList.includes(currentRole);
+    return allowedList.includes(normalizeUserRole(currentRole));
   };
 
   // Add Item to POS Cart
@@ -1426,6 +1580,48 @@ export default function App() {
     } else {
       triggerNotification(`No active product found for barcode '${barcodeSearch}'`, "warning");
     }
+  };
+
+  // Real-time matched products for SKU search
+  const skuMatchedProducts = tenantProducts.filter((p) => {
+    const q = skuSearchInput.trim().toLowerCase();
+    if (!q) return false;
+    return (
+      p.sku.toLowerCase().includes(q) ||
+      (p.barcode && p.barcode.toLowerCase().includes(q)) ||
+      p.name.toLowerCase().includes(q)
+    );
+  });
+
+  // Handle SKU direct lookup and addition to cart
+  const handleSkuAddDirect = (productToBill?: Product) => {
+    const prod = productToBill || selectedSkuProduct || tenantProducts.find(
+      (p) => p.sku.toLowerCase() === skuSearchInput.trim().toLowerCase() || (p.barcode && p.barcode.toLowerCase() === skuSearchInput.trim().toLowerCase())
+    ) || (skuMatchedProducts.length === 1 ? skuMatchedProducts[0] : null);
+
+    if (!prod) {
+      if (skuSearchInput.trim()) {
+        triggerNotification(`No active product found for SKU code '${skuSearchInput}'`, "warning");
+      } else {
+        triggerNotification("Please enter or scan a valid product SKU code.", "warning");
+      }
+      return;
+    }
+
+    const availStock = getProductStock(prod);
+    if (availStock <= 0) {
+      triggerNotification(`Warning: '${prod.name}' (SKU: ${prod.sku}) is Out of Stock!`, "warning");
+    }
+
+    const qty = Math.max(1, skuQuantityInput);
+    for (let i = 0; i < qty; i++) {
+      handleAddToCart(prod);
+    }
+
+    triggerNotification(`Added ${qty}x '${prod.name}' (SKU: ${prod.sku}) to billing cart!`, "success");
+    setSkuSearchInput("");
+    setSelectedSkuProduct(null);
+    setSkuQuantityInput(1);
   };
 
   // Calculate pricing
@@ -2251,43 +2447,13 @@ export default function App() {
       }
     };
 
-    const activeBgConfig = LOGIN_BG_CONFIGS[loginBgMode] || LOGIN_BG_CONFIGS["cosmic-aurora"];
-    const isDarkTheme = activeBgConfig.isDark;
+    const activeBgConfig = LOGIN_BG_CONFIGS["classic-blue"];
+    const isDarkTheme = false;
 
     return (
-      <div className={`min-h-screen w-screen ${activeBgConfig.outerBg} flex items-center justify-center p-3 sm:p-6 md:p-8 relative overflow-y-auto font-sans transition-all duration-700 selection:bg-blue-100 selection:text-blue-900`} id="secured-login-portal">
+      <div className={`min-h-screen w-screen ${activeBgConfig.outerBg} flex items-center justify-center p-3 sm:p-6 md:p-8 relative overflow-y-auto font-sans selection:bg-blue-100 selection:text-blue-900`} id="secured-login-portal">
 
-        {/* Floating Attractive Mode Switcher Dock */}
-        <div className="absolute top-4 right-4 sm:right-8 z-50 flex items-center gap-1.5 bg-slate-900/45 backdrop-blur-md border border-white/10 rounded-full p-1.5 shadow-xl max-w-full overflow-x-auto">
-          <span className="text-[10px] font-black uppercase tracking-wider text-white/80 px-2.5 select-none hidden sm:inline-block font-sans">Mode:</span>
-          <div className="flex items-center gap-1 shrink-0">
-            {Object.entries(LOGIN_BG_CONFIGS).map(([key, config]) => {
-              const isActive = loginBgMode === key;
-              return (
-                <button
-                  key={key}
-                  type="button"
-                  onClick={() => {
-                    setLoginBgMode(key);
-                    localStorage.setItem("expert_pos_login_bg_mode", key);
-                    triggerNotification(`Switched background theme to: ${config.name}`, "success");
-                  }}
-                  className={`relative flex items-center justify-center p-1.5 px-3 rounded-full transition-all duration-300 group hover:scale-105 cursor-pointer text-[11px] font-bold ${
-                    isActive 
-                      ? "bg-white text-slate-900 shadow-md font-extrabold scale-105" 
-                      : "text-white/70 hover:text-white hover:bg-white/10"
-                  }`}
-                  title={config.name}
-                >
-                  <span className="mr-1">{config.name.split(" ")[1]}</span>
-                  <span className="hidden md:inline">{config.name.split(" ")[0]}</span>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Outer Split Canvas Wrapper matching the attachment with dynamic multi bg theme */}
+        {/* Outer Split Canvas Wrapper in Slate Classic Theme */}
         <div className={`w-full max-w-7xl ${activeBgConfig.innerBg} rounded-[2.5rem] shadow-2xl border transition-all duration-700 flex flex-col lg:flex-row overflow-hidden relative min-h-[680px] lg:min-h-[760px]`}>
           
           {/* Left Column (Branding, Features Grid & Beautiful UI Mockup illustration) */}
@@ -2724,9 +2890,9 @@ export default function App() {
               )}
 
               {/* Standard OR Divider */}
-              <div className="relative flex py-5 items-center">
+              <div className="relative flex py-4 items-center">
                 <div className="flex-grow border-t border-slate-200"></div>
-                <span className="flex-shrink mx-4 text-slate-400 text-xs font-bold uppercase tracking-wider font-sans">OR</span>
+                <span className="flex-shrink mx-4 text-slate-400 text-[10px] font-bold uppercase tracking-wider font-sans">OR</span>
                 <div className="flex-grow border-t border-slate-200"></div>
               </div>
 
@@ -2738,12 +2904,11 @@ export default function App() {
                   setOtpInput("");
                   setLoginError(null);
                 }}
-                className="w-full bg-white hover:bg-slate-50 active:bg-slate-100 text-slate-800 border border-slate-200 font-extrabold text-sm py-3.5 px-4 rounded-xl transition-all flex items-center justify-center gap-2.5 cursor-pointer shadow-3xs active:scale-98"
+                className="w-full bg-white hover:bg-slate-50 active:bg-slate-100 text-slate-800 border border-slate-200 font-extrabold text-xs py-3 px-4 rounded-xl transition-all flex items-center justify-center gap-2.5 cursor-pointer shadow-3xs active:scale-98"
               >
-                <Smartphone className="w-4.5 h-4.5 text-slate-500" />
+                <Smartphone className="w-4 h-4 text-slate-500" />
                 <span>{otpMode ? "Sign In with Password" : "Sign In with OTP"}</span>
               </button>
-
 
             </div>
 
@@ -2822,8 +2987,16 @@ export default function App() {
         </div>
       )}
 
+      {/* Mobile Drawer Overlay Backdrop */}
+      {isMobileMenuOpen && (
+        <div 
+          onClick={() => setIsMobileMenuOpen(false)} 
+          className="fixed inset-0 bg-slate-950/60 backdrop-blur-sm z-40 lg:hidden"
+        />
+      )}
+
       {/* Sidebar Navigation - Precise Sleek Theme */}
-      <aside className={`w-64 ${bgMode.sidebarBg} flex flex-col shrink-0 border-r`} id="sidebar">
+      <aside className={`fixed inset-y-0 left-0 z-50 w-64 ${bgMode.sidebarBg} flex flex-col shrink-0 border-r transition-transform duration-300 transform lg:static lg:translate-x-0 ${isMobileMenuOpen ? "translate-x-0 shadow-2xl" : "-translate-x-full"}`} id="sidebar">
         <div className={`p-6 border-b ${bgMode.border} flex flex-col items-center text-center`}>
           {/* Top-left Gate Badge portion for logged-in side */}
           <div className="mb-4">
@@ -2990,7 +3163,7 @@ export default function App() {
           )}
 
           {/* Staff Registry / Manager Panel (available for admin, manager and superadmin) */}
-          {(currentRole === UserRole.ADMIN || currentRole === UserRole.MANAGER || isSuperAdmin) && (
+          {(normalizeUserRole(currentRole) === UserRole.ADMIN || normalizeUserRole(currentRole) === UserRole.MANAGER || isSuperAdmin) && (
             <button
               onClick={() => setActiveTab("staff-registry")}
               className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-colors font-sans text-xs font-medium cursor-pointer ${
@@ -3000,7 +3173,7 @@ export default function App() {
               }`}
             >
               <Users className="w-4 h-4 text-purple-600 font-bold" />
-              <span>{currentRole === UserRole.MANAGER ? "Manager Panel" : "Staff Registry (Staff Onboarding)"}</span>
+              <span>{normalizeUserRole(currentRole) === UserRole.MANAGER ? "Manager Panel" : "Staff Registry (Staff Onboarding)"}</span>
             </button>
           )}
 
@@ -3033,11 +3206,11 @@ export default function App() {
               <div className="overflow-hidden">
                 <p className={`${bgMode.textHeading} text-xs font-bold truncate leading-tight`}>{currentCashierName}</p>
                 <p className={`text-[10px] truncate leading-none mt-1 font-mono font-bold uppercase tracking-wider ${
-                  currentRole === UserRole.ADMIN && currentCashierName.toLowerCase().includes("super")
+                  isSuperAdmin
                     ? "text-purple-500"
                     : bgMode.textMuted
                 }`}>
-                  {currentRole === UserRole.ADMIN && currentCashierName.toLowerCase().includes("super") ? "SUPERADMIN" : currentRole}
+                  {isSuperAdmin ? "SUPERADMIN" : normalizeUserRole(currentRole)}
                 </p>
               </div>
             </div>
@@ -3063,15 +3236,24 @@ export default function App() {
       {/* Main Content Pane */}
       <div className={`flex-1 flex flex-col overflow-hidden ${bgMode.contentBg}`}>
         {/* Header - Styled sleek index */}
-        <header className={`h-16 ${bgMode.headerBg} border-b flex items-center justify-between px-8 shrink-0`}>
-          <div className="flex items-center gap-6">
+        <header className={`h-16 ${bgMode.headerBg} border-b flex items-center justify-between px-4 md:px-8 shrink-0`}>
+          <div className="flex items-center gap-2 md:gap-6">
+            <button
+              type="button"
+              onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+              className="lg:hidden p-2 text-slate-500 hover:text-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-all"
+              title="Toggle Mobile Menu"
+            >
+              {isMobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+            </button>
+
             <div className={`flex items-center gap-2 ${bgMode.textMuted}`}>
               <Store className={`w-4 h-4 ${currentTheme.textAccent}`} />
-              {currentRole === UserRole.ADMIN || isSuperAdmin ? (
+              {normalizeUserRole(currentRole) === UserRole.ADMIN || isSuperAdmin ? (
                 <select
                   value={currentBranch?.id}
                   onChange={(e) => handleBranchChange(e.target.value)}
-                  className={`border-none bg-transparent hover:bg-slate-100 dark:hover:bg-slate-800 p-1 rounded text-xs font-semibold ${bgMode.textHeading} focus:ring-0 outline-none cursor-pointer`}
+                  className={`border-none bg-transparent hover:bg-slate-100 dark:hover:bg-slate-800 p-1 rounded text-xs font-semibold ${bgMode.textHeading} focus:ring-0 outline-none cursor-pointer max-w-[130px] sm:max-w-none truncate`}
                 >
                   {branches.map((b) => (
                     <option key={b.id} value={b.id}>
@@ -3080,21 +3262,21 @@ export default function App() {
                   ))}
                 </select>
               ) : (
-                <span className="text-xs font-bold text-slate-705 bg-slate-100 px-2.5 py-1 rounded">
+                <span className="text-xs font-bold text-slate-705 bg-slate-100 px-2.5 py-1 rounded truncate max-w-[120px] sm:max-w-none">
                   📍 {currentBranch?.name || "Corporate Branch"}
                 </span>
               )}
             </div>
-            <div className="h-4 w-[1px] bg-slate-200"></div>
+            <div className="hidden sm:block h-4 w-[1px] bg-slate-200"></div>
             
             {/* Quick checkout search simulator */}
-            <form onSubmit={handleBarcodeSubmit} className="relative">
+            <form onSubmit={handleBarcodeSubmit} className="relative hidden sm:block">
               <input
                 type="text"
-                placeholder="Scan item barcode (e.g. 5449000133335) or search..."
+                placeholder="Scan item barcode (e.g. 5449000133335)..."
                 value={barcodeSearch}
                 onChange={(e) => setBarcodeSearch(e.target.value)}
-                className={`w-96 pl-9 pr-4 py-1.5 ${bgMode.inputBg} border border-transparent rounded-lg text-xs transition-all outline-none focus:bg-white dark:focus:bg-slate-800 focus:border-slate-300`}
+                className={`w-48 md:w-72 lg:w-96 pl-9 pr-4 py-1.5 ${bgMode.inputBg} border border-transparent rounded-lg text-xs transition-all outline-none focus:bg-white dark:focus:bg-slate-800 focus:border-slate-300`}
               />
               <Search className="w-3.5 h-3.5 absolute left-3 top-2.5 text-slate-400" />
               <button type="submit" className="hidden" />
@@ -3162,11 +3344,11 @@ export default function App() {
               <div className="flex flex-col text-right pr-2.5 border-r border-slate-800 shrink-0">
                 <span className="text-[8px] text-slate-500 font-mono font-bold leading-none mb-0.5 tracking-wider">ACTIVE SESSION</span>
                 <span className={`text-[10px] font-bold leading-none uppercase ${
-                  currentRole === UserRole.ADMIN && currentCashierName.toLowerCase().includes("super")
+                  isSuperAdmin
                     ? "text-purple-400"
                     : "text-emerald-400"
                 }`}>
-                  {currentRole === UserRole.ADMIN && currentCashierName.toLowerCase().includes("super") ? "SUPERADMIN" : currentRole}
+                  {isSuperAdmin ? "SUPERADMIN" : normalizeUserRole(currentRole)}
                 </span>
               </div>
               <button
@@ -3221,9 +3403,211 @@ export default function App() {
                     <p className={`text-[10px] font-bold ${bgMode.textMuted} uppercase tracking-wider mb-1`}>Active Cashier</p>
                     <h3 className={`text-base font-bold truncate ${bgMode.textHeading}`}>{currentCashierName}</h3>
                     <p className={`text-[9px] ${bgMode.textMuted} mt-1`}>
-                      {currentRole === UserRole.ADMIN && currentCashierName.toLowerCase().includes("super") ? "SUPERADMIN" : currentRole} privilege
+                      {isSuperAdmin ? "SUPERADMIN" : normalizeUserRole(currentRole)} privilege
                     </p>
                   </div>
+                </div>
+
+                {/* ⚡ SKU CODE DIRECT SEARCH & BILLING PANEL */}
+                <div className={`p-4 rounded-xl border space-y-3 ${bgMode.cardBg} border-emerald-500/40 shadow-md relative bg-gradient-to-r from-emerald-500/5 via-transparent to-blue-500/5`} id="sku-billing-search-panel">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                    <div className="flex items-center gap-2.5">
+                      <div className="p-2 bg-emerald-500/10 text-emerald-600 rounded-lg shrink-0">
+                        <Barcode className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <h3 className={`text-sm font-black flex items-center gap-2 ${bgMode.textHeading}`}>
+                          SKU Code Search &amp; Billing Selection
+                          <span className="text-[9px] font-mono bg-emerald-500 text-slate-900 font-extrabold px-2 py-0.5 rounded-full uppercase tracking-wider">
+                            Instant Add
+                          </span>
+                        </h3>
+                        <p className={`text-[11px] ${bgMode.textMuted}`}>
+                          Scan or enter SKU code to auto-identify Product Name, Price, Stock &amp; GST details for immediate billing.
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Quick SKU preset chips for instant cashier testing */}
+                    <div className="flex flex-wrap items-center gap-1.5 pt-1 sm:pt-0">
+                      <span className="text-[10px] font-mono text-slate-400 font-semibold">Quick SKUs:</span>
+                      {tenantProducts.slice(0, 5).map((p) => (
+                        <button
+                          key={p.id}
+                          type="button"
+                          onClick={() => {
+                            setSkuSearchInput(p.sku);
+                            setSelectedSkuProduct(p);
+                          }}
+                          className="px-2 py-0.5 text-[10px] font-mono bg-slate-100 dark:bg-slate-800 hover:bg-emerald-600 hover:text-white rounded text-slate-700 dark:text-slate-300 transition-all border border-slate-200/60 cursor-pointer font-bold"
+                          title={`Click to preview ${p.name}`}
+                        >
+                          {p.sku}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Search Form with input, quantity, and Add button */}
+                  <form onSubmit={(e) => { e.preventDefault(); handleSkuAddDirect(); }} className="space-y-3">
+                    <div className="flex flex-col sm:flex-row gap-2">
+                      <div className="relative flex-1">
+                        <input
+                          type="text"
+                          placeholder="Enter or scan SKU Code (e.g. BEV-COL-ZC, GRN-BAS-R5, DRY-BUT-AM)..."
+                          value={skuSearchInput}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setSkuSearchInput(val);
+                            const exact = tenantProducts.find((p) => p.sku.toLowerCase() === val.trim().toLowerCase());
+                            if (exact) {
+                              setSelectedSkuProduct(exact);
+                            } else if (selectedSkuProduct) {
+                              setSelectedSkuProduct(null);
+                            }
+                          }}
+                          className={`w-full pl-9 pr-8 py-2.5 text-xs font-mono font-bold border rounded-xl outline-none focus:ring-2 focus:ring-emerald-500/40 transition-all ${bgMode.inputBg} ${bgMode.border}`}
+                        />
+                        <Barcode className="w-4 h-4 absolute left-3 top-3 text-emerald-500" />
+                        {skuSearchInput && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSkuSearchInput("");
+                              setSelectedSkuProduct(null);
+                            }}
+                            className="absolute right-3 top-3 text-slate-400 hover:text-slate-600"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
+
+                      <div className="flex items-center gap-2 shrink-0">
+                        <div className="flex items-center border rounded-xl overflow-hidden bg-slate-50 dark:bg-slate-800 border-slate-200/80">
+                          <span className="px-2 text-[10px] font-mono font-bold text-slate-400 uppercase">Qty</span>
+                          <input
+                            type="number"
+                            min={1}
+                            max={999}
+                            value={skuQuantityInput}
+                            onChange={(e) => setSkuQuantityInput(Math.max(1, parseInt(e.target.value) || 1))}
+                            className="w-12 py-2 text-center text-xs font-mono font-bold bg-transparent outline-none border-l border-slate-200/80"
+                          />
+                        </div>
+
+                        <button
+                          type="submit"
+                          className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold flex items-center gap-2 shadow-md hover:shadow-lg transition-all cursor-pointer shrink-0"
+                        >
+                          <PlusCircle className="w-4 h-4" />
+                          <span>Add to Cart</span>
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Auto-complete Dropdown Results when typing */}
+                    {skuSearchInput && skuMatchedProducts.length > 0 && !selectedSkuProduct && (
+                      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-xl max-h-52 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-800 text-xs">
+                        {skuMatchedProducts.map((p) => {
+                          const availStock = getProductStock(p);
+                          const isLow = availStock <= p.minStockAlert;
+                          return (
+                            <div
+                              key={p.id}
+                              onClick={() => {
+                                setSelectedSkuProduct(p);
+                                setSkuSearchInput(p.sku);
+                              }}
+                              className="p-2.5 hover:bg-emerald-50 dark:hover:bg-slate-800/80 cursor-pointer flex justify-between items-center transition-colors"
+                            >
+                              <div>
+                                <div className="flex items-center gap-2">
+                                  <span className="font-mono font-bold text-emerald-600 dark:text-emerald-400 text-[11px] bg-emerald-50 dark:bg-slate-800 px-1.5 py-0.5 rounded border border-emerald-200/50">
+                                    SKU: {p.sku}
+                                  </span>
+                                  <span className="font-bold text-slate-900 dark:text-slate-100">{p.name}</span>
+                                </div>
+                                <div className="text-[10px] text-slate-400 flex items-center gap-2 mt-0.5">
+                                  <span>Category: {p.category}</span>
+                                  <span>•</span>
+                                  <span>GST Rate: {p.gstRate}%</span>
+                                </div>
+                              </div>
+                              <div className="text-right">
+                                <span className="font-mono font-bold text-slate-900 dark:text-slate-100 block">
+                                  ₹{p.price.toFixed(2)}
+                                </span>
+                                <span className={`text-[10px] font-bold ${isLow ? "text-rose-500" : "text-emerald-500"}`}>
+                                  Stock: {availStock} {p.unit}s
+                                </span>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+
+                    {/* IDENTIFIED PRODUCT DETAILS PREVIEW CARD (When SKU is matched or selected) */}
+                    {selectedSkuProduct && (
+                      <div className="p-3.5 bg-white dark:bg-slate-900 border-2 border-emerald-500 rounded-xl shadow-md text-xs space-y-2.5">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                          <div className="space-y-1">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="px-2 py-0.5 bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 font-mono font-black text-[10px] rounded-md border border-emerald-300/50">
+                                MATCHED SKU: {selectedSkuProduct.sku}
+                              </span>
+                              <span className="text-[10px] text-slate-400 font-mono">Barcode: {selectedSkuProduct.barcode}</span>
+                              <span className="text-[9px] bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 px-1.5 py-0.5 rounded font-bold uppercase">
+                                {selectedSkuProduct.category}
+                              </span>
+                            </div>
+                            <h4 className="text-sm font-black text-slate-900 dark:text-slate-100">{selectedSkuProduct.name}</h4>
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={() => handleSkuAddDirect(selectedSkuProduct)}
+                            className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 shadow transition-all cursor-pointer shrink-0"
+                          >
+                            <ShoppingCart className="w-3.5 h-3.5" />
+                            <span>Add Directly to Billing Cart</span>
+                          </button>
+                        </div>
+
+                        {/* Product Attribute Cards: Name, Price, Stock Availability, Applicable GST */}
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-2 border-t border-slate-100 dark:border-slate-800 text-[11px]">
+                          <div className="bg-slate-50 dark:bg-slate-800/60 p-2 rounded-lg border border-slate-200/50 dark:border-slate-700/50">
+                            <span className="text-[9px] text-slate-400 uppercase font-bold block">Selling Price</span>
+                            <span className="font-mono font-black text-slate-900 dark:text-slate-100 text-xs">
+                              ₹{selectedSkuProduct.price.toFixed(2)}
+                            </span>
+                          </div>
+
+                          <div className="bg-slate-50 dark:bg-slate-800/60 p-2 rounded-lg border border-slate-200/50 dark:border-slate-700/50">
+                            <span className="text-[9px] text-slate-400 uppercase font-bold block">Stock Availability</span>
+                            <span className={`font-mono font-bold text-xs ${getProductStock(selectedSkuProduct) <= selectedSkuProduct.minStockAlert ? "text-rose-600" : "text-emerald-600"}`}>
+                              {getProductStock(selectedSkuProduct)} {selectedSkuProduct.unit}s {getProductStock(selectedSkuProduct) <= selectedSkuProduct.minStockAlert && "🚨 Low"}
+                            </span>
+                          </div>
+
+                          <div className="bg-slate-50 dark:bg-slate-800/60 p-2 rounded-lg border border-slate-200/50 dark:border-slate-700/50">
+                            <span className="text-[9px] text-slate-400 uppercase font-bold block">Applicable GST</span>
+                            <span className="font-mono font-bold text-emerald-600 dark:text-emerald-400 text-xs">
+                              GST {selectedSkuProduct.gstRate}% (₹{((selectedSkuProduct.price * selectedSkuProduct.gstRate) / (100 + selectedSkuProduct.gstRate)).toFixed(2)})
+                            </span>
+                          </div>
+
+                          <div className="bg-slate-50 dark:bg-slate-800/60 p-2 rounded-lg border border-slate-200/50 dark:border-slate-700/50">
+                            <span className="text-[9px] text-slate-400 uppercase font-bold block">Batch / Expiry</span>
+                            <span className="font-mono font-medium text-slate-700 dark:text-slate-300 text-[10px] truncate block">
+                              {selectedSkuProduct.batchNumber || "B-GEN"} ({selectedSkuProduct.expiryDate || "N/A"})
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </form>
                 </div>
 
                 {/* Local Inventory Filters */}
@@ -3503,6 +3887,41 @@ export default function App() {
                   <p className="text-[11px] text-slate-400 mt-1">
                     Cashier: {currentCashierName} • Branch: {currentBranch?.id}
                   </p>
+                </div>
+
+                {/* Quick SKU Entry Bar inside Cart Drawer */}
+                <div className={`p-2.5 border-b bg-emerald-500/5 ${bgMode.border}`}>
+                  <form
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      handleSkuAddDirect();
+                    }}
+                    className="flex gap-1.5"
+                  >
+                    <div className="relative flex-1">
+                      <input
+                        type="text"
+                        placeholder="Scan or enter SKU to add..."
+                        value={skuSearchInput}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setSkuSearchInput(val);
+                          const exact = tenantProducts.find((p) => p.sku.toLowerCase() === val.trim().toLowerCase());
+                          if (exact) setSelectedSkuProduct(exact);
+                        }}
+                        className={`w-full pl-7 pr-2 py-1.5 text-xs font-mono font-bold border rounded-lg ${bgMode.inputBg} ${bgMode.border} outline-none focus:ring-1 focus:ring-emerald-500/50`}
+                      />
+                      <Barcode className="w-3.5 h-3.5 absolute left-2 top-2.5 text-emerald-500" />
+                    </div>
+                    <button
+                      type="submit"
+                      className="px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold font-mono transition-all cursor-pointer shrink-0 shadow-xs flex items-center gap-1"
+                      title="Add item matching SKU to billing cart"
+                    >
+                      <Plus className="w-3 h-3" />
+                      <span>SKU</span>
+                    </button>
+                  </form>
                 </div>
 
                 {/* Customer Billing Info */}
@@ -5062,17 +5481,29 @@ export default function App() {
                               <div className="absolute top-0 left-0 right-0 h-1 bg-[radial-gradient(circle,transparent_20%,#0f172a_21%)] bg-repeat-x bg-[length:6px_6px]" style={{ transform: "translateY(-4px)" }}></div>
                               
                               <div className="text-center space-y-1 mb-4 font-sans">
+                                {activeTenant.companyLogo && (
+                                  <div className="flex justify-center mb-1">
+                                    <img 
+                                      src={activeTenant.companyLogo} 
+                                      alt={`${activeTenant.name} Logo`} 
+                                      className="h-8 max-w-[120px] object-contain"
+                                    />
+                                  </div>
+                                )}
                                 <h4 className="font-display font-black text-xs uppercase tracking-tight text-slate-950">
-                                  ⭐ EXPERT POS HYPERMARKETS ⭐
+                                  ⭐ {activeTenant.name} ⭐
                                 </h4>
+                                <p className="text-[9px] text-slate-600 font-mono font-bold">
+                                  {opsSettings.receiptHeader || "OFFICIAL RETAIL CASH INVOICE"}
+                                </p>
                                 <p className="text-[9px] text-slate-500 font-mono font-semibold">
-                                  {branches.find(b => b.id === selectedInv.storeBranchId)?.name || "Downtown Smart Hypermarket"}
+                                  {branches.find(b => b.id === selectedInv.storeBranchId)?.name || currentBranch?.name || activeTenant.name}
                                 </p>
                                 <p className="text-[9.5px] text-slate-500 font-mono leading-tight">
-                                  {branches.find(b => b.id === selectedInv.storeBranchId)?.address || "Central Plaza, Main Avenue, New Delhi"}
+                                  {branches.find(b => b.id === selectedInv.storeBranchId)?.address || currentBranch?.address || "Central Plaza, Main Avenue, New Delhi"}
                                 </p>
                                 <p className="text-[8.5px] text-slate-400 font-mono">
-                                  Phone: {branches.find(b => b.id === selectedInv.storeBranchId)?.phone || "811-23456789"}
+                                  Phone: {branches.find(b => b.id === selectedInv.storeBranchId)?.phone || activeTenant.phone || "811-23456789"}
                                 </p>
                               </div>
 
@@ -5083,7 +5514,7 @@ export default function App() {
                                 </div>
                                 <div className="flex justify-between">
                                   <span>GSTIN Check:</span>
-                                  <span className="font-bold uppercase">07AAAAA1111A1Z1</span>
+                                  <span className="font-bold uppercase">{activeTenant.gstinRegNumber || "07AAAAA1111A1Z1"}</span>
                                 </div>
                                 <div className="flex justify-between">
                                   <span>Sales Cashier:</span>
@@ -5118,7 +5549,7 @@ export default function App() {
                                   <div key={idx} className="grid grid-cols-4 gap-1 text-slate-800">
                                     <span className="col-span-2 truncate font-sans text-[9.5px]">{it.name}</span>
                                     <span className="text-right">{it.quantity} {it.unit}</span>
-                                    <span className="text-right font-bold">₹{(it.price * it.quantity).toFixed(2)}</span>
+                                    <span className="text-right font-bold">{activeTenant.currency || "₹"}{(it.price * it.quantity).toFixed(2)}</span>
                                   </div>
                                 ))}
                               </div>
@@ -5127,25 +5558,25 @@ export default function App() {
                               <div className="border-t border-dashed border-slate-300 pt-2 space-y-0.5 text-[9.5px]">
                                 <div className="flex justify-between">
                                   <span>Basket Tax (GST):</span>
-                                  <span>₹{selectedInv.taxAmount.toFixed(2)}</span>
+                                  <span>{activeTenant.currency || "₹"}{selectedInv.taxAmount.toFixed(2)}</span>
                                 </div>
                                 <div className="flex justify-between">
                                   <span>Promo discount code:</span>
-                                  <span>{selectedInv.couponCode ? `-${showInvoicePrintPercentApplied(selectedInv)}` : "₹0.00"}</span>
+                                  <span>{selectedInv.couponCode ? `-${showInvoicePrintPercentApplied(selectedInv)}` : `${activeTenant.currency || "₹"}0.00`}</span>
                                 </div>
                                 <div className="flex justify-between text-[11px] font-black text-slate-950 border-t border-dashed border-slate-300 pt-1.5">
                                   <span>TOTAL NET PAYABLE:</span>
-                                  <span>₹{selectedInv.grandTotal.toFixed(2)}</span>
+                                  <span>{activeTenant.currency || "₹"}{selectedInv.grandTotal.toFixed(2)}</span>
                                 </div>
                                 {selectedInv.paymentMode === PaymentMode.CASH && (
                                   <>
                                     <div className="flex justify-between p-0.5 mt-1 bg-slate-100 rounded text-slate-700">
                                       <span>Tendered Cash:</span>
-                                      <span>₹{Number(selectedInv.cashReceived || selectedInv.grandTotal).toFixed(2)}</span>
+                                      <span>{activeTenant.currency || "₹"}{Number(selectedInv.cashReceived || selectedInv.grandTotal).toFixed(2)}</span>
                                     </div>
                                     <div className="flex justify-between text-slate-700">
                                       <span>Returned Change:</span>
-                                      <span>₹{Number(selectedInv.changeReturned || 0).toFixed(2)}</span>
+                                      <span>{activeTenant.currency || "₹"}{Number(selectedInv.changeReturned || 0).toFixed(2)}</span>
                                     </div>
                                   </>
                                 )}
@@ -5155,8 +5586,14 @@ export default function App() {
                                 </div>
                               </div>
 
-                              <div className="p-2 bg-slate-50 border border-slate-200 rounded text-[8.5px] font-sans leading-normal text-center text-slate-500 mt-4">
-                                ⭐ Loyalty members: spent ₹{selectedInv.grandTotal} to award +{Math.floor(selectedInv.grandTotal/10)} Loyalty Points dynamically.<br />Thank you for shopping at Expert POS!
+                              <div className="p-2 bg-slate-50 border border-slate-200 rounded text-[8.5px] font-sans leading-normal text-center text-slate-600 mt-4">
+                                {opsSettings.receiptFooter ? (
+                                  opsSettings.receiptFooter
+                                ) : (
+                                  <>
+                                    ⭐ Loyalty members: spent {activeTenant.currency || "₹"}{selectedInv.grandTotal} to award +{Math.floor(selectedInv.grandTotal/10)} Loyalty Points dynamically.<br />Thank you for shopping at {activeTenant.name}!
+                                  </>
+                                )}
                               </div>
 
                               {/* Thermal paper tear teeth at bottom */}
@@ -5238,24 +5675,27 @@ export default function App() {
                                   const selectedInv = invoices.find(inv => inv.id === selectedReprintInvoiceId);
                                   if (!selectedInv) return;
                                   
-                                  const itemsText = selectedInv.items.map(it => `[${it.quantity} ${it.unit}] ${it.name} @ ₹${it.price} = ₹${(it.price * it.quantity).toFixed(2)}`).join("\n");
+                                  const itemsText = selectedInv.items.map(it => `[${it.quantity} ${it.unit}] ${it.name} @ ${activeTenant.currency || "₹"}${it.price} = ${activeTenant.currency || "₹"}${(it.price * it.quantity).toFixed(2)}`).join("\n");
                                   const textCopy = `
 ========================================
-        EXPERT POS HYPERMARKETS
+        ${activeTenant.name.toUpperCase()}
 ========================================
+${opsSettings.receiptHeader || "OFFICIAL RETAIL CASH INVOICE"}
 Invoice ID: ${selectedInv.id}
+GSTIN:      ${activeTenant.gstinRegNumber || "07AAAAA1111A1Z1"}
 Timestamp:  ${selectedInv.date} ${selectedInv.time}
 Cashier:    ${selectedInv.cashierName}
+Branch:     ${branches.find(b => b.id === selectedInv.storeBranchId)?.name || currentBranch?.name || activeTenant.name}
 ----------------------------------------
 Particular Description:
 ${itemsText}
 ----------------------------------------
-Basket Tax GST: ₹${selectedInv.taxAmount.toFixed(2)}
+Basket Tax GST: ${activeTenant.currency || "₹"}${selectedInv.taxAmount.toFixed(2)}
 Promo Code:     ${selectedInv.couponCode || "None"}
-TOTAL PAYABLE:  ₹${selectedInv.grandTotal.toFixed(2)}
+TOTAL PAYABLE:  ${activeTenant.currency || "₹"}${selectedInv.grandTotal.toFixed(2)}
 Payment Mode:   ${selectedInv.paymentMode}
 ========================================
-  Thank you for shopping at Expert POS!
+  ${opsSettings.receiptFooter || `Thank you for shopping at ${activeTenant.name}!`}
 ========================================
 `;
                                   navigator.clipboard.writeText(textCopy.trim());
@@ -5615,7 +6055,7 @@ Payment Mode:   ${selectedInv.paymentMode}
             </div>
           )}
 
-          {activeTab === "super-admin" && currentRole === UserRole.ADMIN && currentCashierName.toLowerCase().includes("super") && (
+          {activeTab === "super-admin" && isSuperAdmin && (
             <div className="flex-1 overflow-y-auto p-4 md:p-8 space-y-6">
               <SuperAdminConsole
                 credentialsList={credentialsList}
@@ -5635,7 +6075,7 @@ Payment Mode:   ${selectedInv.paymentMode}
             </div>
           )}
 
-          {activeTab === "staff-registry" && (currentRole === UserRole.ADMIN || currentRole === UserRole.MANAGER) && (
+          {activeTab === "staff-registry" && (normalizeUserRole(currentRole) === UserRole.ADMIN || normalizeUserRole(currentRole) === UserRole.MANAGER || isSuperAdmin) && (
             <div className="flex-1 overflow-y-auto p-4 md:p-8 space-y-6">
               <StaffRegistry
                 credentialsList={credentialsList}
@@ -5659,7 +6099,7 @@ Payment Mode:   ${selectedInv.paymentMode}
                 currentUserEmail={currentUserEmail}
                 currentRole={currentRole}
                 currentCashierName={currentCashierName}
-                onUpdateCashierName={setCurrentCashierName}
+                onUpdateCashierName={handleUpdateCashierName}
                 credentialsList={credentialsList}
                 onUpdateCredentials={(newList) => {
                   setCredentialsList(newList);
@@ -5667,9 +6107,20 @@ Payment Mode:   ${selectedInv.paymentMode}
                 }}
                 activeTenant={activeTenant}
                 onUpdateTenant={(updatedTenant) => {
-                  const updatedList = tenantsList.map(t => t.id === updatedTenant.id ? updatedTenant : t);
+                  const exists = tenantsList.some(t => t.id === updatedTenant.id);
+                  const updatedList = exists
+                    ? tenantsList.map(t => t.id === updatedTenant.id ? updatedTenant : t)
+                    : [...tenantsList, updatedTenant];
                   setTenantsList(updatedList);
                   localStorage.setItem("expert_aid_tenants", JSON.stringify(updatedList));
+                }}
+                opsSettings={opsSettings}
+                onUpdateOpsSettings={(newOps) => {
+                  setOpsSettings(newOps);
+                  localStorage.setItem("expert_aid_terminal_settings", JSON.stringify(newOps));
+                  if (typeof newOps.enableSound === "boolean") {
+                    setSoundEnabled(newOps.enableSound);
+                  }
                 }}
                 triggerNotification={triggerNotification}
                 productCategories={productCategories}
@@ -5770,17 +6221,29 @@ Payment Mode:   ${selectedInv.paymentMode}
             {/* Thermal Receipt Body */}
             <div className="bg-amber-50/20 p-4 rounded-xl border border-slate-200 font-mono text-[11px] text-slate-800 space-y-3" id="invoice-receipt-theme">
               <div className="text-center font-sans space-y-1">
+                {activeTenant.companyLogo && (
+                  <div className="flex justify-center mb-1">
+                    <img 
+                      src={activeTenant.companyLogo} 
+                      alt={`${activeTenant.name} Logo`} 
+                      className="h-10 max-w-[150px] object-contain"
+                    />
+                  </div>
+                )}
                 <h4 className="font-display font-black text-sm tracking-tight text-slate-900">
-                  EXPERT POS HYPERMARKETS
+                  {activeTenant.name}
                 </h4>
+                <p className="text-[9.5px] font-bold text-slate-600 uppercase tracking-wide">
+                  {opsSettings.receiptHeader || "OFFICIAL RETAIL CASH INVOICE"}
+                </p>
                 <p className="text-[10px] text-slate-500 font-mono">
-                  {currentBranch?.name || "Branch #01 Outlet"}
+                  {currentBranch?.name || activeTenant.name}
                 </p>
                 <p className="text-[10px] text-slate-500 font-mono leading-none">
-                  {currentBranch?.address}, {currentBranch?.city}
+                  {currentBranch?.address ? `${currentBranch.address}, ${currentBranch.city}` : "Central Hub, Main Commercial Area"}
                 </p>
                 <p className="text-[9px] text-slate-400 font-mono">
-                  Contact: {currentBranch?.phone}
+                  Contact: {currentBranch?.phone || activeTenant.phone || "011-23456789"}
                 </p>
               </div>
 
@@ -5791,11 +6254,11 @@ Payment Mode:   ${selectedInv.paymentMode}
                 </div>
                 <div className="flex justify-between">
                   <span>GSTIN Check:</span>
-                  <span className="font-bold uppercase">07AAAAA1111A1Z1</span>
+                  <span className="font-bold uppercase">{activeTenant.gstinRegNumber || (currentBranch?.id ? branches.find(b => b.id === currentBranch.id)?.gstin : "") || "07AAAAA1111A1Z1"}</span>
                 </div>
                 <div className="flex justify-between">
                   <span>Sales Cashier:</span>
-                  <span>{showInvoicePrintPreview.cashierName}</span>
+                  <span>{showInvoicePrintPreview.cashierName || currentCashierName}</span>
                 </div>
                 <div className="flex justify-between">
                   <span>Timestamp:</span>
@@ -5826,7 +6289,7 @@ Payment Mode:   ${selectedInv.paymentMode}
                   <div key={it.productId} className="grid grid-cols-4 gap-1">
                     <span className="col-span-2 truncate font-sans text-[10px]">{it.name}</span>
                     <span className="text-right">{it.quantity} {it.unit}</span>
-                    <span className="text-right font-bold">₹{(it.price * it.quantity).toFixed(2)}</span>
+                    <span className="text-right font-bold">{activeTenant.currency || "₹"}{(it.price * it.quantity).toFixed(2)}</span>
                   </div>
                 ))}
               </div>
@@ -5835,25 +6298,25 @@ Payment Mode:   ${selectedInv.paymentMode}
               <div className="border-t border-dashed border-slate-300 pt-2 space-y-1">
                 <div className="flex justify-between">
                   <span>Basket Tax value:</span>
-                  <span>₹{showInvoicePrintPreview.taxAmount.toFixed(2)}</span>
+                  <span>{activeTenant.currency || "₹"}{showInvoicePrintPreview.taxAmount.toFixed(2)}</span>
                 </div>
                 <div className="flex justify-between">
                   <span>Promo discount code:</span>
-                  <span>{showInvoicePrintPreview.couponCode ? `-${showInvoicePrintPercentApplied(showInvoicePrintPreview)}` : "₹0.00"}</span>
+                  <span>{showInvoicePrintPreview.couponCode ? `-${showInvoicePrintPercentApplied(showInvoicePrintPreview)}` : `${activeTenant.currency || "₹"}0.00`}</span>
                 </div>
                 <div className="flex justify-between text-xs font-black text-slate-950 border-t border-dashed border-slate-300 pt-1.5">
                   <span>TOTAL PAYABLE:</span>
-                  <span>₹{showInvoicePrintPreview.grandTotal.toFixed(2)}</span>
+                  <span>{activeTenant.currency || "₹"}{showInvoicePrintPreview.grandTotal.toFixed(2)}</span>
                 </div>
                 {showInvoicePrintPreview.paymentMode === PaymentMode.CASH && (
                   <>
                     <div className="flex justify-between p-0.5 mt-1 bg-slate-100 rounded">
                       <span>Paper Cash Tendered:</span>
-                      <span>₹{Number(showInvoicePrintPreview.cashReceived).toFixed(2)}</span>
+                      <span>{activeTenant.currency || "₹"}{Number(showInvoicePrintPreview.cashReceived).toFixed(2)}</span>
                     </div>
                     <div className="flex justify-between">
                       <span>Change Re-delivered:</span>
-                      <span>₹{Number(showInvoicePrintPreview.changeReturned).toFixed(2)}</span>
+                      <span>{activeTenant.currency || "₹"}{Number(showInvoicePrintPreview.changeReturned).toFixed(2)}</span>
                     </div>
                   </>
                 )}
@@ -5863,8 +6326,14 @@ Payment Mode:   ${selectedInv.paymentMode}
                 </div>
               </div>
 
-              <div className="p-3 bg-slate-100 rounded text-[9px] font-sans leading-tight text-center text-slate-500 border border-slate-200">
-                ⭐ Loyalty members: spent ₹{showInvoicePrintPreview.grandTotal} to award +{Math.floor(showInvoicePrintPreview.grandTotal/10)} Loyalty Points dynamically.<br />Thank you for shopping at Expert POS!
+              <div className="p-3 bg-slate-100 rounded text-[9px] font-sans leading-tight text-center text-slate-600 border border-slate-200">
+                {opsSettings.receiptFooter ? (
+                  opsSettings.receiptFooter
+                ) : (
+                  <>
+                    ⭐ Loyalty members: spent {activeTenant.currency || "₹"}{showInvoicePrintPreview.grandTotal} to award +{Math.floor(showInvoicePrintPreview.grandTotal/10)} Loyalty Points dynamically.<br />Thank you for shopping at {activeTenant.name}!
+                  </>
+                )}
               </div>
             </div>
 
@@ -5935,8 +6404,8 @@ Payment Mode:   ${selectedInv.paymentMode}
         onClose={() => setIsLabelModalOpen(false)}
         products={tenantProducts}
         initialSelectedProduct={labelModalProduct}
-        storeName="EXPERT POS HYPERMARKETS"
-        currencySymbol="₹"
+        storeName={activeTenant.name}
+        currencySymbol={activeTenant.currency || "₹"}
       />
 
       {/* PRODUCT DELETION CONFIRMATION DIALOG (IFRAME SECURE MODAL) */}

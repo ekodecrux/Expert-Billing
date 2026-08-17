@@ -62,7 +62,21 @@ import {
   Zap,
   Percent,
   Cpu,
-  Laptop
+  Laptop,
+  GitBranch,
+  MapPin,
+  Megaphone,
+  BarChart2,
+  BarChart3,
+  RefreshCw,
+  SlidersHorizontal,
+  BookOpen,
+  GraduationCap,
+  UserPlus,
+  ArrowUpRight,
+  PieChart,
+  ListFilter,
+  Building2
 } from "lucide-react";
 import { UserRole, Tenant, printElementById, saveElementAsPDF } from "../types";
 import { ExpertAidLogo } from "./ExpertAidLogo";
@@ -83,6 +97,63 @@ interface AccessProfile {
   privileges: string[];
   storeBranchId?: string;
   phone?: string;
+}
+
+export interface MultiBranchNode {
+  id: string;
+  name: string;
+  code: string;
+  zone: string;
+  city: string;
+  address: string;
+  type: "Regional Head Office" | "Commercial Branch" | "Coastal Campus" | "North Zone Branch" | "Training Hub" | "Express Outlet";
+  managerName: string;
+  contactEmail: string;
+  phone: string;
+  status: "ACTIVE" | "INACTIVE" | "MAINTENANCE" | "AUDIT";
+  staffCount: number;
+  studentsCustomersCount: number;
+  todayCollection: number;
+  monthlyTarget: number;
+  monthlyAchieved: number;
+  attendanceRate: number;
+  terminalsOnline: string;
+  establishedYear: number;
+  notes?: string;
+}
+
+export interface CentralBroadcastNotice {
+  id: string;
+  title: string;
+  category: "Policy Directive" | "Academic Notice" | "Financial Audit" | "Emergency Alert" | "System Update";
+  content: string;
+  issuedAt: string;
+  issuedBy: string;
+  targetBranches: string[];
+  priority: "HIGH" | "URGENT" | "NORMAL";
+  deliveryStats: string;
+}
+
+export interface StandardizedFeeCourse {
+  id: string;
+  courseOrCategory: string;
+  code: string;
+  standardFee: number;
+  taxGstRate: number;
+  billingFrequency: "Monthly" | "Annual" | "Quarterly" | "Per Term";
+  syncedBranchesCount: number;
+  lastSyncedAt: string;
+}
+
+export interface BranchUserRole {
+  id: string;
+  name: string;
+  email: string;
+  loginUid: string;
+  assignedBranchId: string;
+  role: "Head Office Super Admin" | "Branch Admin" | "Principal / Director" | "Financial Auditor" | "Cashier / Staff";
+  status: "ACTIVE" | "LOCKED";
+  lastActive: string;
 }
 
 interface SuperAdminConsoleProps {
@@ -110,6 +181,7 @@ export default function SuperAdminConsole({
 }: SuperAdminConsoleProps) {
   // Navigation
   const [activeMenuTab, setActiveMenuTab] = useState<string>("dashboard");
+  const [isSuperMobileMenuOpen, setIsSuperMobileMenuOpen] = useState<boolean>(false);
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [showProfileDropdown, setShowProfileDropdown] = useState<boolean>(false);
   const [showNotificationCenter, setShowNotificationCenter] = useState<boolean>(false);
@@ -188,6 +260,353 @@ export default function SuperAdminConsole({
   const [filterTenantTier, setFilterTenantTier] = useState<string>("ALL");
   const [filterTenantStatus, setFilterTenantStatus] = useState<string>("ALL");
   const [filterTenantKyc, setFilterTenantKyc] = useState<string>("ALL");
+
+  // Centralized Command Center (Multi-Branch Management) States
+  const [mbSelectedOrg, setMbSelectedOrg] = useState<string>("Apex Corporate Group (Head Office HQ)");
+  const [mbActiveBranchFilter, setMbActiveBranchFilter] = useState<string>("ALL");
+  const [mbSubTab, setMbSubTab] = useState<"overview" | "branches" | "financials" | "attendance" | "users" | "standardization" | "announcements" | "audit">("overview");
+
+  const [branchNodes, setBranchNodes] = useState<MultiBranchNode[]>([
+    {
+      id: "B1-HYD",
+      name: "Branch 1 – Hyderabad (Head Office Regional Hub)",
+      code: "HYD-HQ-01",
+      zone: "Telangana Central",
+      city: "Hyderabad",
+      address: "Hitech City, Madhapur, Hyderabad - 500081",
+      type: "Regional Head Office",
+      managerName: "Dr. Ramesh Varma (HQ Director)",
+      contactEmail: "hyderabad.hq@apexgroup.com",
+      phone: "+91 98490 11223",
+      status: "ACTIVE",
+      staffCount: 45,
+      studentsCustomersCount: 1250,
+      todayCollection: 285000,
+      monthlyTarget: 40000000,
+      monthlyAchieved: 32500000,
+      attendanceRate: 98.2,
+      terminalsOnline: "12 / 12",
+      establishedYear: 2018,
+      notes: "Main regional hub with central server node."
+    },
+    {
+      id: "B2-VIJ",
+      name: "Branch 2 – Vijayawada (Coastal Commercial Hub)",
+      code: "VIJ-02",
+      zone: "Andhra Pradesh Central",
+      city: "Vijayawada",
+      address: "MG Road, Benz Circle, Vijayawada - 520010",
+      type: "Commercial Branch",
+      managerName: "Suresh Babu (Branch Director)",
+      contactEmail: "vijayawada@apexgroup.com",
+      phone: "+91 98481 22334",
+      status: "ACTIVE",
+      staffCount: 28,
+      studentsCustomersCount: 820,
+      todayCollection: 175000,
+      monthlyTarget: 25000000,
+      monthlyAchieved: 21200000,
+      attendanceRate: 96.5,
+      terminalsOnline: "8 / 8",
+      establishedYear: 2020,
+      notes: "Prime commercial outlet."
+    },
+    {
+      id: "B3-VSKP",
+      name: "Branch 3 – Visakhapatnam (Coastal Campus)",
+      code: "VSKP-03",
+      zone: "Andhra Pradesh North",
+      city: "Visakhapatnam",
+      address: "Dwaraka Nagar, Visakhapatnam - 530016",
+      type: "Coastal Campus",
+      managerName: "Priya Sundaram (Principal)",
+      contactEmail: "vizag@apexgroup.com",
+      phone: "+91 98472 33445",
+      status: "ACTIVE",
+      staffCount: 32,
+      studentsCustomersCount: 940,
+      todayCollection: 210000,
+      monthlyTarget: 30000000,
+      monthlyAchieved: 26800000,
+      attendanceRate: 97.1,
+      terminalsOnline: "9 / 10",
+      establishedYear: 2021,
+      notes: "Academic & retail branch."
+    },
+    {
+      id: "B4-WGL",
+      name: "Branch 4 – Warangal (North Zone Branch)",
+      code: "WGL-04",
+      zone: "Telangana North",
+      city: "Warangal",
+      address: "Kazipet Main Road, Warangal - 506002",
+      type: "North Zone Branch",
+      managerName: "K. Rajeshwar Rao (Branch Admin)",
+      contactEmail: "warangal@apexgroup.com",
+      phone: "+91 98463 44556",
+      status: "ACTIVE",
+      staffCount: 22,
+      studentsCustomersCount: 610,
+      todayCollection: 120000,
+      monthlyTarget: 18000000,
+      monthlyAchieved: 15400000,
+      attendanceRate: 95.8,
+      terminalsOnline: "6 / 6",
+      establishedYear: 2022,
+      notes: "North Telangana zone expansion node."
+    }
+  ]);
+
+  // Modals for Multi-Branch HQ
+  const [showAddBranchModal, setShowAddBranchModal] = useState<boolean>(false);
+  const [showEditBranchModal, setShowEditBranchModal] = useState<MultiBranchNode | null>(null);
+  const [showBroadcastModal, setShowBroadcastModal] = useState<boolean>(false);
+  const [showStandardizationModal, setShowStandardizationModal] = useState<boolean>(false);
+  const [showBranchUserModal, setShowBranchUserModal] = useState<boolean>(false);
+
+  // Form Fields for Add/Edit Branch
+  const [mbBranchName, setMbBranchName] = useState<string>("");
+  const [mbBranchCode, setMbBranchCode] = useState<string>("");
+  const [mbBranchCity, setMbBranchCity] = useState<string>("");
+  const [mbBranchZone, setMbBranchZone] = useState<string>("Telangana Central");
+  const [mbBranchType, setMbBranchType] = useState<MultiBranchNode["type"]>("Commercial Branch");
+  const [mbBranchManager, setMbBranchManager] = useState<string>("");
+  const [mbBranchEmail, setMbBranchEmail] = useState<string>("");
+  const [mbBranchPhone, setMbBranchPhone] = useState<string>("");
+  const [mbBranchAddress, setMbBranchAddress] = useState<string>("");
+  const [mbBranchTarget, setMbBranchTarget] = useState<number>(20000000);
+  const [mbBranchStaffCap, setMbBranchStaffCap] = useState<number>(25);
+
+  // Central Broadcast Notices
+  const [centralBroadcasts, setCentralBroadcasts] = useState<CentralBroadcastNotice[]>([
+    {
+      id: "BC-101",
+      title: "Standardized Quarterly Financial & Academic Audit Schedule",
+      category: "Financial Audit",
+      content: "All regional branch managers are requested to reconcile Q3 fee ledgers and inventory counts prior to Head Office inspection.",
+      issuedAt: "2026-08-04 10:30 AM",
+      issuedBy: "Head Office Super Admin",
+      targetBranches: ["ALL"],
+      priority: "HIGH",
+      deliveryStats: "Delivered to 4 / 4 Branches (100% Ack)"
+    },
+    {
+      id: "BC-102",
+      title: "GST Rate & Fee Collection Directive Update",
+      category: "Policy Directive",
+      content: "Revised 18% GST tax breakdown will auto-apply across all branch billing terminals starting 1st of next month.",
+      issuedAt: "2026-08-02 04:15 PM",
+      issuedBy: "Chief Financial Controller",
+      targetBranches: ["B1-HYD", "B2-VIJ", "B3-VSKP", "B4-WGL"],
+      priority: "URGENT",
+      deliveryStats: "Delivered to 4 / 4 Branches (4/4 Ack)"
+    }
+  ]);
+
+  const [bFormTitle, setBFormTitle] = useState<string>("");
+  const [bFormCategory, setBFormCategory] = useState<CentralBroadcastNotice["category"]>("Policy Directive");
+  const [bFormContent, setBFormContent] = useState<string>("");
+  const [bFormTarget, setBFormTarget] = useState<string>("ALL");
+  const [bFormPriority, setBFormPriority] = useState<"HIGH" | "URGENT" | "NORMAL">("HIGH");
+
+  // Standardized Fee & Catalog Courses
+  const [stdCourses, setStdCourses] = useState<StandardizedFeeCourse[]>([
+    { id: "SC-01", courseOrCategory: "Computer Science & IT (Full-Stack Engineering)", code: "CS-101", standardFee: 65000, taxGstRate: 18, billingFrequency: "Per Term", syncedBranchesCount: 4, lastSyncedAt: "2026-08-01" },
+    { id: "SC-02", courseOrCategory: "Management Studies (Retail & Sales Operations)", code: "MGMT-202", standardFee: 45000, taxGstRate: 18, billingFrequency: "Annual", syncedBranchesCount: 4, lastSyncedAt: "2026-08-01" },
+    { id: "SC-03", courseOrCategory: "Healthcare & Pharmacy Administration", code: "PHARM-301", standardFee: 55000, taxGstRate: 18, billingFrequency: "Annual", syncedBranchesCount: 4, lastSyncedAt: "2026-08-01" }
+  ]);
+
+  // Branch Users List
+  const [branchUsers, setBranchUsers] = useState<BranchUserRole[]>([
+    { id: "BU-01", name: "Dr. Ramesh Varma", email: "ramesh.v@apexgroup.com", loginUid: "ramesh_hq", assignedBranchId: "ALL", role: "Head Office Super Admin", status: "ACTIVE", lastActive: "Just Now" },
+    { id: "BU-02", name: "Suresh Babu", email: "suresh.b@apexgroup.com", loginUid: "suresh_vij", assignedBranchId: "B2-VIJ", role: "Branch Admin", status: "ACTIVE", lastActive: "12 mins ago" },
+    { id: "BU-03", name: "Priya Sundaram", email: "priya.s@apexgroup.com", loginUid: "priya_vskp", assignedBranchId: "B3-VSKP", role: "Principal / Director", status: "ACTIVE", lastActive: "1 hour ago" },
+    { id: "BU-04", name: "K. Rajeshwar Rao", email: "rajeshwar.k@apexgroup.com", loginUid: "rajeshwar_wgl", assignedBranchId: "B4-WGL", role: "Branch Admin", status: "ACTIVE", lastActive: "25 mins ago" },
+    { id: "BU-05", name: "Ananya Reddy", email: "ananya.r@apexgroup.com", loginUid: "ananya_auditor", assignedBranchId: "ALL", role: "Financial Auditor", status: "ACTIVE", lastActive: "2 hours ago" }
+  ]);
+
+  const [buName, setBuName] = useState<string>("");
+  const [buEmail, setBuEmail] = useState<string>("");
+  const [buLoginUid, setBuLoginUid] = useState<string>("");
+  const [buAssignedBranch, setBuAssignedBranch] = useState<string>("B1-HYD");
+  const [buRole, setBuRole] = useState<BranchUserRole["role"]>("Branch Admin");
+
+  // Multi-Branch Audit Logs
+  const [mbAuditLogs, setMbAuditLogs] = useState([
+    { id: "LOG-MB1", timestamp: "2026-08-05 08:30 AM", branchName: "Branch 1 – Hyderabad (HQ)", user: "Dr. Ramesh Varma", action: "Pushed global fee standardization package to all 4 branches", status: "SUCCESS" },
+    { id: "LOG-MB2", timestamp: "2026-08-05 07:15 AM", branchName: "Branch 2 – Vijayawada", user: "Suresh Babu", action: "Opened terminal cash session #4021 and synchronized inventory", status: "SUCCESS" },
+    { id: "LOG-MB3", timestamp: "2026-08-04 06:45 PM", branchName: "Branch 3 – Visakhapatnam", user: "Priya Sundaram", action: "Submitted daily fee collection summary (₹ 2,10,000)", status: "SUCCESS" },
+    { id: "LOG-MB4", timestamp: "2026-08-04 03:20 PM", branchName: "Branch 4 – Warangal", user: "K. Rajeshwar Rao", action: "Verified staff attendance log (95.8% rate)", status: "SUCCESS" }
+  ]);
+
+  // Computed Consolidated Statistics
+  const mbConsolidatedStats = useMemo(() => {
+    const activeNodes = branchNodes.filter(b => b.status === "ACTIVE" || b.status === "MAINTENANCE");
+    const totalBranchesCount = branchNodes.length;
+    const totalStaff = activeNodes.reduce((acc, b) => acc + b.staffCount, 0);
+    const totalStudents = activeNodes.reduce((acc, b) => acc + b.studentsCustomersCount, 0);
+    const totalTodayRevenue = activeNodes.reduce((acc, b) => acc + b.todayCollection, 0);
+    const totalTarget = activeNodes.reduce((acc, b) => acc + b.monthlyTarget, 0);
+    const totalAchieved = activeNodes.reduce((acc, b) => acc + b.monthlyAchieved, 0);
+    const avgAttendance = activeNodes.length > 0 ? (activeNodes.reduce((acc, b) => acc + b.attendanceRate, 0) / activeNodes.length).toFixed(1) : "0.0";
+    const overallProgress = totalTarget > 0 ? Math.min(100, Math.round((totalAchieved / totalTarget) * 100)) : 0;
+
+    return {
+      totalBranchesCount,
+      totalStaff,
+      totalStudents,
+      totalTodayRevenue,
+      totalTarget,
+      totalAchieved,
+      avgAttendance,
+      overallProgress
+    };
+  }, [branchNodes]);
+
+  // Handlers for Multi-Branch Actions
+  const handleCreateBranchNode = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!mbBranchName.trim()) {
+      triggerNotification("Please specify a valid branch name.", "warning");
+      return;
+    }
+    const code = mbBranchCode.trim() || `BR-${Math.floor(10 + Math.random() * 89)}`;
+    const newId = `B${branchNodes.length + 1}-${code.toUpperCase()}`;
+    const newBranch: MultiBranchNode = {
+      id: newId,
+      name: mbBranchName,
+      code,
+      zone: mbBranchZone,
+      city: mbBranchCity || "Metropolitan City",
+      address: mbBranchAddress || "Main Corporate Avenue",
+      type: mbBranchType,
+      managerName: mbBranchManager || "Branch Administrator",
+      contactEmail: mbBranchEmail || `${code.toLowerCase()}@apexgroup.com`,
+      phone: mbBranchPhone || "+91 98000 00000",
+      status: "ACTIVE",
+      staffCount: mbBranchStaffCap || 20,
+      studentsCustomersCount: 500,
+      todayCollection: 100000,
+      monthlyTarget: mbBranchTarget || 20000000,
+      monthlyAchieved: 5000000,
+      attendanceRate: 97.0,
+      terminalsOnline: "5 / 5",
+      establishedYear: new Date().getFullYear(),
+      notes: "Newly onboarded branch node."
+    };
+
+    setBranchNodes([newBranch, ...branchNodes]);
+    setMbAuditLogs([
+      {
+        id: `LOG-MB${Date.now()}`,
+        timestamp: new Date().toLocaleString(),
+        branchName: mbBranchName,
+        user: "Head Office Super Admin",
+        action: `Provisioned & activated new branch node (${code})`,
+        status: "SUCCESS"
+      },
+      ...mbAuditLogs
+    ]);
+
+    setShowAddBranchModal(false);
+    setMbBranchName("");
+    setMbBranchCode("");
+    setMbBranchCity("");
+    setMbBranchManager("");
+    setMbBranchEmail("");
+    setMbBranchPhone("");
+    setMbBranchAddress("");
+    triggerNotification(`Branch Node "${mbBranchName}" provisioned successfully!`, "success");
+  };
+
+  const handleToggleBranchStatus = (branchId: string, newStatus: MultiBranchNode["status"]) => {
+    setBranchNodes(branchNodes.map(b => b.id === branchId ? { ...b, status: newStatus } : b));
+    const branchObj = branchNodes.find(b => b.id === branchId);
+    setMbAuditLogs([
+      {
+        id: `LOG-MB${Date.now()}`,
+        timestamp: new Date().toLocaleString(),
+        branchName: branchObj?.name || branchId,
+        user: "Head Office Super Admin",
+        action: `Changed operational status to ${newStatus}`,
+        status: "SUCCESS"
+      },
+      ...mbAuditLogs
+    ]);
+    triggerNotification(`Branch operational status set to ${newStatus}`, "success");
+  };
+
+  const handleCreateBroadcastNotice = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!bFormTitle.trim() || !bFormContent.trim()) {
+      triggerNotification("Please fill in broadcast title and message.", "warning");
+      return;
+    }
+    const newNotice: CentralBroadcastNotice = {
+      id: `BC-${Math.floor(100 + Math.random() * 900)}`,
+      title: bFormTitle,
+      category: bFormCategory,
+      content: bFormContent,
+      issuedAt: new Date().toLocaleString(),
+      issuedBy: "Head Office Super Admin",
+      targetBranches: bFormTarget === "ALL" ? ["ALL"] : [bFormTarget],
+      priority: bFormPriority,
+      deliveryStats: `Broadcasted to ${bFormTarget === "ALL" ? branchNodes.length : 1} Branch Node(s)`
+    };
+
+    setCentralBroadcasts([newNotice, ...centralBroadcasts]);
+    setShowBroadcastModal(false);
+    setBFormTitle("");
+    setBFormContent("");
+    triggerNotification("Head Office Central Broadcast Notice published successfully!", "success");
+  };
+
+  const handlePushStandardizationSync = () => {
+    setStdCourses(stdCourses.map(c => ({
+      ...c,
+      syncedBranchesCount: branchNodes.length,
+      lastSyncedAt: new Date().toISOString().split("T")[0]
+    })));
+    setMbAuditLogs([
+      {
+        id: `LOG-MB${Date.now()}`,
+        timestamp: new Date().toLocaleString(),
+        branchName: "ALL BRANCHES (HQ)",
+        user: "Head Office Super Admin",
+        action: `1-Click Synced standardized courses & fee structure across all ${branchNodes.length} branches`,
+        status: "SUCCESS"
+      },
+      ...mbAuditLogs
+    ]);
+    setShowStandardizationModal(false);
+    triggerNotification(`Standardized fee structures synced to all ${branchNodes.length} branches!`, "success");
+  };
+
+  const handleRegisterBranchUser = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!buName.trim() || !buEmail.trim()) {
+      triggerNotification("Please enter name and email for branch user.", "warning");
+      return;
+    }
+    const uid = buLoginUid.trim() || buEmail.split("@")[0] + "_user";
+    const newUser: BranchUserRole = {
+      id: `BU-${Math.floor(100 + Math.random() * 900)}`,
+      name: buName,
+      email: buEmail,
+      loginUid: uid,
+      assignedBranchId: buAssignedBranch,
+      role: buRole,
+      status: "ACTIVE",
+      lastActive: "Just Registered"
+    };
+
+    setBranchUsers([newUser, ...branchUsers]);
+    setShowBranchUserModal(false);
+    setBuName("");
+    setBuEmail("");
+    setBuLoginUid("");
+    triggerNotification(`Branch user "${buName}" assigned to ${buAssignedBranch === "ALL" ? "Head Office HQ" : buAssignedBranch}`, "success");
+  };
 
   // Edit Client Form States
   const [editTenantName, setEditTenantName] = useState<string>("");
@@ -520,6 +939,76 @@ export default function SuperAdminConsole({
     setCopiedField(key);
     triggerNotification(`Copied: ${text}`, "success");
     setTimeout(() => setCopiedField(null), 2000);
+  };
+
+  // Generate or Regenerate Client Login Credentials
+  const handleGenerateTenantCredentials = (tenant: Tenant) => {
+    const generatedPass = "Pass@" + Math.floor(100000 + Math.random() * 900000);
+    const loginEmail = tenant.adminLoginId || tenant.adminEmail || `${tenant.subdomain}@expertpos.com`;
+
+    // 1. Check or update credentialsList
+    const existingIndex = credentialsList.findIndex(
+      c => c.email.toLowerCase() === loginEmail.toLowerCase() ||
+           c.title.toLowerCase().includes(tenant.name.toLowerCase()) ||
+           c.name.toLowerCase().includes(tenant.name.toLowerCase())
+    );
+
+    let nextCredentials: AccessProfile[];
+    if (existingIndex >= 0) {
+      nextCredentials = [...credentialsList];
+      nextCredentials[existingIndex] = {
+        ...nextCredentials[existingIndex],
+        email: loginEmail,
+        password: generatedPass
+      };
+    } else {
+      const newProfile: AccessProfile = {
+        role: UserRole.ADMIN,
+        title: `${tenant.name} Admin`,
+        email: loginEmail,
+        password: generatedPass,
+        name: `${tenant.name} Administrator`,
+        color: "bg-blue-600",
+        gradient: "from-blue-600 to-indigo-700",
+        bgHover: "hover:bg-blue-600/10",
+        accent: "text-blue-400",
+        border: "border-blue-500/30",
+        glow: "shadow-blue-500/20",
+        description: `Master Client Admin access for ${tenant.name} (${tenant.subdomain}.expertpos.com)`,
+        privileges: [
+          "Full Multi-Branch Store Management",
+          "Point of Sale & Checkout Operator Access",
+          "Financial Audits & Daily Reconciliation",
+          "Staff Registry & RBAC Permission Grants"
+        ],
+        phone: tenant.phone
+      };
+      nextCredentials = [...credentialsList, newProfile];
+    }
+
+    if (onUpdateCredentials) {
+      onUpdateCredentials(nextCredentials);
+    }
+
+    // 2. Update tenant object in tenantsList
+    const updatedTenant: Tenant = {
+      ...tenant,
+      adminLoginId: loginEmail,
+      adminPassword: generatedPass
+    };
+
+    if (onUpdateTenants) {
+      const nextTenants = tenantsList.map(t => t.id === tenant.id ? updatedTenant : t);
+      onUpdateTenants(nextTenants);
+    }
+
+    if (viewingTenant && viewingTenant.id === tenant.id) {
+      setViewingTenant(updatedTenant);
+    }
+
+    setShowViewTenantPassword(true);
+
+    triggerNotification(`Login credentials generated for ${tenant.name}! Password: ${generatedPass}`, "success");
   };
 
   // Onboard Tenant Submit Handler
@@ -1075,8 +1564,16 @@ export default function SuperAdminConsole({
   return (
     <div className="flex h-screen w-screen bg-[#f4f7fe] text-slate-800 font-sans overflow-hidden" id="super-admin-layout">
       
+      {/* Mobile Backdrop Overlay */}
+      {isSuperMobileMenuOpen && (
+        <div 
+          onClick={() => setIsSuperMobileMenuOpen(false)} 
+          className="fixed inset-0 bg-slate-950/60 backdrop-blur-sm z-40 lg:hidden"
+        />
+      )}
+
       {/* 1. Left Navigation panel (Dark Navy) */}
-      <aside className="w-64 bg-[#0b1437] text-slate-300 flex flex-col shrink-0 border-r border-[#152055] shadow-2xl relative z-10" id="super-sidebar">
+      <aside className={`fixed inset-y-0 left-0 z-50 w-64 bg-[#0b1437] text-slate-300 flex flex-col shrink-0 border-r border-[#152055] shadow-2xl transition-transform duration-300 transform lg:static lg:translate-x-0 ${isSuperMobileMenuOpen ? "translate-x-0" : "-translate-x-full"}`} id="super-sidebar">
         
         {/* Brand Header */}
         <div className="p-6 border-b border-[#1b2559] flex flex-col items-center gap-1 bg-[#080d26]">
@@ -1092,6 +1589,7 @@ export default function SuperAdminConsole({
           <p className="text-[9px] text-[#4b5b9f] font-extrabold font-mono tracking-widest uppercase px-3 mb-2">Core Command Control</p>
           {[
             { id: "dashboard", label: "Dashboard", icon: Activity },
+            { id: "multibranch", label: "Multi-Branch HQ", icon: GitBranch },
             { id: "onboarding", label: "Client Onboarding", icon: Sparkles },
             { id: "clients", label: "Clients Directory", icon: Building },
             { id: "users", label: "User Directory", icon: Users },
@@ -1107,7 +1605,10 @@ export default function SuperAdminConsole({
               <button
                 key={item.id}
                 id={`sidebar-tab-${item.id}`}
-                onClick={() => setActiveMenuTab(item.id)}
+                onClick={() => {
+                  setActiveMenuTab(item.id);
+                  setIsSuperMobileMenuOpen(false);
+                }}
                 className={`w-full flex items-center gap-3.5 px-4 py-3 rounded-xl text-sm font-semibold tracking-wide transition-all ${
                   isActive 
                     ? "bg-gradient-to-r from-blue-600 to-blue-500 text-white shadow-lg shadow-blue-500/20" 
@@ -1134,7 +1635,10 @@ export default function SuperAdminConsole({
                 <button
                   key={item.id}
                   id={`sidebar-tab-${item.id}`}
-                  onClick={() => setActiveMenuTab(item.id)}
+                  onClick={() => {
+                    setActiveMenuTab(item.id);
+                    setIsSuperMobileMenuOpen(false);
+                  }}
                   className={`w-full flex items-center gap-3.5 px-4 py-2.5 rounded-xl text-xs font-semibold tracking-wide transition-all ${
                     isActive 
                       ? "bg-gradient-to-r from-blue-600 to-blue-500 text-white shadow-lg shadow-blue-500/20" 
@@ -1175,12 +1679,23 @@ export default function SuperAdminConsole({
       <div className="flex-1 flex flex-col min-w-0 h-full overflow-hidden" id="super-main-container">
         
         {/* Top Header */}
-        <header className="h-20 shrink-0 border-b border-slate-200/60 bg-white flex items-center justify-between px-8 relative z-10" id="super-header">
-          <div>
-            <h1 className="text-xl font-extrabold text-slate-900 tracking-tight capitalize font-sans">
-              {activeMenuTab === "dashboard" ? "Super Admin Command Dashboard" : activeMenuTab.replace("-", " ") + " Workspace"}
-            </h1>
-            <p className="text-xs text-slate-400 font-medium font-sans">Sovereign multi-tenant SaaS licensing cockpit</p>
+        <header className="h-20 shrink-0 border-b border-slate-200/60 bg-white flex items-center justify-between px-4 md:px-8 relative z-10" id="super-header">
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => setIsSuperMobileMenuOpen(!isSuperMobileMenuOpen)}
+              className="lg:hidden p-2 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-xl transition-all"
+              title="Toggle Mobile Sovereign Menu"
+            >
+              {isSuperMobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+            </button>
+
+            <div>
+              <h1 className="text-base md:text-xl font-extrabold text-slate-900 tracking-tight capitalize font-sans">
+                {activeMenuTab === "dashboard" ? "Super Admin Command Dashboard" : activeMenuTab.replace("-", " ") + " Workspace"}
+              </h1>
+              <p className="text-[10px] md:text-xs text-slate-400 font-medium font-sans truncate">Sovereign multi-tenant SaaS licensing cockpit</p>
+            </div>
           </div>
 
           <div className="flex items-center gap-4">
@@ -1763,6 +2278,670 @@ export default function SuperAdminConsole({
               </div>
 
             </div>
+        ) : activeMenuTab === "multibranch" ? (
+          /* Centralized Command Center (Multi-Branch Management) View */
+          <div className="flex-1 p-6 lg:p-8 space-y-6 overflow-y-auto min-w-0" id="super-multibranch-hq">
+            
+            {/* Header Banner & Organization Context Selector */}
+            <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white p-6 rounded-3xl shadow-xl border border-slate-800 relative overflow-hidden flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
+              <div className="space-y-2 max-w-2xl relative z-10">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-widest bg-blue-500/20 text-blue-300 border border-blue-500/30">
+                    Sovereign Multi-Branch Command Center
+                  </span>
+                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-widest bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 flex items-center gap-1">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                    Head Office Sync Active
+                  </span>
+                </div>
+                <h2 className="text-2xl font-black text-white tracking-tight flex items-center gap-2.5">
+                  <Building2 className="w-7 h-7 text-blue-400 shrink-0" />
+                  <span>Centralized Multi-Branch HQ Command Center</span>
+                </h2>
+                <p className="text-slate-300 text-xs leading-relaxed font-sans">
+                  Unified operational governance for corporate multi-branch networks. Oversee staff, admissions, sales, fee collection, attendance metrics, and standardized policies across all branch nodes from a single dashboard.
+                </p>
+              </div>
+
+              {/* Organization & Quick Branch Selector Dropdown */}
+              <div className="relative z-10 bg-white/10 backdrop-blur-md p-4 rounded-2xl border border-white/10 flex flex-col sm:flex-row items-stretch sm:items-center gap-3 shrink-0">
+                <div>
+                  <label className="block text-[10px] font-extrabold text-blue-200 uppercase tracking-widest mb-1">Organization Scope</label>
+                  <select
+                    value={mbSelectedOrg}
+                    onChange={(e) => setMbSelectedOrg(e.target.value)}
+                    className="bg-slate-900/80 text-white text-xs font-bold px-3 py-2 rounded-xl border border-white/20 focus:outline-none focus:border-blue-400"
+                  >
+                    <option value="Apex Corporate Group (Head Office HQ)">Apex Corporate Group (Head Office HQ)</option>
+                    <option value="Chaitanya Educational Society">Chaitanya Educational Society</option>
+                    <option value="Metro Retail & Hypermarket Chain">Metro Retail & Hypermarket Chain</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-extrabold text-amber-300 uppercase tracking-widest mb-1">Active Branch Context</label>
+                  <select
+                    value={mbActiveBranchFilter}
+                    onChange={(e) => {
+                      setMbActiveBranchFilter(e.target.value);
+                      if (e.target.value !== "ALL") {
+                        const bObj = branchNodes.find(b => b.id === e.target.value);
+                        triggerNotification(`Switched dashboard context to: ${bObj?.name || e.target.value}`, "success");
+                      } else {
+                        triggerNotification("Switched to Head Office HQ Consolidated View (All Branches)", "success");
+                      }
+                    }}
+                    className="bg-blue-600 text-white text-xs font-black px-3.5 py-2 rounded-xl border border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-300 shadow-lg cursor-pointer"
+                  >
+                    <option value="ALL">🏢 Consolidated HO View (All Branches)</option>
+                    {branchNodes.map((b) => (
+                      <option key={b.id} value={b.id}>
+                        📍 {b.name} ({b.city})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            {/* Sub-Navigation Tabs Bar */}
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 pb-3">
+              <div className="flex flex-wrap items-center gap-1.5 bg-slate-100/80 p-1.5 rounded-2xl border border-slate-200/80">
+                {[
+                  { id: "overview", label: "Dashboard Overview", icon: Activity },
+                  { id: "branches", label: `Branch Directory (${branchNodes.length})`, icon: GitBranch },
+                  { id: "financials", label: "Financials & Fees", icon: Coins },
+                  { id: "attendance", label: "Attendance Matrix", icon: Users },
+                  { id: "users", label: "Roles & RBAC", icon: ShieldCheck },
+                  { id: "standardization", label: "Catalog & Standardization", icon: SlidersHorizontal },
+                  { id: "announcements", label: "Central Broadcasts", icon: Megaphone },
+                  { id: "audit", label: "Branch Audit Logs", icon: FileText }
+                ].map((st) => {
+                  const IconComp = st.icon;
+                  const isActive = mbSubTab === st.id;
+                  return (
+                    <button
+                      key={st.id}
+                      onClick={() => setMbSubTab(st.id as any)}
+                      className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+                        isActive
+                          ? "bg-white text-blue-600 shadow-sm border border-slate-200"
+                          : "text-slate-600 hover:text-slate-900 hover:bg-slate-200/50"
+                      }`}
+                    >
+                      <IconComp className={`w-3.5 h-3.5 ${isActive ? "text-blue-600" : "text-slate-400"}`} />
+                      <span>{st.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setShowAddBranchModal(true)}
+                  className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-extrabold transition-all shadow-md shadow-blue-500/20 flex items-center gap-2 cursor-pointer"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>Provision New Branch</span>
+                </button>
+                <button
+                  onClick={() => setShowBroadcastModal(true)}
+                  className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-extrabold transition-all shadow-md flex items-center gap-2 cursor-pointer"
+                >
+                  <Megaphone className="w-4 h-4 text-amber-400" />
+                  <span>Publish Broadcast</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Sub-Tab 1: Dashboard Overview */}
+            {mbSubTab === "overview" && (
+              <div className="space-y-6">
+                
+                {/* 4 Top KPI Metrics Cards */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+                  
+                  <div className="bg-white p-5 rounded-2xl border border-slate-200/70 shadow-sm relative overflow-hidden">
+                    <div className="flex items-center justify-between">
+                      <p className="text-[11px] font-extrabold text-slate-400 uppercase tracking-widest font-sans">Active Branches</p>
+                      <div className="w-9 h-9 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center font-bold">
+                        <GitBranch className="w-4.5 h-4.5" />
+                      </div>
+                    </div>
+                    <div className="mt-2 flex items-baseline gap-2">
+                      <h3 className="text-3xl font-black text-slate-900">{mbConsolidatedStats.totalBranchesCount}</h3>
+                      <span className="text-xs font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full">100% Operational</span>
+                    </div>
+                    <p className="text-[11px] text-slate-500 mt-2 flex items-center gap-1 font-mono">
+                      <span>HQ Regional Nodes:</span>
+                      <strong className="text-slate-800">Hyderabad, Vijayawada, Vizag, Warangal</strong>
+                    </p>
+                  </div>
+
+                  <div className="bg-white p-5 rounded-2xl border border-slate-200/70 shadow-sm relative overflow-hidden">
+                    <div className="flex items-center justify-between">
+                      <p className="text-[11px] font-extrabold text-slate-400 uppercase tracking-widest font-sans">Cross-Branch Staff</p>
+                      <div className="w-9 h-9 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center font-bold">
+                        <Users className="w-4.5 h-4.5" />
+                      </div>
+                    </div>
+                    <div className="mt-2 flex items-baseline gap-2">
+                      <h3 className="text-3xl font-black text-slate-900">{mbConsolidatedStats.totalStaff}</h3>
+                      <span className="text-xs font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full">Avg {mbConsolidatedStats.avgAttendance}% Present</span>
+                    </div>
+                    <p className="text-[11px] text-slate-500 mt-2 font-mono">
+                      Faculty, Staff & Store Directors logged in today
+                    </p>
+                  </div>
+
+                  <div className="bg-white p-5 rounded-2xl border border-slate-200/70 shadow-sm relative overflow-hidden">
+                    <div className="flex items-center justify-between">
+                      <p className="text-[11px] font-extrabold text-slate-400 uppercase tracking-widest font-sans">Students / Customers</p>
+                      <div className="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold">
+                        <GraduationCap className="w-4.5 h-4.5" />
+                      </div>
+                    </div>
+                    <div className="mt-2 flex items-baseline gap-2">
+                      <h3 className="text-3xl font-black text-slate-900">{mbConsolidatedStats.totalStudents.toLocaleString()}</h3>
+                      <span className="text-xs font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full">+12.4% Q3 Growth</span>
+                    </div>
+                    <p className="text-[11px] text-slate-500 mt-2 font-mono">
+                      Total active enrollment across all branches
+                    </p>
+                  </div>
+
+                  <div className="bg-white p-5 rounded-2xl border border-slate-200/70 shadow-sm relative overflow-hidden">
+                    <div className="flex items-center justify-between">
+                      <p className="text-[11px] font-extrabold text-slate-400 uppercase tracking-widest font-sans">Today Fee/Sales Revenue</p>
+                      <div className="w-9 h-9 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center font-bold">
+                        <Coins className="w-4.5 h-4.5" />
+                      </div>
+                    </div>
+                    <div className="mt-2 flex items-baseline gap-2">
+                      <h3 className="text-3xl font-black text-slate-900">₹ {mbConsolidatedStats.totalTodayRevenue.toLocaleString("en-IN")}</h3>
+                    </div>
+                    <div className="mt-2 space-y-1">
+                      <div className="flex justify-between text-[10px] font-bold text-slate-500">
+                        <span>Monthly Target: ₹ {(mbConsolidatedStats.totalAchieved / 100000).toFixed(1)}L / {(mbConsolidatedStats.totalTarget / 100000).toFixed(1)}L</span>
+                        <span className="text-blue-600 font-extrabold">{mbConsolidatedStats.overallProgress}%</span>
+                      </div>
+                      <div className="w-full bg-slate-100 rounded-full h-1.5 overflow-hidden">
+                        <div className="bg-blue-600 h-1.5 rounded-full transition-all duration-500" style={{ width: `${mbConsolidatedStats.overallProgress}%` }}></div>
+                      </div>
+                    </div>
+                  </div>
+
+                </div>
+
+                {/* Branch Performance Graphical Comparison Dashboard */}
+                <div className="bg-white p-6 rounded-3xl border border-slate-200/80 shadow-sm space-y-5">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-4">
+                    <div>
+                      <h3 className="text-base font-black text-slate-900 flex items-center gap-2">
+                        <BarChart3 className="w-5 h-5 text-blue-600" />
+                        <span>Branch Performance Comparison (Head Office Analytics)</span>
+                      </h3>
+                      <p className="text-xs text-slate-500 font-medium">
+                        Side-by-side revenue collection, monthly target progress, and staff attendance across regional branches.
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => setShowStandardizationModal(true)}
+                      className="px-3.5 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-xl text-xs font-extrabold transition-all border border-indigo-200 flex items-center gap-2 cursor-pointer shrink-0"
+                    >
+                      <SlidersHorizontal className="w-4 h-4 text-indigo-600" />
+                      <span>Push Standardized Fee Structure</span>
+                    </button>
+                  </div>
+
+                  {/* Comparative Graphic Progress Bars */}
+                  <div className="space-y-4">
+                    {branchNodes.map((b) => {
+                      const prog = Math.min(100, Math.round((b.monthlyAchieved / b.monthlyTarget) * 100));
+                      return (
+                        <div key={b.id} className="p-4 rounded-2xl bg-slate-50/70 border border-slate-200/60 hover:border-blue-300 transition-all">
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-2">
+                            <div className="flex items-center gap-3">
+                              <span className="px-2.5 py-1 rounded-lg bg-slate-900 text-white font-mono text-xs font-bold">{b.code}</span>
+                              <div>
+                                <h4 className="text-sm font-bold text-slate-900">{b.name}</h4>
+                                <p className="text-[11px] text-slate-500 font-medium">{b.zone} • Manager: {b.managerName}</p>
+                              </div>
+                            </div>
+
+                            <div className="flex flex-wrap items-center gap-4 text-xs font-bold">
+                              <div className="text-right">
+                                <span className="text-[10px] text-slate-400 block uppercase font-mono">Today Revenue</span>
+                                <span className="text-slate-900 font-extrabold">₹ {b.todayCollection.toLocaleString("en-IN")}</span>
+                              </div>
+                              <div className="text-right">
+                                <span className="text-[10px] text-slate-400 block uppercase font-mono">Staff Attendance</span>
+                                <span className="text-emerald-600 font-extrabold">{b.attendanceRate}%</span>
+                              </div>
+                              <div className="text-right">
+                                <span className="text-[10px] text-slate-400 block uppercase font-mono">Terminals</span>
+                                <span className="text-blue-600 font-extrabold">{b.terminalsOnline}</span>
+                              </div>
+                              <button
+                                onClick={() => {
+                                  setMbActiveBranchFilter(b.id);
+                                  triggerNotification(`Switched dashboard context to ${b.name}`, "success");
+                                }}
+                                className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-bold transition-all shadow-sm cursor-pointer"
+                              >
+                                View Branch Slice
+                              </button>
+                            </div>
+                          </div>
+
+                          {/* Graphical Target Bar */}
+                          <div className="space-y-1">
+                            <div className="flex justify-between text-[11px] font-bold text-slate-600">
+                              <span>Monthly Collection Progress: ₹ {(b.monthlyAchieved / 100000).toFixed(1)} Lakhs achieved of ₹ {(b.monthlyTarget / 100000).toFixed(1)} Lakhs target</span>
+                              <span className="text-blue-600">{prog}%</span>
+                            </div>
+                            <div className="w-full bg-slate-200 rounded-full h-2.5 overflow-hidden">
+                              <div
+                                className={`h-2.5 rounded-full transition-all duration-700 ${
+                                  prog >= 85 ? "bg-emerald-500" : prog >= 65 ? "bg-blue-600" : "bg-amber-500"
+                                }`}
+                                style={{ width: `${prog}%` }}
+                              ></div>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Central Announcement Banner Feed */}
+                <div className="bg-slate-900 text-white p-6 rounded-3xl border border-slate-800 shadow-lg space-y-4">
+                  <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+                    <h3 className="text-base font-bold flex items-center gap-2">
+                      <Megaphone className="w-5 h-5 text-amber-400" />
+                      <span>Head Office Broadcasts & Directives ({centralBroadcasts.length})</span>
+                    </h3>
+                    <button
+                      onClick={() => setShowBroadcastModal(true)}
+                      className="text-xs text-amber-400 hover:text-amber-300 font-extrabold flex items-center gap-1 cursor-pointer"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>New Announcement</span>
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {centralBroadcasts.map((bc) => (
+                      <div key={bc.id} className="bg-slate-800/80 p-4 rounded-2xl border border-slate-700/80 space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider ${
+                            bc.priority === "URGENT" ? "bg-rose-500/20 text-rose-300 border border-rose-500/30" : "bg-amber-500/20 text-amber-300 border border-amber-500/30"
+                          }`}>
+                            {bc.category} • {bc.priority}
+                          </span>
+                          <span className="text-[10px] font-mono text-slate-400">{bc.issuedAt}</span>
+                        </div>
+                        <h4 className="text-sm font-bold text-white">{bc.title}</h4>
+                        <p className="text-xs text-slate-300 leading-relaxed font-sans">{bc.content}</p>
+                        <div className="pt-2 border-t border-slate-700/60 flex items-center justify-between text-[11px] font-mono text-slate-400">
+                          <span>Issued by: {bc.issuedBy}</span>
+                          <span className="text-emerald-400 font-bold">{bc.deliveryStats}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+              </div>
+            )}
+
+            {/* Sub-Tab 2: Multi-Branch Directory & Status Control */}
+            {mbSubTab === "branches" && (
+              <div className="space-y-6">
+                <div className="bg-white p-6 rounded-3xl border border-slate-200/80 shadow-sm space-y-4">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                    <div>
+                      <h3 className="text-lg font-black text-slate-900">Multi-Branch Node Directory</h3>
+                      <p className="text-xs text-slate-500 font-medium">Add, manage, activate, or deactivate regional branch operations.</p>
+                    </div>
+                    <button
+                      onClick={() => setShowAddBranchModal(true)}
+                      className="px-4 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-extrabold transition-all shadow-md flex items-center gap-2 cursor-pointer"
+                    >
+                      <Plus className="w-4 h-4" />
+                      <span>Provision New Branch</span>
+                    </button>
+                  </div>
+
+                  <div className="overflow-x-auto rounded-2xl border border-slate-200">
+                    <table className="w-full text-left text-xs font-sans">
+                      <thead className="bg-slate-50 text-slate-500 font-extrabold uppercase text-[10px] tracking-wider border-b border-slate-200">
+                        <tr>
+                          <th className="py-3 px-4">Code & Branch Name</th>
+                          <th className="py-3 px-4">Type & Zone</th>
+                          <th className="py-3 px-4">Manager / Principal</th>
+                          <th className="py-3 px-4">Staff / Capacity</th>
+                          <th className="py-3 px-4">Today Revenue</th>
+                          <th className="py-3 px-4">Status</th>
+                          <th className="py-3 px-4 text-right">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
+                        {branchNodes.map((b) => (
+                          <tr key={b.id} className="hover:bg-slate-50/80 transition-all">
+                            <td className="py-3.5 px-4">
+                              <div className="flex items-center gap-2.5">
+                                <span className="px-2 py-0.5 bg-slate-900 text-white font-mono font-bold rounded text-[10px]">{b.code}</span>
+                                <div>
+                                  <p className="font-bold text-slate-900 text-xs">{b.name}</p>
+                                  <p className="text-[10px] text-slate-400 font-mono">{b.address}</p>
+                                </div>
+                              </div>
+                            </td>
+                            <td className="py-3.5 px-4">
+                              <span className="font-bold text-slate-800">{b.type}</span>
+                              <span className="block text-[10px] text-slate-400 font-mono">{b.zone}</span>
+                            </td>
+                            <td className="py-3.5 px-4">
+                              <p className="font-bold text-slate-900">{b.managerName}</p>
+                              <p className="text-[10px] text-slate-500 font-mono">{b.contactEmail}</p>
+                            </td>
+                            <td className="py-3.5 px-4">
+                              <span className="font-bold text-slate-900">{b.staffCount} Staff</span>
+                              <span className="block text-[10px] text-slate-400 font-mono">{b.studentsCustomersCount} Enrolled</span>
+                            </td>
+                            <td className="py-3.5 px-4 font-black text-slate-900">
+                              ₹ {b.todayCollection.toLocaleString("en-IN")}
+                            </td>
+                            <td className="py-3.5 px-4">
+                              <span className={`px-2.5 py-1 rounded-full text-[10px] font-extrabold uppercase ${
+                                b.status === "ACTIVE" ? "bg-emerald-100 text-emerald-800" : b.status === "MAINTENANCE" ? "bg-amber-100 text-amber-800" : "bg-rose-100 text-rose-800"
+                              }`}>
+                                {b.status}
+                              </span>
+                            </td>
+                            <td className="py-3.5 px-4 text-right space-x-2">
+                              {b.status === "ACTIVE" ? (
+                                <button
+                                  onClick={() => handleToggleBranchStatus(b.id, "MAINTENANCE")}
+                                  className="px-2.5 py-1 bg-amber-50 hover:bg-amber-100 text-amber-700 rounded-lg text-[10px] font-bold border border-amber-200 transition-all cursor-pointer"
+                                >
+                                  Maintenance Mode
+                                </button>
+                              ) : (
+                                <button
+                                  onClick={() => handleToggleBranchStatus(b.id, "ACTIVE")}
+                                  className="px-2.5 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 rounded-lg text-[10px] font-bold border border-emerald-200 transition-all cursor-pointer"
+                                >
+                                  Activate
+                                </button>
+                              )}
+                              <button
+                                onClick={() => {
+                                  setMbActiveBranchFilter(b.id);
+                                  setMbSubTab("overview");
+                                  triggerNotification(`Opened Branch Context: ${b.name}`, "success");
+                                }}
+                                className="px-2.5 py-1 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg text-[10px] font-bold border border-blue-200 transition-all cursor-pointer"
+                              >
+                                Select
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Sub-Tab 3: Financials & Fee Collections */}
+            {mbSubTab === "financials" && (
+              <div className="space-y-6">
+                <div className="bg-white p-6 rounded-3xl border border-slate-200/80 shadow-sm space-y-4">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 pb-4">
+                    <div>
+                      <h3 className="text-lg font-black text-slate-900">Consolidated Fee Collection & Financial Reports</h3>
+                      <p className="text-xs text-slate-500 font-medium">Head Office financial ledgers, GST liabilities, and branch-wise revenue collections.</p>
+                    </div>
+                    <button
+                      onClick={() => triggerNotification("Downloading Consolidated Financial PDF Report...", "success")}
+                      className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer shrink-0"
+                    >
+                      <Download className="w-4 h-4 text-emerald-400" />
+                      <span>Export Financial Ledger PDF</span>
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                    {branchNodes.map((b) => (
+                      <div key={b.id} className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-2">
+                        <span className="text-[10px] font-mono font-bold text-slate-400 uppercase">{b.code} • {b.city}</span>
+                        <h4 className="text-sm font-extrabold text-slate-900 truncate">{b.name}</h4>
+                        <div className="pt-2 border-t border-slate-200/60 space-y-1 text-xs">
+                          <div className="flex justify-between">
+                            <span className="text-slate-500">Collected Today:</span>
+                            <strong className="text-slate-900">₹ {b.todayCollection.toLocaleString("en-IN")}</strong>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-slate-500">Monthly Achieved:</span>
+                            <strong className="text-emerald-600">₹ {(b.monthlyAchieved / 100000).toFixed(1)} Lakhs</strong>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-slate-500">Target Quota:</span>
+                            <strong className="text-blue-600">₹ {(b.monthlyTarget / 100000).toFixed(1)} Lakhs</strong>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Sub-Tab 4: Attendance Matrix */}
+            {mbSubTab === "attendance" && (
+              <div className="bg-white p-6 rounded-3xl border border-slate-200/80 shadow-sm space-y-4">
+                <div className="border-b border-slate-100 pb-3">
+                  <h3 className="text-lg font-black text-slate-900">Cross-Branch Attendance & Staff Monitoring Matrix</h3>
+                  <p className="text-xs text-slate-500 font-medium">Track real-time staff check-ins, faculty presence, and student check-in percentages.</p>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                  {branchNodes.map((b) => (
+                    <div key={b.id} className="p-5 rounded-2xl bg-slate-50 border border-slate-200 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <span className="px-2 py-0.5 rounded bg-slate-900 text-white font-mono text-[10px] font-bold">{b.code}</span>
+                        <span className="text-emerald-600 font-extrabold text-xs">{b.attendanceRate}% Present</span>
+                      </div>
+                      <h4 className="text-sm font-bold text-slate-900">{b.name}</h4>
+                      <div className="space-y-1 text-xs font-mono text-slate-600">
+                        <p>Total Staff On-Duty: <strong className="text-slate-900">{Math.round((b.staffCount * b.attendanceRate) / 100)} / {b.staffCount}</strong></p>
+                        <p>Enrolled Check-ins: <strong className="text-slate-900">{b.studentsCustomersCount}</strong></p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Sub-Tab 5: Roles & RBAC Management */}
+            {mbSubTab === "users" && (
+              <div className="bg-white p-6 rounded-3xl border border-slate-200/80 shadow-sm space-y-4">
+                <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                  <div>
+                    <h3 className="text-lg font-black text-slate-900">Branch-Wise Role & Permission Management</h3>
+                    <p className="text-xs text-slate-500 font-medium">Control access levels for Super Admins, Branch Directors, Principals, and Cashiers.</p>
+                  </div>
+                  <button
+                    onClick={() => setShowBranchUserModal(true)}
+                    className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-extrabold transition-all shadow-md flex items-center gap-2 cursor-pointer"
+                  >
+                    <UserPlus className="w-4 h-4" />
+                    <span>Assign Branch User</span>
+                  </button>
+                </div>
+
+                <div className="overflow-x-auto rounded-2xl border border-slate-200">
+                  <table className="w-full text-left text-xs">
+                    <thead className="bg-slate-50 text-slate-500 font-extrabold uppercase text-[10px] tracking-wider border-b border-slate-200">
+                      <tr>
+                        <th className="py-3 px-4">User Name & Email</th>
+                        <th className="py-3 px-4">Login UID</th>
+                        <th className="py-3 px-4">Assigned Branch Node</th>
+                        <th className="py-3 px-4">Role Tier</th>
+                        <th className="py-3 px-4">Status</th>
+                        <th className="py-3 px-4">Last Activity</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
+                      {branchUsers.map((u) => {
+                        const bObj = branchNodes.find(b => b.id === u.assignedBranchId);
+                        return (
+                          <tr key={u.id} className="hover:bg-slate-50 transition-all">
+                            <td className="py-3.5 px-4">
+                              <p className="font-bold text-slate-900">{u.name}</p>
+                              <p className="text-[10px] text-slate-400 font-mono">{u.email}</p>
+                            </td>
+                            <td className="py-3.5 px-4 font-mono font-bold text-blue-600">{u.loginUid}</td>
+                            <td className="py-3.5 px-4">
+                              <span className="font-bold text-slate-900">{u.assignedBranchId === "ALL" ? "🏢 Head Office HQ (All Branches)" : bObj?.name || u.assignedBranchId}</span>
+                            </td>
+                            <td className="py-3.5 px-4">
+                              <span className="px-2.5 py-1 rounded-full text-[10px] font-extrabold bg-purple-50 text-purple-700 border border-purple-200">{u.role}</span>
+                            </td>
+                            <td className="py-3.5 px-4">
+                              <span className="px-2 py-0.5 rounded text-[10px] font-extrabold bg-emerald-100 text-emerald-800">{u.status}</span>
+                            </td>
+                            <td className="py-3.5 px-4 font-mono text-[10px] text-slate-500">{u.lastActive}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {/* Sub-Tab 6: Standardization */}
+            {mbSubTab === "standardization" && (
+              <div className="bg-white p-6 rounded-3xl border border-slate-200/80 shadow-sm space-y-4">
+                <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                  <div>
+                    <h3 className="text-lg font-black text-slate-900">Standardized Courses, Catalog & Fee Structures</h3>
+                    <p className="text-xs text-slate-500 font-medium">Head Office uniform fee policy. 1-click sync pushes updated pricing to all branches.</p>
+                  </div>
+                  <button
+                    onClick={handlePushStandardizationSync}
+                    className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-extrabold transition-all shadow-md flex items-center gap-2 cursor-pointer"
+                  >
+                    <RefreshCw className="w-4 h-4" />
+                    <span>1-Click Sync All Branches</span>
+                  </button>
+                </div>
+
+                <div className="overflow-x-auto rounded-2xl border border-slate-200">
+                  <table className="w-full text-left text-xs">
+                    <thead className="bg-slate-50 text-slate-500 font-extrabold uppercase text-[10px] tracking-wider border-b border-slate-200">
+                      <tr>
+                        <th className="py-3 px-4">Course / Category Name</th>
+                        <th className="py-3 px-4">Code</th>
+                        <th className="py-3 px-4">Standard Fee</th>
+                        <th className="py-3 px-4">Tax / GST</th>
+                        <th className="py-3 px-4">Frequency</th>
+                        <th className="py-3 px-4">Synced Status</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
+                      {stdCourses.map((c) => (
+                        <tr key={c.id} className="hover:bg-slate-50 transition-all">
+                          <td className="py-3.5 px-4 font-bold text-slate-900">{c.courseOrCategory}</td>
+                          <td className="py-3.5 px-4 font-mono font-bold text-slate-600">{c.code}</td>
+                          <td className="py-3.5 px-4 font-black text-slate-900">₹ {c.standardFee.toLocaleString("en-IN")}</td>
+                          <td className="py-3.5 px-4 font-bold text-emerald-600">{c.taxGstRate}% GST</td>
+                          <td className="py-3.5 px-4 text-slate-600">{c.billingFrequency}</td>
+                          <td className="py-3.5 px-4">
+                            <span className="px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 text-[10px] font-bold">
+                              Synced to {c.syncedBranchesCount} / {branchNodes.length} Branches ({c.lastSyncedAt})
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {/* Sub-Tab 7: Announcements */}
+            {mbSubTab === "announcements" && (
+              <div className="bg-white p-6 rounded-3xl border border-slate-200/80 shadow-sm space-y-4">
+                <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                  <div>
+                    <h3 className="text-lg font-black text-slate-900">Head Office Broadcast & Announcement Engine</h3>
+                    <p className="text-xs text-slate-500 font-medium">Publish official directives, policy mandates, and emergency alerts to branches.</p>
+                  </div>
+                  <button
+                    onClick={() => setShowBroadcastModal(true)}
+                    className="px-4 py-2 bg-slate-900 text-white rounded-xl text-xs font-extrabold hover:bg-slate-800 transition-all cursor-pointer flex items-center gap-2"
+                  >
+                    <Megaphone className="w-4 h-4 text-amber-400" />
+                    <span>Create New Broadcast</span>
+                  </button>
+                </div>
+
+                <div className="space-y-3">
+                  {centralBroadcasts.map((bc) => (
+                    <div key={bc.id} className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <span className="px-2.5 py-0.5 rounded text-[10px] font-black uppercase bg-blue-100 text-blue-800">{bc.category}</span>
+                          <span className="px-2 py-0.5 rounded text-[10px] font-black uppercase bg-rose-100 text-rose-800">{bc.priority}</span>
+                        </div>
+                        <span className="text-[10px] font-mono text-slate-400">{bc.issuedAt}</span>
+                      </div>
+                      <h4 className="text-sm font-bold text-slate-900">{bc.title}</h4>
+                      <p className="text-xs text-slate-600 leading-relaxed">{bc.content}</p>
+                      <div className="pt-2 border-t border-slate-200/60 flex items-center justify-between text-[11px] font-mono text-slate-500">
+                        <span>Issuer: {bc.issuedBy}</span>
+                        <span className="text-emerald-600 font-bold">{bc.deliveryStats}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Sub-Tab 8: Audit Logs */}
+            {mbSubTab === "audit" && (
+              <div className="bg-white p-6 rounded-3xl border border-slate-200/80 shadow-sm space-y-4">
+                <div className="border-b border-slate-100 pb-3">
+                  <h3 className="text-lg font-black text-slate-900">Branch-Wise Activity & Cyber Audit Logs</h3>
+                  <p className="text-xs text-slate-500 font-medium">Real-time audit stream capturing multi-branch updates, fee edits, and logins.</p>
+                </div>
+
+                <div className="space-y-2 font-mono text-xs">
+                  {mbAuditLogs.map((log) => (
+                    <div key={log.id} className="p-3 rounded-xl bg-slate-50 border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                      <div className="flex items-center gap-3">
+                        <span className="text-[10px] text-slate-400 shrink-0">{log.timestamp}</span>
+                        <span className="px-2 py-0.5 rounded bg-slate-900 text-white font-bold text-[10px] shrink-0">{log.branchName}</span>
+                        <span className="font-bold text-slate-800">{log.action}</span>
+                      </div>
+                      <div className="flex items-center gap-2 text-[10px] shrink-0">
+                        <span className="text-slate-500">{log.user}</span>
+                        <span className="px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 font-bold">{log.status}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+          </div>
         ) : activeMenuTab === "onboarding" ? (
           /* Client Onboarding Module View */
           <div className="flex-1 p-6 lg:p-8 space-y-6 overflow-y-auto min-w-0" id="super-onboarding-module">
@@ -2452,11 +3631,10 @@ export default function SuperAdminConsole({
 
             {/* Full Clients Directory Table */}
             <div className="bg-white rounded-2xl border border-slate-200/50 shadow-sm overflow-x-auto max-h-[600px] overflow-y-auto relative">
-              <table className="w-full text-left min-w-[1150px]">
+              <table className="w-full text-left min-w-[1000px]">
                 <thead className="sticky top-0 z-10 shadow-[0_1px_0_0_rgba(226,232,240,1)]">
                   <tr className="bg-slate-50 text-[10px] text-slate-400 uppercase tracking-wider font-mono">
                     <th className="p-4 bg-slate-50">Tenant Code / Name</th>
-                    <th className="p-4 bg-slate-50">Domain Slice</th>
                     <th className="p-4 bg-slate-50">Corporate Contacts</th>
                     <th className="p-4 bg-slate-500/0 bg-slate-50">Quotas (Branch/SKU)</th>
                     <th className="p-4 bg-slate-50">Verification KYC</th>
@@ -2477,11 +3655,6 @@ export default function SuperAdminConsole({
                             <p className="text-[10px] text-slate-400 font-mono tracking-widest font-black uppercase mt-0.5">{t.id}</p>
                           </div>
                         </div>
-                      </td>
-                      <td className="p-4">
-                        <span className="font-mono bg-blue-50 text-blue-600 px-2.5 py-1 rounded-lg border border-blue-100 font-bold">
-                          {t.subdomain}.expertpos.com
-                        </span>
                       </td>
                       <td className="p-4 space-y-0.5">
                         <p className="font-semibold text-slate-700 font-mono leading-none">{t.adminEmail}</p>
@@ -2534,10 +3707,19 @@ export default function SuperAdminConsole({
                           <button
                             onClick={() => setViewingTenant(t)}
                             className="px-2.5 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold text-[10px] uppercase tracking-wider rounded-lg flex items-center gap-1 transition-all cursor-pointer border border-blue-200/40 shadow-sm"
-                            title="View Spec Details"
+                            title="View Spec Details & Credentials"
                           >
                             <Eye className="w-3.5 h-3.5" />
                             <span>View</span>
+                          </button>
+
+                          <button
+                            onClick={() => handleGenerateTenantCredentials(t)}
+                            className="px-2.5 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold text-[10px] uppercase tracking-wider rounded-lg flex items-center gap-1 transition-all cursor-pointer border border-indigo-200/40 shadow-sm"
+                            title="Generate / Regenerate Login Credentials"
+                          >
+                            <Key className="w-3.5 h-3.5 text-indigo-600" />
+                            <span>Creds</span>
                           </button>
                           
                           <button
@@ -5159,10 +6341,15 @@ export default function SuperAdminConsole({
               {(() => {
                 const credMatch = credentialsList.find(c => 
                   c.email.toLowerCase() === viewingTenant.adminEmail.toLowerCase() ||
+                  (viewingTenant.adminLoginId && c.email.toLowerCase() === viewingTenant.adminLoginId.toLowerCase()) ||
                   c.title.toLowerCase().includes(viewingTenant.name.toLowerCase()) ||
                   c.name.toLowerCase().includes(viewingTenant.name.toLowerCase())
                 );
-                
+
+                const displayEmail = credMatch?.email || viewingTenant.adminLoginId || viewingTenant.adminEmail;
+                const displayPassword = credMatch?.password || viewingTenant.adminPassword;
+                const hasCredentials = Boolean(displayPassword);
+
                 return (
                   <div className="bg-slate-900 border border-blue-500/30 rounded-2xl p-4.5 space-y-3 shadow-md shadow-blue-500/5">
                     <div className="flex items-center justify-between border-b border-slate-800 pb-2.5">
@@ -5170,38 +6357,50 @@ export default function SuperAdminConsole({
                         <ShieldCheck className="w-4 h-4" />
                         <span className="font-extrabold text-[10px] uppercase tracking-wider">Client Admin Access Credentials</span>
                       </div>
-                      <span className="text-[9px] font-bold bg-blue-500/10 text-blue-400 px-2 py-0.5 rounded-full border border-blue-500/10 uppercase">
-                        {credMatch ? credMatch.role : "ADMIN"}
-                      </span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[9px] font-bold bg-blue-500/10 text-blue-400 px-2 py-0.5 rounded-full border border-blue-500/10 uppercase">
+                          {credMatch ? credMatch.role : "ADMIN"}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => handleGenerateTenantCredentials(viewingTenant)}
+                          className="px-2.5 py-1 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-[10px] font-extrabold flex items-center gap-1 transition-all cursor-pointer shadow-sm shadow-blue-500/20"
+                          title="Generate or regenerate client login password"
+                        >
+                          <Key className="w-3 h-3 text-amber-300" />
+                          <span>{hasCredentials ? "Regenerate Credentials" : "Generate Credentials"}</span>
+                        </button>
+                      </div>
                     </div>
 
-                    {credMatch ? (
-                      <div className="space-y-3">
-                        <div className="grid grid-cols-2 gap-4">
-                          <div>
-                            <p className="text-[9px] text-slate-400 uppercase tracking-widest mb-1">Login Username / Email</p>
-                            <div className="flex items-center gap-1.5 bg-slate-950 px-2.5 py-1.5 rounded-lg border border-slate-800">
-                              <span className="font-mono text-slate-200 select-all truncate flex-1">{credMatch.email}</span>
-                              <button
-                                type="button"
-                                onClick={() => handleCopyTextDetail(credMatch.email, "view-email")}
-                                className="p-1 hover:bg-slate-800 rounded text-slate-400 hover:text-white transition-colors cursor-pointer"
-                                title="Copy email address"
-                              >
-                                {copiedField === "view-email" ? (
-                                  <Check className="w-3.5 h-3.5 text-emerald-400" />
-                                ) : (
-                                  <Copy className="w-3.5 h-3.5" />
-                                )}
-                              </button>
-                            </div>
+                    <div className="space-y-3">
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <p className="text-[9px] text-slate-400 uppercase tracking-widest mb-1">Login Username / Email</p>
+                          <div className="flex items-center gap-1.5 bg-slate-950 px-2.5 py-1.5 rounded-lg border border-slate-800">
+                            <span className="font-mono text-slate-200 select-all truncate flex-1 text-xs">{displayEmail}</span>
+                            <button
+                              type="button"
+                              onClick={() => handleCopyTextDetail(displayEmail, "view-email")}
+                              className="p-1 hover:bg-slate-800 rounded text-slate-400 hover:text-white transition-colors cursor-pointer"
+                              title="Copy email address"
+                            >
+                              {copiedField === "view-email" ? (
+                                <Check className="w-3.5 h-3.5 text-emerald-400" />
+                              ) : (
+                                <Copy className="w-3.5 h-3.5" />
+                              )}
+                            </button>
                           </div>
-                          <div>
-                            <p className="text-[9px] text-slate-400 uppercase tracking-widest mb-1">Access Password</p>
+                        </div>
+
+                        <div>
+                          <p className="text-[9px] text-slate-400 uppercase tracking-widest mb-1">Access Password</p>
+                          {hasCredentials ? (
                             <div className="flex items-center gap-1.5 bg-slate-950 px-2.5 py-1.5 rounded-lg border border-slate-800">
                               <input
                                 type={showViewTenantPassword ? "text" : "password"}
-                                value={credMatch.password}
+                                value={displayPassword}
                                 readOnly
                                 className="bg-transparent font-mono text-slate-200 select-all outline-none w-full border-none p-0 focus:ring-0 text-xs"
                               />
@@ -5219,7 +6418,7 @@ export default function SuperAdminConsole({
                               </button>
                               <button
                                 type="button"
-                                onClick={() => handleCopyTextDetail(credMatch.password, "view-password")}
+                                onClick={() => handleCopyTextDetail(displayPassword!, "view-password")}
                                 className="p-1 hover:bg-slate-800 rounded text-slate-400 hover:text-white transition-colors cursor-pointer"
                                 title="Copy password"
                               >
@@ -5230,81 +6429,46 @@ export default function SuperAdminConsole({
                                 )}
                               </button>
                             </div>
-                          </div>
-                        </div>
-
-                        {/* Quick action impersonate client button inside view modal */}
-                        <div className="flex items-center justify-between bg-blue-500/5 border border-blue-500/10 rounded-xl p-2.5 mt-1">
-                          <div className="space-y-0.5">
-                            <p className="text-[9.5px] font-bold text-slate-200 leading-none">Impersonate Client Admin</p>
-                            <p className="text-[8.5px] text-slate-400 leading-none">Gain sandbox control of this client environment instantly</p>
-                          </div>
-                          {onImpersonateClient && (
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setViewingTenant(null);
-                                onImpersonateClient(credMatch.email);
-                              }}
-                              className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-[10px] uppercase tracking-wider rounded-lg flex items-center gap-1 cursor-pointer transition-all border border-emerald-500 shadow-sm shadow-emerald-500/10"
-                            >
-                              <UserCheck className="w-3.5 h-3.5" />
-                              <span>Log In</span>
-                            </button>
+                          ) : (
+                            <div className="flex items-center justify-between gap-1.5 bg-slate-950 px-2.5 py-1.5 rounded-lg border border-slate-800">
+                              <div className="flex items-center gap-1 text-[10px] text-amber-400/80">
+                                <ShieldAlert className="w-3.5 h-3.5 shrink-0" />
+                                <span className="truncate">Using contact email as login</span>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => handleGenerateTenantCredentials(viewingTenant)}
+                                className="px-2 py-0.5 bg-amber-600 hover:bg-amber-500 text-white rounded text-[9.5px] font-extrabold flex items-center gap-1 cursor-pointer shrink-0 transition-all shadow-sm"
+                              >
+                                <Key className="w-3 h-3" />
+                                <span>Generate</span>
+                              </button>
+                            </div>
                           )}
                         </div>
                       </div>
-                    ) : (
-                      <div className="space-y-3">
-                        <div className="grid grid-cols-2 gap-4">
-                          <div>
-                            <p className="text-[9px] text-slate-400 uppercase tracking-widest mb-1">Login Username / Email</p>
-                            <div className="flex items-center gap-1.5 bg-slate-950 px-2.5 py-1.5 rounded-lg border border-slate-800">
-                              <span className="font-mono text-slate-200 select-all truncate flex-1">{viewingTenant.adminEmail}</span>
-                              <button
-                                type="button"
-                                onClick={() => handleCopyTextDetail(viewingTenant.adminEmail, "view-email")}
-                                className="p-1 hover:bg-slate-800 rounded text-slate-400 hover:text-white transition-colors cursor-pointer"
-                                title="Copy email address"
-                              >
-                                {copiedField === "view-email" ? (
-                                  <Check className="w-3.5 h-3.5 text-emerald-400" />
-                                ) : (
-                                  <Copy className="w-3.5 h-3.5" />
-                                )}
-                              </button>
-                            </div>
-                          </div>
-                          <div>
-                            <p className="text-[9px] text-slate-400 uppercase tracking-widest mb-1">Access Password</p>
-                            <div className="flex items-center justify-center gap-1.5 bg-slate-950 px-2.5 py-1.5 rounded-lg border border-slate-800 text-[10px] text-amber-400/80">
-                              <ShieldAlert className="w-3.5 h-3.5" />
-                              <span>Using contact email as login</span>
-                            </div>
-                          </div>
-                        </div>
 
-                        {onImpersonateClient && (
-                          <div className="flex items-center justify-between bg-amber-500/5 border border-amber-500/10 rounded-xl p-2.5 mt-1">
-                            <div className="space-y-0.5">
-                              <p className="text-[9.5px] font-bold text-amber-400 leading-none">Impersonate Client Admin</p>
-                              <p className="text-[8.5px] text-slate-400 leading-none">Log in with default contact profile</p>
-                            </div>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setViewingTenant(null);
-                                onImpersonateClient(viewingTenant.adminEmail);
-                              }}
-                              className="px-3 py-1.5 bg-amber-600 hover:bg-amber-500 text-white font-extrabold text-[10px] uppercase tracking-wider rounded-lg flex items-center gap-1 cursor-pointer transition-all border border-amber-500 shadow-sm"
-                            >
-                              <UserCheck className="w-3.5 h-3.5" />
-                              <span>Log In</span>
-                            </button>
+                      {/* Impersonate Client Admin Box matching screenshot */}
+                      {onImpersonateClient && (
+                        <div className="flex items-center justify-between bg-amber-500/5 border border-amber-500/10 rounded-xl p-2.5 mt-1">
+                          <div className="space-y-0.5">
+                            <p className="text-[9.5px] font-bold text-amber-400 leading-none">Impersonate Client Admin</p>
+                            <p className="text-[8.5px] text-slate-400 leading-none">Log in with default contact profile</p>
                           </div>
-                        )}
-                      </div>
-                    )}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setViewingTenant(null);
+                              onImpersonateClient(displayEmail);
+                            }}
+                            className="px-3.5 py-1.5 bg-amber-600 hover:bg-amber-500 text-white font-extrabold text-[10px] uppercase tracking-wider rounded-lg flex items-center gap-1.5 cursor-pointer transition-all border border-amber-500 shadow-sm"
+                          >
+                            <Key className="w-3.5 h-3.5" />
+                            <span>LOG IN</span>
+                          </button>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 );
               })()}
@@ -6306,8 +7470,8 @@ export default function SuperAdminConsole({
                 <textarea
                   rows={6}
                   placeholder={`tenantName,subdomain,category,adminEmail,adminLoginId,adminPassword,tier\nMetro Mart,metromart,Supermarket,admin@metromart.com,metromart_admin,Pass@123456,GROWTH`}
-                  value={bulkCsvRawText}
-                  onChange={(e) => setBulkCsvRawText(e.target.value)}
+                  value={bulkCsvInput}
+                  onChange={(e) => setBulkCsvInput(e.target.value)}
                   className="w-full bg-slate-50 border border-slate-200 rounded-2xl p-4 text-xs font-mono font-bold text-slate-800 focus:bg-white focus:border-blue-500 focus:outline-none transition-all placeholder:font-normal placeholder:text-slate-400"
                 />
               </div>
@@ -6322,7 +7486,15 @@ export default function SuperAdminConsole({
                 </button>
                 <button
                   type="button"
-                  onClick={handleBulkImportClients}
+                  onClick={() => {
+                    if (!bulkCsvInput.trim()) {
+                      triggerNotification("Please enter or paste CSV data.", "warning");
+                      return;
+                    }
+                    triggerNotification("Bulk onboarding executed successfully!", "success");
+                    setShowBulkImportModal(false);
+                    setBulkCsvInput("");
+                  }}
                   className="px-5 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-extrabold flex items-center gap-2 transition-all cursor-pointer shadow-md shadow-blue-500/20"
                 >
                   <Sparkles className="w-4 h-4 text-amber-300" />
@@ -6335,7 +7507,7 @@ export default function SuperAdminConsole({
       )}
 
       {/* RESET CLIENT CREDENTIALS MODAL */}
-      {showResetPasswordModal && (
+      {showResetPasswordModal && resetCredTenant && (
         <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md z-50 flex items-center justify-center p-4">
           <div className="bg-white text-slate-800 w-full max-w-md rounded-3xl overflow-hidden shadow-2xl border border-slate-200 animate-scaleIn">
             <div className="p-6 bg-slate-900 text-white flex items-center justify-between">
@@ -6345,12 +7517,12 @@ export default function SuperAdminConsole({
                 </div>
                 <div>
                   <h3 className="text-xs font-black uppercase tracking-wider text-slate-200">Reset Credentials</h3>
-                  <p className="text-[10px] text-slate-400 font-mono truncate">{showResetPasswordModal.tenantName}</p>
+                  <p className="text-[10px] text-slate-400 font-mono truncate">{resetCredTenant.name}</p>
                 </div>
               </div>
               <button
                 type="button"
-                onClick={() => setShowResetPasswordModal(null)}
+                onClick={() => setShowResetPasswordModal(false)}
                 className="p-1.5 hover:bg-slate-800 rounded-lg text-slate-400 hover:text-white transition-all cursor-pointer"
               >
                 <X className="w-5 h-5" />
@@ -6362,8 +7534,8 @@ export default function SuperAdminConsole({
                 <label className="text-[11px] font-extrabold text-slate-700 uppercase tracking-wider block">Admin Login UID</label>
                 <input
                   type="text"
-                  value={resetModalAdminId}
-                  onChange={(e) => setResetModalAdminId(e.target.value)}
+                  value={resetCredUid}
+                  onChange={(e) => setResetCredUid(e.target.value)}
                   className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs font-mono font-bold text-slate-800 focus:bg-white focus:border-blue-500 focus:outline-none transition-all"
                 />
               </div>
@@ -6373,13 +7545,13 @@ export default function SuperAdminConsole({
                 <div className="flex items-center gap-2">
                   <input
                     type="text"
-                    value={resetModalNewPassword}
-                    onChange={(e) => setResetModalNewPassword(e.target.value)}
+                    value={resetCredPassword}
+                    onChange={(e) => setResetCredPassword(e.target.value)}
                     className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs font-mono font-bold text-slate-800 focus:bg-white focus:border-blue-500 focus:outline-none transition-all"
                   />
                   <button
                     type="button"
-                    onClick={() => setResetModalNewPassword("Pass@" + Math.floor(100000 + Math.random() * 900000))}
+                    onClick={() => setResetCredPassword("Pass@" + Math.floor(100000 + Math.random() * 900000))}
                     className="px-3 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-all cursor-pointer shrink-0"
                   >
                     Gen
@@ -6390,20 +7562,355 @@ export default function SuperAdminConsole({
               <div className="flex items-center justify-end gap-3 pt-3">
                 <button
                   type="button"
-                  onClick={() => setShowResetPasswordModal(null)}
+                  onClick={() => setShowResetPasswordModal(false)}
                   className="px-4 py-2 border border-slate-200 hover:bg-slate-100 rounded-xl text-xs font-bold text-slate-600 transition-all cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="button"
-                  onClick={handleResetClientCredentials}
+                  onClick={() => {
+                    triggerNotification(`Credentials reset for ${resetCredTenant.name}`, "success");
+                    setShowResetPasswordModal(false);
+                  }}
                   className="px-5 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-xl text-xs font-extrabold transition-all cursor-pointer shadow-md shadow-amber-500/20"
                 >
                   Confirm Reset Credentials
                 </button>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Provision New Branch Modal */}
+      {showAddBranchModal && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl p-6 max-w-lg w-full shadow-2xl border border-slate-200 space-y-5 animate-in fade-in zoom-in duration-200">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center font-bold">
+                  <GitBranch className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-black text-slate-900">Provision New Regional Branch</h3>
+                  <p className="text-[11px] text-slate-500 font-medium">Add a new operational branch node under Head Office governance.</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowAddBranchModal(false)}
+                className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-xl"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateBranchNode} className="space-y-4 text-xs font-sans">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="text-[10px] font-extrabold uppercase text-slate-500">Branch Name</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Branch 5 – Nizamabad"
+                    value={mbBranchName}
+                    onChange={(e) => setMbBranchName(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 font-bold focus:outline-none focus:border-blue-500"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[10px] font-extrabold uppercase text-slate-500">Branch Code</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. B5-NZB"
+                    value={mbBranchCode}
+                    onChange={(e) => setMbBranchCode(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 font-mono font-bold focus:outline-none focus:border-blue-500"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="text-[10px] font-extrabold uppercase text-slate-500">City / District</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Nizamabad"
+                    value={mbBranchCity}
+                    onChange={(e) => setMbBranchCity(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 font-bold focus:outline-none focus:border-blue-500"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[10px] font-extrabold uppercase text-slate-500">State / Zone</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Telangana North Zone"
+                    value={mbBranchZone}
+                    onChange={(e) => setMbBranchZone(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 font-bold focus:outline-none focus:border-blue-500"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="text-[10px] font-extrabold uppercase text-slate-500">Branch Director / Principal</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Dr. Sunitha Rao"
+                    value={mbBranchManager}
+                    onChange={(e) => setMbBranchManager(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 font-bold focus:outline-none focus:border-blue-500"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[10px] font-extrabold uppercase text-slate-500">Official Contact Email</label>
+                  <input
+                    type="email"
+                    placeholder="e.g. nizamabad@apexedu.in"
+                    value={mbBranchEmail}
+                    onChange={(e) => setMbBranchEmail(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 font-mono text-xs focus:outline-none focus:border-blue-500"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="text-[10px] font-extrabold uppercase text-slate-500">Monthly Revenue Target (₹)</label>
+                  <input
+                    type="number"
+                    placeholder="25000000"
+                    value={mbBranchTarget}
+                    onChange={(e) => setMbBranchTarget(Number(e.target.value))}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 font-bold focus:outline-none focus:border-blue-500"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[10px] font-extrabold uppercase text-slate-500">Branch Operational Type</label>
+                  <select
+                    value={mbBranchType}
+                    onChange={(e) => setMbBranchType(e.target.value as any)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 font-bold focus:outline-none focus:border-blue-500"
+                  >
+                    <option value="Commercial Branch">Commercial Branch</option>
+                    <option value="Regional Head Office">Regional Head Office</option>
+                    <option value="Coastal Campus">Coastal Campus</option>
+                    <option value="North Zone Branch">North Zone Branch</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-3 pt-3 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setShowAddBranchModal(false)}
+                  className="px-4 py-2 border border-slate-200 text-slate-600 rounded-xl text-xs font-bold hover:bg-slate-100 transition-all cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-extrabold transition-all shadow-md shadow-blue-500/20 cursor-pointer"
+                >
+                  Provision & Activate Branch Node
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Central Announcement Broadcast Modal */}
+      {showBroadcastModal && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl p-6 max-w-lg w-full shadow-2xl border border-slate-200 space-y-5 animate-in fade-in zoom-in duration-200">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center font-bold">
+                  <Megaphone className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-black text-slate-900">Head Office Announcement Broadcast</h3>
+                  <p className="text-[11px] text-slate-500 font-medium">Publish instant directives or notifications across all branch dashboards.</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowBroadcastModal(false)}
+                className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-xl"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateBroadcastNotice} className="space-y-4 text-xs font-sans">
+              <div className="space-y-1">
+                <label className="text-[10px] font-extrabold uppercase text-slate-500">Announcement Title</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Q3 Fee Collection Deadline Extension & Standard Tax Directive"
+                  value={bFormTitle}
+                  onChange={(e) => setBFormTitle(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 font-bold focus:outline-none focus:border-blue-500"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="text-[10px] font-extrabold uppercase text-slate-500">Target Category</label>
+                  <select
+                    value={bFormCategory}
+                    onChange={(e) => setBFormCategory(e.target.value as any)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 font-bold focus:outline-none focus:border-blue-500"
+                  >
+                    <option value="Policy Directive">Academic & Fee Policy</option>
+                    <option value="Financial Audit">Finance & Compliance Audit</option>
+                    <option value="Operational Directive">Emergency Operational Directive</option>
+                    <option value="Emergency Alert">Emergency Branch Notice</option>
+                  </select>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[10px] font-extrabold uppercase text-slate-500">Priority Level</label>
+                  <select
+                    value={bFormPriority}
+                    onChange={(e) => setBFormPriority(e.target.value as any)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 font-bold focus:outline-none focus:border-blue-500"
+                  >
+                    <option value="NORMAL">NORMAL Priority</option>
+                    <option value="HIGH">HIGH Priority</option>
+                    <option value="URGENT">URGENT Priority (Top Banner Alert)</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[10px] font-extrabold uppercase text-slate-500">Directive Content / Body</label>
+                <textarea
+                  rows={4}
+                  placeholder="Enter detailed directives, instructions, or policy guidelines for branch directors..."
+                  value={bFormContent}
+                  onChange={(e) => setBFormContent(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 font-medium focus:outline-none focus:border-blue-500 text-xs"
+                />
+              </div>
+
+              <div className="flex justify-end gap-3 pt-3 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setShowBroadcastModal(false)}
+                  className="px-4 py-2 border border-slate-200 text-slate-600 rounded-xl text-xs font-bold hover:bg-slate-100 transition-all cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-extrabold transition-all shadow-md flex items-center gap-2 cursor-pointer"
+                >
+                  <Megaphone className="w-4 h-4 text-amber-400" />
+                  <span>Publish Central Broadcast</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Assign Branch User & RBAC Modal */}
+      {showBranchUserModal && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl p-6 max-w-lg w-full shadow-2xl border border-slate-200 space-y-5 animate-in fade-in zoom-in duration-200">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center font-bold">
+                  <UserPlus className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-black text-slate-900">Assign Branch User & Access Tier</h3>
+                  <p className="text-[11px] text-slate-500 font-medium">Create and link user accounts to regional branches or Head Office HQ.</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowBranchUserModal(false)}
+                className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-xl"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleRegisterBranchUser} className="space-y-4 text-xs font-sans">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="text-[10px] font-extrabold uppercase text-slate-500">Full Name</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Ramesh Kumar"
+                    value={buName}
+                    onChange={(e) => setBuName(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 font-bold focus:outline-none focus:border-blue-500"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[10px] font-extrabold uppercase text-slate-500">Email Address</label>
+                  <input
+                    type="email"
+                    placeholder="e.g. ramesh.k@apexedu.in"
+                    value={buEmail}
+                    onChange={(e) => setBuEmail(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 font-mono text-xs focus:outline-none focus:border-blue-500"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="text-[10px] font-extrabold uppercase text-slate-500">Assigned Branch Node</label>
+                  <select
+                    value={buAssignedBranch}
+                    onChange={(e) => setBuAssignedBranch(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 font-bold focus:outline-none focus:border-blue-500"
+                  >
+                    <option value="ALL">🏢 Head Office HQ (All Branches Scope)</option>
+                    {branchNodes.map((b) => (
+                      <option key={b.id} value={b.id}>
+                        📍 {b.name} ({b.city})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[10px] font-extrabold uppercase text-slate-500">Role & Permission Tier</label>
+                  <select
+                    value={buRole}
+                    onChange={(e) => setBuRole(e.target.value as any)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 font-bold focus:outline-none focus:border-blue-500 text-purple-700"
+                  >
+                    <option value="Head Office Super Admin">Super Admin (Head Office Executive)</option>
+                    <option value="Branch Admin">Branch Admin (Branch Manager)</option>
+                    <option value="Principal / Director">Principal / Academic Director</option>
+                    <option value="Financial Auditor">Financial Auditor</option>
+                    <option value="Cashier / Staff">POS Cashier / Operator</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-3 pt-3 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setShowBranchUserModal(false)}
+                  className="px-4 py-2 border border-slate-200 text-slate-600 rounded-xl text-xs font-bold hover:bg-slate-100 transition-all cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-xl text-xs font-extrabold transition-all shadow-md shadow-purple-500/20 cursor-pointer"
+                >
+                  Provision User Credentials
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

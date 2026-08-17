@@ -20,6 +20,21 @@ export enum UserRole {
   STORE_KEEPER = "STORE_KEEPER"
 }
 
+export function normalizeUserRole(role: any): UserRole {
+  if (!role) return UserRole.CASHIER;
+  const str = String(role).toUpperCase().replace(/[\s_-]+/g, "");
+  if (str.includes("ADMIN") || str.includes("SOVEREIGN") || str.includes("OWNER")) {
+    return UserRole.ADMIN;
+  }
+  if (str.includes("MANAG")) {
+    return UserRole.MANAGER;
+  }
+  if (str.includes("STORE") || str.includes("KEEPER") || str.includes("INVENTORY") || str.includes("WAREHOUSE") || str.includes("STOCK")) {
+    return UserRole.STORE_KEEPER;
+  }
+  return UserRole.CASHIER;
+}
+
 export enum MeasurementUnit {
   KG = "Kg",
   LITER = "Liters",
@@ -181,6 +196,10 @@ export interface Tenant {
   maxProducts: number;
   onboardingFeePaid: number;
   companyLogo?: string;
+
+  // Client Admin Credentials
+  adminLoginId?: string;
+  adminPassword?: string;
   
   // Custom Prices & Subscription Cost parameters
   monthlySubscriptionFee: number;
@@ -202,6 +221,14 @@ export interface Tenant {
   // Client Security/Verification Status details
   clientVerificationStatus: "VERIFIED" | "PENDING_KYC" | "REJECTED" | "UNDER_REVIEW";
   gstinRegNumber?: string;
+}
+
+export interface AppSettings {
+  autoPrintReceipt: boolean;
+  enableSound: boolean;
+  receiptHeader: string;
+  receiptFooter: string;
+  maxDiscountAllowed: number;
 }
 
 export interface StockTransfer {
@@ -561,9 +588,9 @@ function generateVectorPDFFallback(
   };
 
   try {
-    if (elementId === "invoice-receipt-theme") {
+    if (elementId === "invoice-receipt-theme" || elementId === "virtual-receipt-roll-wrapper") {
       const titleEl = element.querySelector("h4");
-      const storeTitle = titleEl ? titleEl.textContent?.trim() : "EXPERT POS HYPERMARKETS";
+      const storeTitle = titleEl ? titleEl.textContent?.replace(/[⭐*]/g, "").trim() : "RETAIL STORE RECEIPT";
 
       const subtitleEls = element.querySelectorAll("p");
       const branchName = subtitleEls[0] ? subtitleEls[0].textContent?.trim() : "";
@@ -614,10 +641,14 @@ function generateVectorPDFFallback(
             const key = spans[0].textContent?.trim() || "";
             const val = spans[1].textContent?.trim() || "";
             if (
-              key.includes("Tax value") || 
+              key.includes("Tax") || 
               key.includes("discount") || 
-              key.includes("TOTAL PAYABLE") || 
-              key.includes("Payment Mode")
+              key.includes("TOTAL") || 
+              key.includes("PAYABLE") ||
+              key.includes("Payment Mode") ||
+              key.includes("Tender Mode") ||
+              key.includes("Cash") ||
+              key.includes("Change")
             ) {
               mathLines.push({ key, val });
             }
@@ -637,7 +668,7 @@ function generateVectorPDFFallback(
       pdf.setFontSize(10);
       let y = 20;
 
-      pdf.text(cleanText(storeTitle || "EXPERT POS HYPERMARKETS"), pdfWidth / 2, y, { align: "center" });
+      pdf.text(cleanText(storeTitle || "RETAIL CASH RECEIPT"), pdfWidth / 2, y, { align: "center" });
       y += 12;
 
       pdf.setFont("courier", "normal");
@@ -704,7 +735,7 @@ function generateVectorPDFFallback(
       y += 11;
 
       mathLines.forEach(m => {
-        if (m.key.includes("TOTAL PAYABLE")) {
+        if (m.key.includes("TOTAL PAYABLE") || m.key.includes("NET PAYABLE")) {
           pdf.setFont("courier", "bold");
           pdf.setFontSize(10);
           pdf.text(cleanText(m.key), 10, y);
@@ -722,7 +753,16 @@ function generateVectorPDFFallback(
       y += 5;
       pdf.setFont("courier", "italic");
       pdf.setFontSize(7);
-      pdf.text("Thank you for shopping at Expert POS!", pdfWidth / 2, y, { align: "center" });
+      
+      const footerBox = element.querySelector(".p-3.bg-slate-100, .p-2.bg-slate-50");
+      const footerMsg = footerBox ? footerBox.textContent?.trim() : "Thank you for your business!";
+      if (footerMsg) {
+        const splitFooter = pdf.splitTextToSize(cleanText(footerMsg), pdfWidth - 20);
+        splitFooter.forEach((line: string) => {
+          pdf.text(line, pdfWidth / 2, y, { align: "center" });
+          y += 9;
+        });
+      }
       
       pdf.save(filename);
       return true;
