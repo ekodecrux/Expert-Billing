@@ -3,8 +3,25 @@ import path from "path";
 import fs from "fs";
 import dotenv from "dotenv";
 import { createServer as createViteServer } from "vite";
-import { GoogleGenAI, Type } from "@google/genai";
-import { PaymentMode, UserRole, MeasurementUnit, Product, Supplier, Customer, Invoice, StoreBranch, Expense, CashSession, StockAdjustment, StockTransfer } from "./src/types";
+import { GoogleGenAI } from "@google/genai";
+import type { MeasurementUnit as TMeasurementUnit, PaymentMode as TPaymentMode, Product, Supplier, Customer, Invoice, StoreBranch, Expense, CashSession, StockAdjustment, StockTransfer } from "./src/types.ts";
+
+const MeasurementUnit = {
+  KG: "KG" as TMeasurementUnit,
+  GRAM: "Gram" as TMeasurementUnit,
+  LITRE: "Litre" as TMeasurementUnit,
+  ML: "ml" as TMeasurementUnit,
+  PIECE: "Pieces" as TMeasurementUnit,
+  PACKET: "Packets" as TMeasurementUnit,
+  BOX: "Boxes" as TMeasurementUnit,
+};
+
+const PaymentMode = {
+  CASH: "CASH" as TPaymentMode,
+  UPI: "UPI" as TPaymentMode,
+  CARD: "CARD" as TPaymentMode,
+  STORE_CREDIT: "STORE_CREDIT" as TPaymentMode,
+};
 
 dotenv.config();
 
