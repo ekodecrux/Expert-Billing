@@ -26,7 +26,7 @@ const PaymentMode = {
 dotenv.config();
 
 const app = express();
-const PORT = 3000;
+const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
 
 app.use(express.json());
 
@@ -739,7 +739,7 @@ If they ask for retail advice, detail the specific steps they can take (like tra
 Maintain a smart, encouraging, conversational retail-manager tone. Keep formatting elegant using markdown lists. Never exceed 250 words.`;
 
     const response = await ai.models.generateContent({
-      model: "gemini-3.5-flash",
+      model: "gemini-3.8-flash",
       contents: prompt,
       config: {
         systemInstruction: systemPrompt,
