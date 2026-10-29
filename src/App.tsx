@@ -1511,7 +1511,8 @@ export default function App() {
             const nextQty = item.quantity + 1;
             const subtotal = nextQty * item.price;
             const gstAmount = Number(((subtotal * item.gstRate) / (100 + item.gstRate)).toFixed(2));
-            return { ...item, quantity: nextQty, subtotal, gstAmount };
+            const itemMrp = item.mrp || (product as any).mrp || (product.price > 0 ? Number((product.price * 1.15).toFixed(2)) : product.price);
+            return { ...item, mrp: itemMrp, quantity: nextQty, subtotal, gstAmount };
           }
           return item;
         });
@@ -1519,11 +1520,13 @@ export default function App() {
 
       // Add fresh
       const gstAmount = Number(((product.price * product.gstRate) / (100 + product.gstRate)).toFixed(2));
+      const itemMrp = (product as any).mrp ? Number((product as any).mrp) : (product.price > 0 ? Number((product.price * 1.15).toFixed(2)) : product.price);
       const newItem: InvoiceItem = {
         productId: product.id,
         name: product.name,
         barcode: product.barcode,
         price: product.price,
+        mrp: itemMrp,
         quantity: 1,
         unit: product.unit,
         gstRate: product.gstRate,
@@ -3083,6 +3086,21 @@ export default function App() {
               >
                 <ShoppingBag className="w-4 h-4" />
                 <span>Product Catalogue</span>
+              </button>
+
+              <button
+                onClick={() => {
+                  openLabelGeneratorModal(null);
+                }}
+                className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-colors font-sans text-xs font-medium cursor-pointer text-slate-600 hover:bg-slate-200/60 hover:text-slate-900"
+              >
+                <Tag className="w-4 h-4 text-purple-600" />
+                <div className="flex justify-between items-center w-full">
+                  <span>Barcode &amp; Label Printing</span>
+                  <span className="bg-purple-100 text-purple-700 text-[9px] px-1.5 py-0.5 rounded-full font-bold">
+                    Thermal / A4
+                  </span>
+                </div>
               </button>
 
               <button
@@ -5538,24 +5556,67 @@ export default function App() {
                                 )}
                               </div>
 
-                              {/* Items list */}
+                              {/* Items list with MRP & Rate */}
                               <div className="border-t border-slate-300 py-2 space-y-1 text-[9px]">
-                                <div className="grid grid-cols-4 font-bold border-b border-slate-200 pb-1 text-slate-950">
-                                  <span className="col-span-2">Description Particular</span>
-                                  <span className="text-right">Qty</span>
+                                <div className="grid grid-cols-5 font-bold border-b border-slate-200 pb-1 text-slate-950">
+                                  <span className="col-span-2">Item Description</span>
+                                  <span className="text-right">MRP</span>
+                                  <span className="text-right">Rate</span>
                                   <span className="text-right">Total</span>
                                 </div>
-                                {selectedInv.items.map((it, idx) => (
-                                  <div key={idx} className="grid grid-cols-4 gap-1 text-slate-800">
-                                    <span className="col-span-2 truncate font-sans text-[9.5px]">{it.name}</span>
-                                    <span className="text-right">{it.quantity} {it.unit}</span>
-                                    <span className="text-right font-bold">{activeTenant.currency || "₹"}{(it.price * it.quantity).toFixed(2)}</span>
-                                  </div>
-                                ))}
+                                {selectedInv.items.map((it, idx) => {
+                                  const itemMrp = it.mrp || (it.price > 0 ? Number((it.price * 1.15).toFixed(2)) : it.price);
+                                  const isDiscounted = itemMrp > it.price;
+                                  return (
+                                    <div key={idx} className="grid grid-cols-5 gap-1 text-slate-800 items-center">
+                                      <div className="col-span-2 truncate font-sans">
+                                        <span className="font-semibold block truncate leading-tight">{it.name}</span>
+                                        <span className="text-[8px] text-slate-400 font-mono">Qty: {it.quantity} {it.unit}</span>
+                                      </div>
+                                      <span className={`text-right font-mono ${isDiscounted ? "text-slate-400 line-through text-[8.5px]" : "text-slate-600"}`}>
+                                        {activeTenant.currency || "₹"}{itemMrp.toFixed(2)}
+                                      </span>
+                                      <span className="text-right font-mono text-slate-700">
+                                        {activeTenant.currency || "₹"}{it.price.toFixed(2)}
+                                      </span>
+                                      <span className="text-right font-bold font-mono">
+                                        {activeTenant.currency || "₹"}{(it.price * it.quantity).toFixed(2)}
+                                      </span>
+                                    </div>
+                                  );
+                                })}
                               </div>
+
+                              {/* MRP Savings */}
+                              {(() => {
+                                const totalMrp = selectedInv.items.reduce((acc, it) => {
+                                  const itemMrp = it.mrp || (it.price > 0 ? Number((it.price * 1.15).toFixed(2)) : it.price);
+                                  return acc + (itemMrp * it.quantity);
+                                }, 0);
+                                const totalSavings = Math.max(0, totalMrp - selectedInv.grandTotal);
+                                if (totalSavings > 0) {
+                                  return (
+                                    <div className="p-1.5 bg-emerald-50 border border-emerald-200 rounded text-emerald-800 text-[8.5px] font-bold flex justify-between items-center my-1 font-sans">
+                                      <span>🎉 You Saved on MRP:</span>
+                                      <span className="font-mono font-extrabold">{activeTenant.currency || "₹"}{totalSavings.toFixed(2)} ({Math.round((totalSavings / totalMrp) * 100)}% OFF)</span>
+                                    </div>
+                                  );
+                                }
+                                return null;
+                              })()}
 
                               {/* Calculations */}
                               <div className="border-t border-dashed border-slate-300 pt-2 space-y-0.5 text-[9.5px]">
+                                <div className="flex justify-between">
+                                  <span>Total MRP:</span>
+                                  <span className="font-mono text-slate-500 line-through">
+                                    {activeTenant.currency || "₹"}
+                                    {selectedInv.items.reduce((acc, it) => {
+                                      const itemMrp = it.mrp || (it.price > 0 ? Number((it.price * 1.15).toFixed(2)) : it.price);
+                                      return acc + (itemMrp * it.quantity);
+                                    }, 0).toFixed(2)}
+                                  </span>
+                                </div>
                                 <div className="flex justify-between">
                                   <span>Basket Tax (GST):</span>
                                   <span>{activeTenant.currency || "₹"}{selectedInv.taxAmount.toFixed(2)}</span>
@@ -6278,24 +6339,67 @@ Payment Mode:   ${selectedInv.paymentMode}
                 )}
               </div>
 
-              {/* Items Table */}
+              {/* Items Table with MRP & Savings */}
               <div className="border-t border-slate-300 pt-2 space-y-2">
-                <div className="grid grid-cols-4 font-bold border-b border-slate-300 pb-1 text-slate-900">
-                  <span className="col-span-2">Particular Description</span>
-                  <span className="text-right">Qty</span>
-                  <span className="text-right">Price</span>
+                <div className="grid grid-cols-5 font-bold border-b border-slate-300 pb-1 text-slate-900 text-[10px]">
+                  <span className="col-span-2">Item Description</span>
+                  <span className="text-right">MRP</span>
+                  <span className="text-right">Rate</span>
+                  <span className="text-right">Total</span>
                 </div>
-                {showInvoicePrintPreview.items.map((it) => (
-                  <div key={it.productId} className="grid grid-cols-4 gap-1">
-                    <span className="col-span-2 truncate font-sans text-[10px]">{it.name}</span>
-                    <span className="text-right">{it.quantity} {it.unit}</span>
-                    <span className="text-right font-bold">{activeTenant.currency || "₹"}{(it.price * it.quantity).toFixed(2)}</span>
-                  </div>
-                ))}
+                {showInvoicePrintPreview.items.map((it) => {
+                  const itemMrp = it.mrp || (it.price > 0 ? Number((it.price * 1.15).toFixed(2)) : it.price);
+                  const isDiscounted = itemMrp > it.price;
+                  return (
+                    <div key={it.productId} className="grid grid-cols-5 gap-1 text-[10px] items-center">
+                      <div className="col-span-2 truncate font-sans">
+                        <span className="font-semibold block truncate leading-tight">{it.name}</span>
+                        <span className="text-[8.5px] text-slate-500 font-mono">Qty: {it.quantity} {it.unit}</span>
+                      </div>
+                      <span className={`text-right font-mono ${isDiscounted ? "text-slate-400 line-through text-[9px]" : "text-slate-600"}`}>
+                        {activeTenant.currency || "₹"}{itemMrp.toFixed(2)}
+                      </span>
+                      <span className="text-right font-mono font-medium text-slate-700">
+                        {activeTenant.currency || "₹"}{it.price.toFixed(2)}
+                      </span>
+                      <span className="text-right font-bold font-mono text-slate-900">
+                        {activeTenant.currency || "₹"}{(it.price * it.quantity).toFixed(2)}
+                      </span>
+                    </div>
+                  );
+                })}
               </div>
+
+              {/* MRP Savings Banner */}
+              {(() => {
+                const totalMrp = showInvoicePrintPreview.items.reduce((acc, it) => {
+                  const itemMrp = it.mrp || (it.price > 0 ? Number((it.price * 1.15).toFixed(2)) : it.price);
+                  return acc + (itemMrp * it.quantity);
+                }, 0);
+                const totalSavings = Math.max(0, totalMrp - showInvoicePrintPreview.grandTotal);
+                if (totalSavings > 0) {
+                  return (
+                    <div className="p-1.5 bg-emerald-50 border border-emerald-200 rounded text-emerald-800 text-[9.5px] font-bold flex justify-between items-center my-1 font-sans">
+                      <span className="flex items-center gap-1">🎉 You Saved on MRP:</span>
+                      <span className="font-mono font-extrabold">{activeTenant.currency || "₹"}{totalSavings.toFixed(2)} ({Math.round((totalSavings / totalMrp) * 100)}% OFF)</span>
+                    </div>
+                  );
+                }
+                return null;
+              })()}
 
               {/* Dynamic Math */}
               <div className="border-t border-dashed border-slate-300 pt-2 space-y-1">
+                <div className="flex justify-between">
+                  <span>Total MRP Value:</span>
+                  <span className="font-mono text-slate-500 line-through">
+                    {activeTenant.currency || "₹"}
+                    {showInvoicePrintPreview.items.reduce((acc, it) => {
+                      const itemMrp = it.mrp || (it.price > 0 ? Number((it.price * 1.15).toFixed(2)) : it.price);
+                      return acc + (itemMrp * it.quantity);
+                    }, 0).toFixed(2)}
+                  </span>
+                </div>
                 <div className="flex justify-between">
                   <span>Basket Tax value:</span>
                   <span>{activeTenant.currency || "₹"}{showInvoicePrintPreview.taxAmount.toFixed(2)}</span>

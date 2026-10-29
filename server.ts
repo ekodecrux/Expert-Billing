@@ -817,8 +817,9 @@ Maintain a smart, encouraging, conversational retail-manager tone. Keep formatti
     res.status(500).json({ error: err?.message || "Internal Server Error" });
   });
 
-  const server = app.listen(PORT, () => {
-    console.log(`Expert POS Smart Billing running on port ${PORT}`);
+  const portNum = Number(PORT) || 3000;
+  const server = app.listen(portNum, "0.0.0.0", () => {
+    console.log(`Expert POS Smart Billing running on 0.0.0.0:${portNum}`);
   });
 
   server.on("error", (err: any) => {

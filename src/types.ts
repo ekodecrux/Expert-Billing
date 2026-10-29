@@ -51,6 +51,7 @@ export interface Product {
   sku: string;
   purchasePrice: number;
   price: number;
+  mrp?: number; // Maximum Retail Price (Printed on packaging)
   gstRate: number; // e.g. 5, 12, 18 for GST percentage
   unit: MeasurementUnit;
   stock: number;
@@ -92,6 +93,7 @@ export interface InvoiceItem {
   productId: string;
   name: string;
   barcode: string;
+  mrp?: number; // Maximum Retail Price
   price: number; // pricing after item discount
   quantity: number;
   unit: MeasurementUnit;

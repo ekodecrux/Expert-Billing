@@ -5,9 +5,10 @@ import {
   Settings, CheckCircle, Smartphone, Globe, Plus, Trash, Users,
   Eye, Edit, X, Check, Mail, Lock, ShieldAlert,
   Sliders, Briefcase, Package, Clock, Plug, Layout, Zap, Percent, Cpu, Laptop, ChevronRight, Receipt, DollarSign,
-  Upload, Image as ImageIcon, Building, RotateCcw, Camera, Sparkles
+  Upload, Image as ImageIcon, Building, RotateCcw, Camera, Sparkles, Tag, HardDrive, FileCode
 } from "lucide-react";
 import { UserRole, normalizeUserRole, Tenant, Product, Customer, Invoice, Expense, Supplier, StoreBranch } from "../types";
+import { LABEL_SIZE_PRESETS, printThermalLabelsDirect } from "../utils/labelPrinterEngine";
 
 export interface AppSettings {
   autoPrintReceipt: boolean;
@@ -196,6 +197,58 @@ export default function SettingsPanel({
     onUpdateProductCategories(updated);
     setEditingCategory(null);
     triggerNotification(`Successfully updated category bracket to "${catToSave}"!`, "success");
+  };
+
+  // --- Dedicated Label Printer Hardware State ---
+  const [labelPrinterConfig, setLabelPrinterConfig] = useState(() => {
+    const saved = localStorage.getItem("expert_pos_label_printer_settings");
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch (e) {}
+    }
+    return {
+      printerModel: "zebra-zpl",
+      printerName: "Zebra ZD220 Direct Thermal Label Printer",
+      presetId: "roll-50x25",
+      connectionType: "browser",
+      networkIp: "192.168.1.200",
+      networkPort: "9100",
+      dpi: 203,
+      darkness: 10,
+      gapMm: 3,
+      sensorType: "gap"
+    };
+  });
+
+  const handleSaveLabelPrinterConfig = (e: React.FormEvent) => {
+    e.preventDefault();
+    localStorage.setItem("expert_pos_label_printer_settings", JSON.stringify(labelPrinterConfig));
+    triggerNotification("Label printer hardware settings saved successfully!", "success");
+  };
+
+  const handleTestPrintFromSettings = () => {
+    const selectedPreset = LABEL_SIZE_PRESETS.find(p => p.id === labelPrinterConfig.presetId) || LABEL_SIZE_PRESETS[0];
+    const testHtml = `
+      <div class="label-print-page" style="padding: 2.5mm; border: 1px dashed #000; text-align: center; height: 100%;">
+        <div style="font-size: 10px; font-weight: 900; border-bottom: 1px solid #000; padding-bottom: 1mm; text-transform: uppercase;">
+          ${labelPrinterConfig.printerName}
+        </div>
+        <div style="font-size: 8px; margin: 1.5mm 0; font-family: monospace;">
+          Size: ${selectedPreset.name} | DPI: ${labelPrinterConfig.dpi} | Dark: ${labelPrinterConfig.darkness}/15
+        </div>
+        <div style="margin: 1.5mm auto; width: 85%; font-size: 9px; font-family: monospace; border: 1px solid #000; padding: 1.5mm; font-weight: bold;">
+          ||||||||||||||||||||||||||||||||||||||||
+          <br/>
+          CALIB-OK-2026
+        </div>
+        <div style="font-size: 7.5px; font-family: monospace; border-top: 1px solid #000; padding-top: 1mm;">
+          INTERFACE: ${labelPrinterConfig.connectionType.toUpperCase()} | SENSOR: ${labelPrinterConfig.sensorType.toUpperCase()}
+        </div>
+      </div>
+    `;
+    printThermalLabelsDirect(testHtml, selectedPreset, "Label Printer Calibration Test");
+    triggerNotification("Spooling calibration label to printer...", "success");
   };
 
   // --- Supplier state variables ---
@@ -1629,8 +1682,9 @@ export default function SettingsPanel({
       )}
 
       {activeSubTab === "pos" && (
-        /* ================= SUB-TAB: POS OPERATIONAL PREFERENCES ================= */
-        <form onSubmit={handleSavePOSSettings} className="space-y-6 max-w-2xl font-sans">
+        <div className="space-y-8 max-w-2xl font-sans">
+          {/* ================= SUB-TAB: POS OPERATIONAL PREFERENCES ================= */}
+          <form onSubmit={handleSavePOSSettings} className="space-y-6">
           <div className="space-y-4">
             <h3 className="text-xs font-black text-slate-900 uppercase tracking-widest flex items-center gap-1.5 font-mono">
               <Printer className="w-4 h-4 text-purple-600" /> POS Operational Settings
@@ -1731,11 +1785,199 @@ export default function SettingsPanel({
             </button>
           </div>
         </form>
+
+        {/* ================= LABEL PRINTERS & BARCODE HARDWARE CARD ================= */}
+        <div className="space-y-4 max-w-2xl font-sans mt-8 pt-6 border-t border-slate-200">
+          <div className="flex justify-between items-center">
+            <h3 className="text-xs font-black text-slate-900 uppercase tracking-widest flex items-center gap-1.5 font-mono">
+              <Tag className="w-4 h-4 text-purple-600" /> Label Printers &amp; Barcode Hardware
+            </h3>
+            <span className="text-[10px] font-mono font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+              Active Hardware Ready
+            </span>
+          </div>
+          <p className="text-[11px] text-slate-500">
+            Configure direct thermal roll printers (Zebra, TSC, TVS, Xprinter, Epson, Rollo, Dymo) and office A4 barcode label sheets.
+          </p>
+
+          <form onSubmit={handleSaveLabelPrinterConfig} className="p-5 bg-slate-50 rounded-2xl border border-slate-200 space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-[11px] text-slate-700 font-bold uppercase tracking-wider mb-1">
+                  Default Label Printer Model
+                </label>
+                <select
+                  value={labelPrinterConfig.printerModel}
+                  onChange={(e) => {
+                    const model = e.target.value;
+                    let defaultName = "Zebra ZD220 Direct Thermal Printer";
+                    if (model === "tsc-tspl") defaultName = "TSC TE244 Thermal Barcode Printer";
+                    if (model === "tvs-lp46") defaultName = "TVS LP 46 Neo Label Printer";
+                    if (model === "xprinter-xp") defaultName = "Xprinter XP-420B Shipping & Shelf Label Printer";
+                    if (model === "epson-tm") defaultName = "Epson TM-L90 Thermal Label & Receipt Printer";
+                    if (model === "dymo-lw") defaultName = "Dymo LabelWriter 450 Turbo";
+                    if (model === "laser-a4") defaultName = "Standard Laser / Inkjet A4 Sheets";
+                    setLabelPrinterConfig({
+                      ...labelPrinterConfig,
+                      printerModel: model,
+                      printerName: defaultName
+                    });
+                  }}
+                  className="w-full bg-white border border-slate-300 rounded-xl py-2 px-3 text-xs font-semibold text-slate-900 outline-none focus:border-purple-600 cursor-pointer"
+                >
+                  <option value="zebra-zpl">Zebra ZD220 / ZD230 / ZD420 (ZPL II)</option>
+                  <option value="tsc-tspl">TSC TE244 / TTP-244 Pro / DA210 (TSPL)</option>
+                  <option value="tvs-lp46">TVS Electronics LP 46 Neo / Lite (TSPL)</option>
+                  <option value="xprinter-xp">Xprinter XP-420B / XP-365B (TSPL)</option>
+                  <option value="citizen-cl">Citizen CL-S621 / CL-E300 (ZPL)</option>
+                  <option value="epson-tm">Epson TM-L90 / TM-L100 (ESC/POS Label)</option>
+                  <option value="rollo-usb">Rollo Commercial High-Speed Printer</option>
+                  <option value="dymo-lw">Dymo LabelWriter 450 / 550</option>
+                  <option value="laser-a4">Standard Laser / Inkjet Printer (A4 Sheets)</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-[11px] text-slate-700 font-bold uppercase tracking-wider mb-1">
+                  Printer Friendly Display Name
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={labelPrinterConfig.printerName}
+                  onChange={(e) => setLabelPrinterConfig({ ...labelPrinterConfig, printerName: e.target.value })}
+                  className="w-full bg-white border border-slate-300 rounded-xl py-2 px-3 text-xs font-semibold text-slate-900 outline-none focus:border-purple-600 font-mono"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] text-slate-700 font-bold uppercase tracking-wider mb-1">
+                  Default Label Size Preset
+                </label>
+                <select
+                  value={labelPrinterConfig.presetId}
+                  onChange={(e) => setLabelPrinterConfig({ ...labelPrinterConfig, presetId: e.target.value })}
+                  className="w-full bg-white border border-slate-300 rounded-xl py-2 px-3 text-xs font-bold text-slate-900 outline-none focus:border-purple-600 cursor-pointer"
+                >
+                  <optgroup label="Direct Thermal Roll Presets">
+                    <option value="roll-50x25">50 × 25 mm (2" × 1") - Standard Shelf Tag</option>
+                    <option value="roll-38x25">38 × 25 mm (1.5" × 1") - Compact Item Sticker</option>
+                    <option value="roll-50x30">50 × 30 mm - Grocery &amp; Deli Roll</option>
+                    <option value="roll-75x50">75 × 50 mm (3" × 2") - Apparel Tag</option>
+                    <option value="roll-100x50">100 × 50 mm (4" × 2") - Shelf Talker / Bin Tag</option>
+                    <option value="roll-100x150">100 × 150 mm (4" × 6") - Shipping &amp; Pallet</option>
+                    <option value="dual-roll-38x25">2-Up Dual Roll (2 × 38×25 mm)</option>
+                    <option value="jewelry-32x19">Jewelry Tag (32 × 19 mm Dumbbell)</option>
+                  </optgroup>
+                  <optgroup label="Office Laser/Inkjet A4 Sheets">
+                    <option value="a4-sheet-24">A4 Sheet: 24 Labels (70 × 37 mm)</option>
+                    <option value="a4-sheet-40">A4 Sheet: 40 Labels (52.5 × 29.7 mm)</option>
+                    <option value="a4-sheet-65">A4 Sheet: 65 Labels (38.1 × 21.2 mm)</option>
+                  </optgroup>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-[11px] text-slate-700 font-bold uppercase tracking-wider mb-1">
+                  Connection Interface / Protocol
+                </label>
+                <select
+                  value={labelPrinterConfig.connectionType}
+                  onChange={(e) => setLabelPrinterConfig({ ...labelPrinterConfig, connectionType: e.target.value })}
+                  className="w-full bg-white border border-slate-300 rounded-xl py-2 px-3 text-xs font-semibold text-slate-900 outline-none focus:border-purple-600 cursor-pointer"
+                >
+                  <option value="browser">Browser Direct Thermal (Zero-Margin CSS @page)</option>
+                  <option value="tcp">Raw Network TCP Socket (Port 9100)</option>
+                  <option value="usb">USB Virtual COM / Direct Spool</option>
+                  <option value="bluetooth">Bluetooth SPP / Wireless</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-[11px] text-slate-700 font-bold uppercase tracking-wider mb-1">
+                  Print Resolution (DPI)
+                </label>
+                <select
+                  value={labelPrinterConfig.dpi}
+                  onChange={(e) => setLabelPrinterConfig({ ...labelPrinterConfig, dpi: Number(e.target.value) })}
+                  className="w-full bg-white border border-slate-300 rounded-xl py-2 px-3 text-xs font-semibold text-slate-900 outline-none focus:border-purple-600 cursor-pointer"
+                >
+                  <option value={203}>203 DPI (Standard Thermal 8 dots/mm)</option>
+                  <option value={300}>300 DPI (High-Definition 12 dots/mm)</option>
+                  <option value={600}>600 DPI (Ultra Fine 24 dots/mm)</option>
+                </select>
+              </div>
+
+              <div>
+                <div className="flex justify-between items-center mb-1">
+                  <label className="text-[11px] text-slate-700 font-bold uppercase tracking-wider">
+                    Thermal Darkness / Density
+                  </label>
+                  <span className="text-xs font-mono font-bold text-purple-600">{labelPrinterConfig.darkness} / 15</span>
+                </div>
+                <input
+                  type="range"
+                  min={1}
+                  max={15}
+                  value={labelPrinterConfig.darkness}
+                  onChange={(e) => setLabelPrinterConfig({ ...labelPrinterConfig, darkness: parseInt(e.target.value) || 10 })}
+                  className="w-full accent-purple-600 bg-slate-200 cursor-pointer"
+                />
+              </div>
+            </div>
+
+            {/* Network IP/Port when TCP selected */}
+            {labelPrinterConfig.connectionType === "tcp" && (
+              <div className="grid grid-cols-2 gap-3 p-3 bg-purple-50/60 rounded-xl border border-purple-200">
+                <div>
+                  <label className="text-[10px] font-bold text-purple-900 block mb-1">Printer IP Address</label>
+                  <input
+                    type="text"
+                    value={labelPrinterConfig.networkIp}
+                    onChange={(e) => setLabelPrinterConfig({ ...labelPrinterConfig, networkIp: e.target.value })}
+                    className="w-full bg-white border border-purple-300 rounded-lg px-2.5 py-1 text-xs font-mono font-bold"
+                    placeholder="192.168.1.200"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold text-purple-900 block mb-1">Raw Port</label>
+                  <input
+                    type="text"
+                    value={labelPrinterConfig.networkPort}
+                    onChange={(e) => setLabelPrinterConfig({ ...labelPrinterConfig, networkPort: e.target.value })}
+                    className="w-full bg-white border border-purple-300 rounded-lg px-2.5 py-1 text-xs font-mono font-bold"
+                    placeholder="9100"
+                  />
+                </div>
+              </div>
+            )}
+
+            <div className="flex items-center justify-between pt-2 border-t border-slate-200">
+              <button
+                type="button"
+                onClick={handleTestPrintFromSettings}
+                className="bg-slate-200 hover:bg-slate-300 text-slate-800 font-bold text-xs py-2 px-4 rounded-xl transition-all flex items-center gap-1.5 cursor-pointer uppercase tracking-wider font-mono shadow-2xs"
+              >
+                <Zap className="w-3.5 h-3.5 text-purple-600" />
+                Print Alignment Test Label
+              </button>
+
+              <button
+                type="submit"
+                className="bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs py-2 px-5 rounded-xl shadow-md transition-all flex items-center gap-2 cursor-pointer uppercase tracking-wider font-sans"
+              >
+                <Save className="w-4 h-4 shrink-0" />
+                Save Label Hardware Settings
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
       )}
 
       {activeSubTab === "system" && (
-        /* ================= SUB-TAB: SYSTEM MAINTENANCE & LOCAL DATABASE ================= */
         <div className="space-y-6 max-w-2xl font-sans">
+          {/* ================= SUB-TAB: SYSTEM MAINTENANCE & LOCAL DATABASE ================= */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
             {/* Database stats */}
             <div className="bg-slate-50 rounded-2xl border border-slate-200 p-5 space-y-4">
