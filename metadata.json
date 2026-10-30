@@ -1,6 +1,6 @@
 {
   "name": "EXPERT POS SMART BILLING HUB",
-  "description": "A high-performance Super Market Billing and POS Application with Stock and Store Management featuring AI-driven Stock Optimization and customer billing copilots.",
+  "description": "A high-performance Super Market Billing and POS Application with Stock and Store Management featuring multi-store inventory, barcode generation, thermal printing, and comprehensive billing operations.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

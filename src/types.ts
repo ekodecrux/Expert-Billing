@@ -171,18 +171,6 @@ export interface StockAdjustment {
   storeBranchId?: string;
 }
 
-// AI Billing Assistant Types
-export interface CopilotMessage {
-  id: string;
-  sender: "user" | "copilot";
-  text: string;
-  suggestions?: string[];
-  suggestedAction?: {
-    type: "APPLY_DISCOUNT" | "ADD_TO_CART" | "REORDER_PRODUCT" | "TRANSFER_STOCK";
-    payload: any;
-  };
-}
-
 export interface Tenant {
   id: string;
   name: string;
@@ -622,11 +610,17 @@ function generateVectorPDFFallback(
       });
 
       const items: { name: string; qty: string; price: string }[] = [];
-      const gridDivs = element.querySelectorAll("div.grid.grid-cols-4");
+      const gridDivs = element.querySelectorAll("div.grid");
       gridDivs.forEach((div, idx) => {
         if (idx === 0) return; // skip header
         const spans = div.querySelectorAll("span");
-        if (spans.length >= 3) {
+        if (spans.length >= 5) {
+          items.push({
+            name: spans[0].textContent?.trim() || "",
+            qty: spans[3].textContent?.trim() || "",
+            price: spans[4].textContent?.trim() || ""
+          });
+        } else if (spans.length >= 3) {
           items.push({
             name: spans[0].textContent?.trim() || "",
             qty: spans[1].textContent?.trim() || "",

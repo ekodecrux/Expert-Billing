@@ -3,7 +3,6 @@ import path from "path";
 import fs from "fs";
 import dotenv from "dotenv";
 import { createServer as createViteServer } from "vite";
-import { GoogleGenAI } from "@google/genai";
 import type { MeasurementUnit as TMeasurementUnit, PaymentMode as TPaymentMode, Product, Supplier, Customer, Invoice, StoreBranch, Expense, CashSession, StockAdjustment, StockTransfer } from "./src/types.ts";
 
 const MeasurementUnit = {
@@ -33,6 +32,17 @@ app.use(express.json());
 // Health check endpoint for hostinger & load balancers
 app.get(["/health", "/api/health"], (_req, res) => {
   res.status(200).json({ status: "ok", timestamp: new Date().toISOString() });
+});
+
+// Production database dump download route
+app.get(["/api/database/export", "/api/database/download"], (_req, res) => {
+  const filePath = path.join(process.cwd(), "database", "expertbilling_production.sql");
+  if (fs.existsSync(filePath)) {
+    res.setHeader("Content-Disposition", 'attachment; filename="expertbilling_production.sql"');
+    res.setHeader("Content-Type", "application/sql");
+    return res.sendFile(filePath);
+  }
+  res.status(404).json({ error: "Database file not found" });
 });
 
 // Path to low-overhead database file
@@ -370,25 +380,6 @@ function writeDb(state: DbState) {
 // Ensure database file exists on startup
 readDb();
 
-// Lazy initialize Gemini API only when needed to prevent startup failures
-let aiClientInstance: GoogleGenAI | null = null;
-function getAiClient(): GoogleGenAI | null {
-  if (!aiClientInstance) {
-    const apiKey = process.env.GEMINI_API_KEY;
-    if (apiKey) {
-      aiClientInstance = new GoogleGenAI({
-        apiKey,
-        httpOptions: {
-          headers: {
-            "User-Agent": "aistudio-build",
-          },
-        },
-      });
-    }
-  }
-  return aiClientInstance;
-}
-
 // API Routes
 
 // Load full database State
@@ -714,60 +705,6 @@ app.delete("/api/branches/:id", (req, res) => {
   res.json({ success: true, branches: db.branches });
 });
 
-// AI Copilot prompt dispatcher via server SDK
-app.post("/api/copilot", async (req, res) => {
-  const { prompt, context } = req.body;
-  const ai = getAiClient();
-
-  if (!ai) {
-    return res.json({
-      text: "⚠️ **Gemini Co-pilot Warning**: Gemini API key is not configured in this workspace yet. You can set it in **Settings > Secrets** so that the Smart Assistant can generate real stock optimization advice, SMS promotional copywriting, and store analytics. \n\n*Running locally in offline simulation mode instead.*",
-      suggestions: [
-        "Simulate marketing SMS",
-        "Explain low-stock recommendation",
-        "Generate a discount code strategy"
-      ]
-    });
-  }
-
-  try {
-    const systemPrompt = `You are "Smart Billing Co-pilot" built inside the Expert POS Smart Billing application for supermarkets.
-The manager/cashier is asking you a question or asking to do a smart task.
-You have access to current dashboard state:
-- Low-stock warning products: ${JSON.stringify(context?.lowStockProducts || [])}
-- Low-shelf-life/Expiring products: ${JSON.stringify(context?.expiringProducts || [])}
-- Selected cashier/role: ${context?.currentRole || 'Manager'}
-- Main active branch: ${context?.currentBranch?.name || 'Downtown Smart Hypermarket'}
-
-Provide a highly crisp, smart, actionable response. If they ask for a marketing SMS or WhatsApp deal copy, write a highly catchy text containing emoji and promotional urgency.
-If they ask for retail advice, detail the specific steps they can take (like transferring merchandise between branches to optimize expiring inventory, or applying customized bundles).
-Maintain a smart, encouraging, conversational retail-manager tone. Keep formatting elegant using markdown lists. Never exceed 250 words.`;
-
-    const response = await ai.models.generateContent({
-      model: "gemini-3.8-flash",
-      contents: prompt,
-      config: {
-        systemInstruction: systemPrompt,
-        temperature: 0.7
-      }
-    });
-
-    res.json({
-      text: response.text || "I was unable to formulate a response.",
-      suggestions: [
-        "Suggest stock adjustment",
-        "Create an SMS promo for expiring milk",
-        "Suggest bundles for grocery categories"
-      ]
-    });
-  } catch (error: any) {
-    console.error("Gemini API Error:", error);
-    res.json({
-      text: `⚠️ **AI Copilot API Error**: ${error?.message || 'Unknown integration error'}. Please verify your Gemini API key in the Secrets panel.`,
-      suggestions: ["Retry query", "Read stock reports", "How are loyalty points calculated?"]
-    });
-  }
-});
 
 // Production & Development server setup
 (async () => {

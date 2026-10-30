@@ -83,7 +83,6 @@ import {
   saveElementAsPDF
 } from "./types";
 
-import SmartCopilot from "./components/SmartCopilot";
 import SuperAdminConsole from "./components/SuperAdminConsole";
 import StaffRegistry from "./components/StaffRegistry";
 import SettingsPanel from "./components/SettingsPanel";
@@ -95,7 +94,7 @@ const PRESET_TENANTS: Tenant[] = [
     id: "TENANT-001",
     name: "Expert POS Retail Hub",
     subdomain: "hub",
-    adminEmail: "admin@expertpos.com",
+    adminEmail: "admin@expertbilling.in",
     phone: "+91 9988776655",
     currency: "₹",
     tier: "ENTERPRISE",
@@ -397,7 +396,7 @@ const PRESET_CREDENTIALS = [
   {
     role: UserRole.ADMIN,
     title: "Super Admin Master Controls",
-    email: "superadmin@expertpos.com",
+    email: "superadmin@expertbilling.in",
     password: "SuperAdminMasterKey2026",
     name: "System Sovereign (Super Admin)",
     color: "violet",
@@ -430,7 +429,7 @@ const PRESET_CREDENTIALS = [
   {
     role: UserRole.ADMIN,
     title: "Client Admin (Expert POS Hub)",
-    email: "admin@expertpos.com",
+    email: "admin@expertbilling.in",
     password: "AdminOverrideX99",
     name: "John Doe (Admin)",
     color: "emerald",
@@ -439,7 +438,7 @@ const PRESET_CREDENTIALS = [
     accent: "text-emerald-500",
     border: "border-emerald-500/20",
     glow: "shadow-emerald-500/10",
-    description: "Full master key to POS checkout, financial ledgers, inventory catalogue, CRM, expense logs, and AI Copilot.",
+    description: "Full master key to POS checkout, financial ledgers, inventory catalogue, CRM, and expense logs.",
     privileges: ["POS Sandbox access", "Audit profit & tax ledgers", "Modify products/suppliers", "Administer loyalty points", "Direct DB sync states"],
     phone: "+91 9911223344",
     tenantId: "TENANT-001"
@@ -447,7 +446,7 @@ const PRESET_CREDENTIALS = [
   {
     role: UserRole.MANAGER,
     title: "Manager Reports & Stock",
-    email: "manager@expertpos.com",
+    email: "manager@expertbilling.in",
     password: "ManagerProfit77",
     name: "Alice Manager",
     color: "indigo",
@@ -464,7 +463,7 @@ const PRESET_CREDENTIALS = [
   {
     role: UserRole.CASHIER,
     title: "Cashier Billing Only",
-    email: "cashier@expertpos.com",
+    email: "cashier@expertbilling.in",
     password: "CashierBilling101",
     name: "John Cashier",
     color: "amber",
@@ -481,7 +480,7 @@ const PRESET_CREDENTIALS = [
   {
     role: UserRole.STORE_KEEPER,
     title: "Store Keeper Inventory Management",
-    email: "storekeeper@expertpos.com",
+    email: "storekeeper@expertbilling.in",
     password: "StoreKeeperReconcile26",
     name: "Devin Stocker",
     color: "rose",
@@ -1006,7 +1005,7 @@ export default function App() {
     return localStorage.getItem("expert_pos_login_bg_mode") || "cosmic-aurora";
   });
 
-  const isSuperAdmin = currentUserEmail.toLowerCase() === "superadmin@expertpos.com";
+  const isSuperAdmin = currentUserEmail.toLowerCase() === "superadmin@expertbilling.in" || currentUserEmail.toLowerCase() === "superadmin@expertpos.com";
 
   // Active POS cart states
   const [cartItems, setCartItems] = useState<InvoiceItem[]>([]);
@@ -1182,7 +1181,7 @@ export default function App() {
       if (cleanRole.includes("super") || cleanRole === "sa") {
         targetCred = PRESET_CREDENTIALS.find((c) => c.email.includes("superadmin"));
       } else if (cleanRole === "admin" || cleanRole === "administrator") {
-        targetCred = PRESET_CREDENTIALS.find((c) => c.email === "admin@expertpos.com");
+        targetCred = PRESET_CREDENTIALS.find((c) => c.email === "admin@expertbilling.in" || c.email === "admin@expertpos.com");
       } else if (cleanRole.includes("manage")) {
         targetCred = PRESET_CREDENTIALS.find((c) => c.role === UserRole.MANAGER);
       } else if (cleanRole.includes("cashier") || cleanRole === "pos" || cleanRole === "billing") {
@@ -1214,7 +1213,7 @@ export default function App() {
         }
 
         const effectiveRole = normalizeUserRole(match.role);
-        if (match.email.toLowerCase() === "superadmin@expertpos.com") {
+        if (match.email.toLowerCase() === "superadmin@expertbilling.in" || match.email.toLowerCase() === "superadmin@expertpos.com") {
           setActiveTab("super-admin");
         } else if (effectiveRole === UserRole.MANAGER) {
           setActiveTab("analytics");
@@ -1283,7 +1282,7 @@ export default function App() {
       }
       
       // Auto-route to respective application based on role & permissions
-      if (match.email.toLowerCase() === "superadmin@expertpos.com") {
+      if (match.email.toLowerCase() === "superadmin@expertbilling.in" || match.email.toLowerCase() === "superadmin@expertpos.com") {
         setActiveTab("super-admin");
       } else if (normalizedRole === UserRole.MANAGER) {
         setActiveTab("analytics");
@@ -1296,7 +1295,7 @@ export default function App() {
       }
 
       // Automatically detect and select the appropriate client company tenant workspace!
-      if (trimmedId !== "superadmin@expertpos.com") {
+      if (trimmedId !== "superadmin@expertbilling.in" && trimmedId !== "superadmin@expertpos.com") {
         let tenantMatch = tenantsList.find(
           (t) => t.adminEmail.toLowerCase() === trimmedId
         );
@@ -1345,7 +1344,7 @@ export default function App() {
     setCurrentUserEmail(cred.email);
     setIsLoggedIn(true);
 
-    if (cred.email.toLowerCase() === "superadmin@expertpos.com") {
+    if (cred.email.toLowerCase() === "superadmin@expertbilling.in" || cred.email.toLowerCase() === "superadmin@expertpos.com") {
       setActiveTab("super-admin");
     } else if (normalizedRole === UserRole.MANAGER) {
       setActiveTab("analytics");
@@ -1359,7 +1358,7 @@ export default function App() {
 
     // Automatically detect and select the appropriate client company tenant workspace!
     const trimmedId = cred.email.toLowerCase();
-    if (trimmedId !== "superadmin@expertpos.com") {
+    if (trimmedId !== "superadmin@expertbilling.in" && trimmedId !== "superadmin@expertpos.com") {
       let tenantMatch = tenantsList.find(
         (t) => t.adminEmail.toLowerCase() === trimmedId
       );
@@ -2438,7 +2437,7 @@ export default function App() {
       e.preventDefault();
       if (otpInput.trim() === "123456") {
         // Log in as tenant admin by default
-        const match = credentialsList.find(c => c.email === "admin@expertpos.com") || PRESET_CREDENTIALS[1];
+        const match = credentialsList.find(c => c.email === "admin@expertbilling.in" || c.email === "admin@expertpos.com") || PRESET_CREDENTIALS[1];
         setCurrentRole(match.role);
         setCurrentCashierName(match.name);
         setCurrentUserEmail(match.email);
@@ -2808,7 +2807,7 @@ export default function App() {
                     <button
                       type="button"
                       onClick={() => {
-                        setLoginUserId("admin@expertpos.com");
+                        setLoginUserId("admin@expertbilling.in");
                         setLoginPassword("AdminOverrideX99");
                         triggerNotification("Credentials quick-filled! Click 'Login' to enter.", "success");
                       }}
@@ -3878,15 +3877,6 @@ export default function App() {
                       </table>
                     </div>
                   )}
-                </div>
-
-                {/* Smart AI copilot right in the system dashboard */}
-                <div className="border border-slate-200 rounded-xl overflow-hidden mt-6">
-                  <SmartCopilot
-                    currentRole={currentRole}
-                    currentBranch={currentBranch}
-                    products={products}
-                  />
                 </div>
               </div>
 
@@ -5556,28 +5546,30 @@ export default function App() {
                                 )}
                               </div>
 
-                              {/* Items list with MRP & Rate */}
+                              {/* Items list with MRP, Rate & dedicated Qty column */}
                               <div className="border-t border-slate-300 py-2 space-y-1 text-[9px]">
-                                <div className="grid grid-cols-5 font-bold border-b border-slate-200 pb-1 text-slate-950">
-                                  <span className="col-span-2">Item Description</span>
+                                <div className="grid grid-cols-[3fr_1.4fr_1.4fr_1.1fr_1.6fr] gap-1 font-bold border-b border-slate-200 pb-1 text-slate-950">
+                                  <span className="truncate">Item Description</span>
                                   <span className="text-right">MRP</span>
                                   <span className="text-right">Rate</span>
+                                  <span className="text-center">Qty</span>
                                   <span className="text-right">Total</span>
                                 </div>
                                 {selectedInv.items.map((it, idx) => {
                                   const itemMrp = it.mrp || (it.price > 0 ? Number((it.price * 1.15).toFixed(2)) : it.price);
-                                  const isDiscounted = itemMrp > it.price;
                                   return (
-                                    <div key={idx} className="grid grid-cols-5 gap-1 text-slate-800 items-center">
-                                      <div className="col-span-2 truncate font-sans">
+                                    <div key={idx} className="grid grid-cols-[3fr_1.4fr_1.4fr_1.1fr_1.6fr] gap-1 text-slate-800 items-center">
+                                      <div className="truncate font-sans">
                                         <span className="font-semibold block truncate leading-tight">{it.name}</span>
-                                        <span className="text-[8px] text-slate-400 font-mono">Qty: {it.quantity} {it.unit}</span>
                                       </div>
                                       <span className="text-right font-mono text-slate-700 text-[8.5px]">
                                         {activeTenant.currency || "₹"}{itemMrp.toFixed(2)}
                                       </span>
                                       <span className="text-right font-mono text-slate-700">
                                         {activeTenant.currency || "₹"}{it.price.toFixed(2)}
+                                      </span>
+                                      <span className="text-center font-mono font-bold text-slate-800 text-[8.5px]">
+                                        {it.quantity}
                                       </span>
                                       <span className="text-right font-bold font-mono">
                                         {activeTenant.currency || "₹"}{(it.price * it.quantity).toFixed(2)}
@@ -5736,7 +5728,7 @@ export default function App() {
                                   const selectedInv = invoices.find(inv => inv.id === selectedReprintInvoiceId);
                                   if (!selectedInv) return;
                                   
-                                  const itemsText = selectedInv.items.map(it => `[${it.quantity} ${it.unit}] ${it.name} @ ${activeTenant.currency || "₹"}${it.price} = ${activeTenant.currency || "₹"}${(it.price * it.quantity).toFixed(2)}`).join("\n");
+                                  const itemsText = selectedInv.items.map(it => `[${it.quantity}] ${it.name} @ ${activeTenant.currency || "₹"}${it.price} = ${activeTenant.currency || "₹"}${(it.price * it.quantity).toFixed(2)}`).join("\n");
                                   const textCopy = `
 ========================================
         ${activeTenant.name.toUpperCase()}
@@ -6339,28 +6331,30 @@ Payment Mode:   ${selectedInv.paymentMode}
                 )}
               </div>
 
-              {/* Items Table with MRP & Savings */}
+              {/* Items Table with MRP, Rate & dedicated Qty column */}
               <div className="border-t border-slate-300 pt-2 space-y-2">
-                <div className="grid grid-cols-5 font-bold border-b border-slate-300 pb-1 text-slate-900 text-[10px]">
-                  <span className="col-span-2">Item Description</span>
+                <div className="grid grid-cols-[3fr_1.4fr_1.4fr_1.1fr_1.6fr] gap-1 font-bold border-b border-slate-300 pb-1 text-slate-900 text-[10px]">
+                  <span className="truncate">Item Description</span>
                   <span className="text-right">MRP</span>
                   <span className="text-right">Rate</span>
+                  <span className="text-center">Qty</span>
                   <span className="text-right">Total</span>
                 </div>
                 {showInvoicePrintPreview.items.map((it) => {
                   const itemMrp = it.mrp || (it.price > 0 ? Number((it.price * 1.15).toFixed(2)) : it.price);
-                  const isDiscounted = itemMrp > it.price;
                   return (
-                    <div key={it.productId} className="grid grid-cols-5 gap-1 text-[10px] items-center">
-                      <div className="col-span-2 truncate font-sans">
+                    <div key={it.productId} className="grid grid-cols-[3fr_1.4fr_1.4fr_1.1fr_1.6fr] gap-1 text-[10px] items-center">
+                      <div className="truncate font-sans">
                         <span className="font-semibold block truncate leading-tight">{it.name}</span>
-                        <span className="text-[8.5px] text-slate-500 font-mono">Qty: {it.quantity} {it.unit}</span>
                       </div>
                       <span className="text-right font-mono text-slate-700 text-[9.5px]">
                         {activeTenant.currency || "₹"}{itemMrp.toFixed(2)}
                       </span>
                       <span className="text-right font-mono font-medium text-slate-700">
                         {activeTenant.currency || "₹"}{it.price.toFixed(2)}
+                      </span>
+                      <span className="text-center font-mono font-bold text-slate-800 text-[9.5px]">
+                        {it.quantity}
                       </span>
                       <span className="text-right font-bold font-mono text-slate-900">
                         {activeTenant.currency || "₹"}{(it.price * it.quantity).toFixed(2)}

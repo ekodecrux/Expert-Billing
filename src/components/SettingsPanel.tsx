@@ -1071,7 +1071,7 @@ export default function SettingsPanel({
                     className={`flex-1 bg-transparent border-0 text-slate-900 py-2.5 px-3 text-xs focus:outline-none placeholder-slate-400 font-sans ${!isAdmin ? "cursor-not-allowed text-slate-500" : ""}`}
                   />
                   <span className="bg-slate-100 border-l border-slate-300 text-[10px] font-bold text-slate-600 px-3 py-2.5 shrink-0 select-none">
-                    .expertpos.com
+                    .expertbilling.in
                   </span>
                 </div>
               </div>

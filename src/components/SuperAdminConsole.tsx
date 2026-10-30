@@ -241,7 +241,7 @@ export default function SuperAdminConsole({
     "Wireless Laser Barcode Scanner"
   ]);
   const [featureModulesEnabled, setFeatureModulesEnabled] = useState<Record<string, boolean>>({
-    aiCopilot: true,
+    posAnalytics: true,
     expiryTracking: true,
     loyaltyPoints: true,
     branchTransfers: true,
@@ -852,7 +852,7 @@ export default function SuperAdminConsole({
     systemTheme: "Slate Light Enterprise",
     // Miscellaneous
     softwareVersion: "v4.12.2-stable",
-    emailSmtpServer: "smtp.expertpos.com",
+    emailSmtpServer: "smtp.expertbilling.in",
     transactionCategoryList: "Subscription, Onboarding, Consultation, Support, Addon",
     emailAlertsEnabled: true,
     aboutText: "Expert POS SaaS Enterprise Platform Sandbox.",
@@ -944,7 +944,7 @@ export default function SuperAdminConsole({
   // Generate or Regenerate Client Login Credentials
   const handleGenerateTenantCredentials = (tenant: Tenant) => {
     const generatedPass = "Pass@" + Math.floor(100000 + Math.random() * 900000);
-    const loginEmail = tenant.adminLoginId || tenant.adminEmail || `${tenant.subdomain}@expertpos.com`;
+    const loginEmail = tenant.adminLoginId || tenant.adminEmail || `${tenant.subdomain}@expertbilling.in`;
 
     // 1. Check or update credentialsList
     const existingIndex = credentialsList.findIndex(
@@ -974,7 +974,7 @@ export default function SuperAdminConsole({
         accent: "text-blue-400",
         border: "border-blue-500/30",
         glow: "shadow-blue-500/20",
-        description: `Master Client Admin access for ${tenant.name} (${tenant.subdomain}.expertpos.com)`,
+        description: `Master Client Admin access for ${tenant.name} (${tenant.subdomain}.expertbilling.in)`,
         privileges: [
           "Full Multi-Branch Store Management",
           "Point of Sale & Checkout Operator Access",
@@ -1475,16 +1475,16 @@ export default function SuperAdminConsole({
 
     if (template === "overdue") {
       subject = `ACTION REQUIRED: Outstanding Balance Reminder for ${tenant.name}`;
-      body = `Dear Admin of ${tenant.name},\n\nThis is an actionable notice regarding your outstanding balance of ₹${pendingBillAmount.toLocaleString()} under your ${tenant.tier} tier subscription. Please login to your billing workspace and authorize settlement to avoid temporary sandbox restrictions.\n\nSecure payment link: https://${tenant.subdomain}.expertpos.com/billing/pay\n\nSaaS Billing Operations Team`;
+      body = `Dear Admin of ${tenant.name},\n\nThis is an actionable notice regarding your outstanding balance of ₹${pendingBillAmount.toLocaleString()} under your ${tenant.tier} tier subscription. Please login to your billing workspace and authorize settlement to avoid temporary sandbox restrictions.\n\nSecure payment link: https://${tenant.subdomain}.expertbilling.in/billing/pay\n\nSaaS Billing Operations Team`;
     } else if (template === "renewal") {
       subject = `Notification: Upcoming Subscription Renewal for ${tenant.name}`;
-      body = `Dear Admin of ${tenant.name},\n\nYour ${tenant.tier} tier subscription is scheduled for renewal on ${tenant.subscriptionEndDate || "2027-06-01"}. A renewal fee of ₹${(tenant.monthlySubscriptionFee || 4500).toLocaleString()} will be billed as per your ${tenant.billingCycle || "MONTHLY"} billing schedule.\n\nManage subscription: https://${tenant.subdomain}.expertpos.com/settings/subscription\n\nSaaS Billing Operations Team`;
+      body = `Dear Admin of ${tenant.name},\n\nYour ${tenant.tier} tier subscription is scheduled for renewal on ${tenant.subscriptionEndDate || "2027-06-01"}. A renewal fee of ₹${(tenant.monthlySubscriptionFee || 4500).toLocaleString()} will be billed as per your ${tenant.billingCycle || "MONTHLY"} billing schedule.\n\nManage subscription: https://${tenant.subdomain}.expertbilling.in/settings/subscription\n\nSaaS Billing Operations Team`;
     } else if (template === "kyc") {
       subject = `Compliance Notice: Complete KYC Verification for ${tenant.name}`;
-      body = `Dear Admin of ${tenant.name},\n\nTo comply with digital billing guidelines, we request you to complete your KYC Verification. Your current compliance status is ${tenant.clientVerificationStatus || "PENDING_KYC"}.\n\nPlease upload valid business registry documents via the verification portal to maintain full platform privileges.\n\nCompliance Portal: https://${tenant.subdomain}.expertpos.com/settings/compliance\n\nSaaS Security & Trust Division`;
+      body = `Dear Admin of ${tenant.name},\n\nTo comply with digital billing guidelines, we request you to complete your KYC Verification. Your current compliance status is ${tenant.clientVerificationStatus || "PENDING_KYC"}.\n\nPlease upload valid business registry documents via the verification portal to maintain full platform privileges.\n\nCompliance Portal: https://${tenant.subdomain}.expertbilling.in/settings/compliance\n\nSaaS Security & Trust Division`;
     } else {
       subject = `Announcement: System Maintenance & Upgrades for ${tenant.name}`;
-      body = `Dear Admin of ${tenant.name},\n\nWe would like to inform you that our core server cluster hosting your tenant subdomain '${tenant.subdomain}.expertpos.com' will undergo scheduled performance maintenance this weekend.\n\nNo downtime is expected, but background APIs might undergo short latency fluctuations.\n\nThank you for choosing Expert POS SaaS.`;
+      body = `Dear Admin of ${tenant.name},\n\nWe would like to inform you that our core server cluster hosting your tenant subdomain '${tenant.subdomain}.expertbilling.in' will undergo scheduled performance maintenance this weekend.\n\nNo downtime is expected, but background APIs might undergo short latency fluctuations.\n\nThank you for choosing Expert POS SaaS.`;
     }
 
     setEmailSubject(subject);
@@ -1661,7 +1661,7 @@ export default function SuperAdminConsole({
             </div>
             <div className="min-w-0">
               <p className="text-xs font-bold text-white truncate font-sans">Super Admin</p>
-              <p className="text-[9px] text-slate-400 font-mono truncate">superadmin@expertpos.com</p>
+              <p className="text-[9px] text-slate-400 font-mono truncate">superadmin@expertbilling.in</p>
             </div>
           </div>
           <button
@@ -2182,7 +2182,7 @@ export default function SuperAdminConsole({
                               </div>
                               <div>
                                 <p className="text-xs font-bold text-slate-800 leading-snug">{t.name}</p>
-                                <p className="text-[10px] text-slate-400 font-semibold font-mono tracking-wide">{t.subdomain}.expertpos.com</p>
+                                <p className="text-[10px] text-slate-400 font-semibold font-mono tracking-wide">{t.subdomain}.expertbilling.in</p>
                               </div>
                             </div>
                           </td>
@@ -2956,7 +2956,7 @@ export default function SuperAdminConsole({
                 </div>
                 <h1 className="text-2xl font-black text-white tracking-tight">Onboard New Corporate Client</h1>
                 <p className="text-xs text-slate-300 leading-relaxed font-medium">
-                  Provision new multi-tenant database sandboxes with custom domain handles (<code className="text-blue-300 font-mono">tenant.expertpos.com</code>), resource quotas, pricing contracts, and administrator security credentials.
+                  Provision new multi-tenant database sandboxes with custom domain handles (<code className="text-blue-300 font-mono">tenant.expertbilling.in</code>), resource quotas, pricing contracts, and administrator security credentials.
                 </p>
               </div>
 
@@ -3103,7 +3103,7 @@ export default function SuperAdminConsole({
 
                         <div className="space-y-1.5 sm:col-span-2">
                           <label className="text-[11px] font-extrabold text-slate-700 uppercase tracking-wider block">
-                            Isolated Subdomain Slug (<code className="text-blue-600 font-mono">tenant.expertpos.com</code>)
+                            Isolated Subdomain Slug (<code className="text-blue-600 font-mono">tenant.expertbilling.in</code>)
                           </label>
                           <div className="flex items-center gap-2">
                             <div className="relative flex-1">
@@ -3114,7 +3114,7 @@ export default function SuperAdminConsole({
                                 onChange={(e) => setTenantSubdomain(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ""))}
                                 className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-4 pr-32 py-2.5 text-xs font-mono font-bold text-blue-600 focus:bg-white focus:border-blue-500 focus:outline-none transition-all"
                               />
-                              <span className="absolute right-3 top-2.5 text-xs text-slate-400 font-mono font-bold">.expertpos.com</span>
+                              <span className="absolute right-3 top-2.5 text-xs text-slate-400 font-mono font-bold">.expertbilling.in</span>
                             </div>
                             <button
                               type="button"
@@ -3129,7 +3129,7 @@ export default function SuperAdminConsole({
                           </div>
                           {tenantSubdomain && (
                             <p className="text-[10px] font-mono text-emerald-600 flex items-center gap-1 font-bold mt-1">
-                              <CheckCircle className="w-3 h-3" /> https://{tenantSubdomain}.expertpos.com is available for sandbox binding
+                              <CheckCircle className="w-3 h-3" /> https://{tenantSubdomain}.expertbilling.in is available for sandbox binding
                             </p>
                           )}
                         </div>
@@ -3465,7 +3465,7 @@ export default function SuperAdminConsole({
                         <label className="text-[11px] font-extrabold text-slate-700 uppercase tracking-wider block">Enabled Feature Modules</label>
                         <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
                           {[
-                            { key: "aiCopilot", label: "AI Smart Assistant" },
+                            { key: "posAnalytics", label: "POS Sales Analytics" },
                             { key: "expiryTracking", label: "Expiry & Batch Tracking" },
                             { key: "loyaltyPoints", label: "Customer Loyalty System" },
                             { key: "branchTransfers", label: "Inter-Branch Stock Transfers" },
@@ -3553,7 +3553,7 @@ export default function SuperAdminConsole({
                     </div>
                     <div className="min-w-0 flex-1">
                       <p className="font-extrabold text-white text-sm truncate">{tenantName || "Corporate Client Name"}</p>
-                      <p className="text-[10px] font-mono text-blue-400 truncate mt-0.5">https://{tenantSubdomain || "subdomain"}.expertpos.com</p>
+                      <p className="text-[10px] font-mono text-blue-400 truncate mt-0.5">https://{tenantSubdomain || "subdomain"}.expertbilling.in</p>
                     </div>
                   </div>
 
@@ -4019,7 +4019,7 @@ export default function SuperAdminConsole({
                     <input
                       type="email"
                       required
-                      placeholder="e.g. alice@expertpos.com"
+                      placeholder="e.g. alice@expertbilling.in"
                       value={newEmail}
                       onChange={(e) => setNewEmail(e.target.value)}
                       className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2 px-3 text-xs font-semibold placeholder-slate-400 focus:outline-none focus:border-blue-500 focus:bg-white"
@@ -4252,7 +4252,7 @@ export default function SuperAdminConsole({
                               </div>
                               <div>
                                 <p className="text-xs font-bold text-slate-800 leading-snug">{t.name}</p>
-                                <p className="text-[9px] text-slate-400 font-mono tracking-wider">{t.subdomain}.expertpos.com</p>
+                                <p className="text-[9px] text-slate-400 font-mono tracking-wider">{t.subdomain}.expertbilling.in</p>
                               </div>
                             </div>
                           </td>
@@ -4337,8 +4337,8 @@ export default function SuperAdminConsole({
                                     : `Notification: Upcoming Subscription Renewal for ${t.name}`;
 
                                   const body = type === "overdue"
-                                    ? `Dear Admin of ${t.name},\n\nThis is an actionable notice regarding your outstanding balance of ₹${pendingBillAmount.toLocaleString()} under your ${t.tier} tier subscription. Please login to your billing workspace and authorize settlement to avoid temporary sandbox restrictions.\n\nSecure payment link: https://${t.subdomain}.expertpos.com/billing/pay\n\nSaaS Billing Operations Team`
-                                    : `Dear Admin of ${t.name},\n\nYour ${t.tier} tier subscription is scheduled for renewal on ${t.subscriptionEndDate || "2027-06-01"}. A renewal fee of ₹${(t.monthlySubscriptionFee || 4500).toLocaleString()} will be billed as per your ${t.billingCycle || "MONTHLY"} billing schedule.\n\nManage subscription: https://${t.subdomain}.expertpos.com/settings/subscription\n\nSaaS Billing Operations Team`;
+                                    ? `Dear Admin of ${t.name},\n\nThis is an actionable notice regarding your outstanding balance of ₹${pendingBillAmount.toLocaleString()} under your ${t.tier} tier subscription. Please login to your billing workspace and authorize settlement to avoid temporary sandbox restrictions.\n\nSecure payment link: https://${t.subdomain}.expertbilling.in/billing/pay\n\nSaaS Billing Operations Team`
+                                    : `Dear Admin of ${t.name},\n\nYour ${t.tier} tier subscription is scheduled for renewal on ${t.subscriptionEndDate || "2027-06-01"}. A renewal fee of ₹${(t.monthlySubscriptionFee || 4500).toLocaleString()} will be billed as per your ${t.billingCycle || "MONTHLY"} billing schedule.\n\nManage subscription: https://${t.subdomain}.expertbilling.in/settings/subscription\n\nSaaS Billing Operations Team`;
 
                                   setEmailSubject(subject);
                                   setEmailBody(body);
@@ -5351,7 +5351,7 @@ export default function SuperAdminConsole({
               <p className="text-slate-400">[2024-05-24 10:05:14 UTC] POLICY_AUDIT: Root certificates mapped to tenant isolates...</p>
               <p className="text-emerald-500">[2024-05-24 10:12:44 UTC] DATABASE: SaaS node TENANT-001 sandbox initialized completely.</p>
               <p className="text-emerald-500">[2024-05-24 10:15:30 UTC] DISPATCH: Physical 80mm Thermal Printer dispatched to TENANT-002.</p>
-              <p className="text-slate-400">[2024-05-24 11:20:10 UTC] AUTHENTICATION: Master key superadmin@expertpos.com completed session auth challenge.</p>
+              <p className="text-slate-400">[2024-05-24 11:20:10 UTC] AUTHENTICATION: Master key superadmin@expertbilling.in completed session auth challenge.</p>
               <p className="text-blue-400">[2024-05-24 12:44:00 UTC] ISOLATION_LOCK: Quota values mapped for Tech Solutions (Branches: 5, SKU limit: 100).</p>
               <p className="text-amber-400">[2024-05-24 13:00:15 UTC] BILLING_SYNC: Corporate monthly subscription ledger generated for 9 tenants.</p>
               <p className="text-emerald-400">[2024-05-24 14:02:11 UTC] BACKUP: Manual export JSON file completed on sovereign request.</p>
@@ -6303,7 +6303,7 @@ export default function SuperAdminConsole({
               <div className="grid grid-cols-2 gap-4 border-b border-slate-800/40 pb-4">
                 <div>
                   <p className="text-[9px] text-slate-500 uppercase tracking-widest mb-1">Domain URL</p>
-                  <p className="font-mono text-blue-400 font-bold">{viewingTenant.subdomain}.expertpos.com</p>
+                  <p className="font-mono text-blue-400 font-bold">{viewingTenant.subdomain}.expertbilling.in</p>
                 </div>
                 <div>
                   <p className="text-[9px] text-slate-500 uppercase tracking-widest mb-1">KYC Status</p>
@@ -7364,7 +7364,7 @@ export default function SuperAdminConsole({
                 </div>
                 <div className="flex justify-between items-center text-slate-200">
                   <span className="text-slate-500">Tenant Domain:</span>
-                  <span className="font-bold text-blue-400">https://{showOnboardingSuccessModal.tenantSubdomain}.expertpos.com</span>
+                  <span className="font-bold text-blue-400">https://{showOnboardingSuccessModal.tenantSubdomain}.expertbilling.in</span>
                 </div>
                 <div className="flex justify-between items-center text-slate-200">
                   <span className="text-slate-500">Admin Login UID:</span>
@@ -7395,7 +7395,7 @@ export default function SuperAdminConsole({
                 <button
                   type="button"
                   onClick={() => {
-                    const text = `EXPERT POS CLIENT ONBOARDING PACK\n--------------------------------\nClient Name: ${showOnboardingSuccessModal.tenantName}\nDomain: https://${showOnboardingSuccessModal.tenantSubdomain}.expertpos.com\nAdmin Login: ${showOnboardingSuccessModal.adminLoginId}\nPassword: ${showOnboardingSuccessModal.adminPassword}\nPlan: ${showOnboardingSuccessModal.tier}\nGSTIN: ${showOnboardingSuccessModal.gstin}`;
+                    const text = `EXPERT POS CLIENT ONBOARDING PACK\n--------------------------------\nClient Name: ${showOnboardingSuccessModal.tenantName}\nDomain: https://${showOnboardingSuccessModal.tenantSubdomain}.expertbilling.in\nAdmin Login: ${showOnboardingSuccessModal.adminLoginId}\nPassword: ${showOnboardingSuccessModal.adminPassword}\nPlan: ${showOnboardingSuccessModal.tier}\nGSTIN: ${showOnboardingSuccessModal.gstin}`;
                     navigator.clipboard.writeText(text);
                     alert("Onboarding Welcome Credentials copied to clipboard!");
                   }}

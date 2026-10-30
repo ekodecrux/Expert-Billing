@@ -1,0 +1,27 @@
+{
+  "development": {
+    "host": "145.79.209.120",
+    "port": 3306,
+    "user": "u559264694_expertbilling",
+    "password": "Pos@2026",
+    "database": "u559264694_expertbilling",
+    "waitForConnections": true,
+    "connectionLimit": 10,
+    "queueLimit": 0
+  },
+  "production": {
+    "host": "localhost",
+    "port": 3306,
+    "user": "u559264694_expertbilling",
+    "password": "Pos@2026",
+    "database": "u559264694_expertbilling",
+    "waitForConnections": true,
+    "connectionLimit": 25,
+    "queueLimit": 0
+  },
+  "sshTunnel": {
+    "host": "145.79.209.120",
+    "port": 65002,
+    "username": "u559264694"
+  }
+}
