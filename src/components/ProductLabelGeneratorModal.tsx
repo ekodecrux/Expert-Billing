@@ -359,7 +359,7 @@ export const ProductLabelGeneratorModal: React.FC<ProductLabelGeneratorModalProp
           <div>
             ${
               opt.showMrp && hasMrp
-                ? `<span style="font-size: 7px; text-decoration: line-through; color: #555; font-family: monospace;">MRP:${opt.currencySymbol}${prod.mrp?.toFixed(2)}</span>`
+                ? `<span style="font-size: 7px; color: #555; font-family: monospace;">MRP:${opt.currencySymbol}${prod.mrp?.toFixed(2)}</span>`
                 : ""
             }
             <div style="font-size: 11px; font-weight: 900; font-family: monospace; line-height: 1;">
@@ -625,8 +625,8 @@ export const ProductLabelGeneratorModal: React.FC<ProductLabelGeneratorModalProp
                         <div className="font-mono font-black text-emerald-600 text-sm">
                           {currencySymbol}{activeSingleProduct.price.toFixed(2)}
                         </div>
-                        {activeSingleProduct.mrp && activeSingleProduct.mrp > activeSingleProduct.price && (
-                          <div className="text-[10px] text-slate-400 line-through font-mono">
+                        {activeSingleProduct.mrp && (
+                          <div className="text-[10px] text-slate-500 font-mono">
                             MRP: {currencySymbol}{activeSingleProduct.mrp.toFixed(2)}
                           </div>
                         )}
@@ -998,7 +998,7 @@ export const ProductLabelGeneratorModal: React.FC<ProductLabelGeneratorModalProp
                           <div className="flex items-center justify-between my-1 px-1">
                             <div>
                               {designOptions.showMrp && hasMrp && (
-                                <div className="text-[9px] text-stone-400 line-through font-mono leading-none">
+                                <div className="text-[9px] text-stone-500 font-mono leading-none">
                                   MRP: {currencySymbol}{product.mrp?.toFixed(2)}
                                 </div>
                               )}

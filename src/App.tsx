@@ -5573,7 +5573,7 @@ export default function App() {
                                         <span className="font-semibold block truncate leading-tight">{it.name}</span>
                                         <span className="text-[8px] text-slate-400 font-mono">Qty: {it.quantity} {it.unit}</span>
                                       </div>
-                                      <span className={`text-right font-mono ${isDiscounted ? "text-slate-400 line-through text-[8.5px]" : "text-slate-600"}`}>
+                                      <span className="text-right font-mono text-slate-700 text-[8.5px]">
                                         {activeTenant.currency || "₹"}{itemMrp.toFixed(2)}
                                       </span>
                                       <span className="text-right font-mono text-slate-700">
@@ -5609,7 +5609,7 @@ export default function App() {
                               <div className="border-t border-dashed border-slate-300 pt-2 space-y-0.5 text-[9.5px]">
                                 <div className="flex justify-between">
                                   <span>Total MRP:</span>
-                                  <span className="font-mono text-slate-500 line-through">
+                                  <span className="font-mono text-slate-700 font-medium">
                                     {activeTenant.currency || "₹"}
                                     {selectedInv.items.reduce((acc, it) => {
                                       const itemMrp = it.mrp || (it.price > 0 ? Number((it.price * 1.15).toFixed(2)) : it.price);
@@ -6356,7 +6356,7 @@ Payment Mode:   ${selectedInv.paymentMode}
                         <span className="font-semibold block truncate leading-tight">{it.name}</span>
                         <span className="text-[8.5px] text-slate-500 font-mono">Qty: {it.quantity} {it.unit}</span>
                       </div>
-                      <span className={`text-right font-mono ${isDiscounted ? "text-slate-400 line-through text-[9px]" : "text-slate-600"}`}>
+                      <span className="text-right font-mono text-slate-700 text-[9.5px]">
                         {activeTenant.currency || "₹"}{itemMrp.toFixed(2)}
                       </span>
                       <span className="text-right font-mono font-medium text-slate-700">
@@ -6392,7 +6392,7 @@ Payment Mode:   ${selectedInv.paymentMode}
               <div className="border-t border-dashed border-slate-300 pt-2 space-y-1">
                 <div className="flex justify-between">
                   <span>Total MRP Value:</span>
-                  <span className="font-mono text-slate-500 line-through">
+                  <span className="font-mono text-slate-700 font-medium">
                     {activeTenant.currency || "₹"}
                     {showInvoicePrintPreview.items.reduce((acc, it) => {
                       const itemMrp = it.mrp || (it.price > 0 ? Number((it.price * 1.15).toFixed(2)) : it.price);
