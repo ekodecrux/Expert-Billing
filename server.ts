@@ -708,29 +708,21 @@ app.delete("/api/branches/:id", (req, res) => {
 
 // Production & Development server setup
 (async () => {
+  const isProduction = process.env.NODE_ENV === "production";
   const distPath = path.join(process.cwd(), "dist");
   const indexPath = path.join(distPath, "index.html");
 
-  // In production, if dist is missing, auto-build so it never throws 503
-  if ((process.env.NODE_ENV === "production" || !process.env.NODE_ENV) && !fs.existsSync(indexPath)) {
-    console.log("[server] dist/index.html not found, executing vite build...");
-    try {
-      const { execSync } = await import("child_process");
-      execSync("npx vite build", { stdio: "inherit" });
-    } catch (e) {
-      console.error("[server] Auto-build failed:", e);
-    }
-  }
-
-  if (process.env.NODE_ENV !== "production" && !fs.existsSync(indexPath)) {
+  if (!isProduction) {
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: "spa",
     });
     app.use(vite.middlewares);
   } else {
-    app.use(express.static(distPath));
-    app.get("*", (req, res) => {
+    if (fs.existsSync(distPath)) {
+      app.use(express.static(distPath));
+    }
+    app.get("*", (_req, res) => {
       if (fs.existsSync(indexPath)) {
         res.sendFile(indexPath);
       } else {

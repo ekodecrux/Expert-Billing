@@ -2020,12 +2020,20 @@ export default function SettingsPanel({
               </p>
 
               <div className="flex flex-col gap-2 pt-1.5">
+                <a
+                  href="/api/database/download"
+                  download="expertbilling_production.sql"
+                  className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs py-2 px-4 rounded-xl transition-all flex items-center justify-center gap-2 cursor-pointer shadow-sm text-center"
+                >
+                  <Database className="w-3.5 h-3.5" /> Download MySQL Production SQL (.sql)
+                </a>
+
                 <button
                   type="button"
                   onClick={handleExportBackup}
                   className="w-full bg-white hover:bg-slate-50 text-slate-800 border border-slate-300 font-bold text-xs py-2 px-4 rounded-xl transition-all flex items-center justify-center gap-2 cursor-pointer shadow-2xs"
                 >
-                  📥 Export Database Backup
+                  📥 Export Database Backup (JSON)
                 </button>
 
                 <button
