@@ -1047,6 +1047,8 @@ export default function SuperAdminConsole({
       name,
       subdomain,
       adminEmail: email,
+      adminLoginId: loginId,
+      adminPassword: password,
       phone,
       currency: "₹",
       tier: tenantTier,
@@ -1063,7 +1065,7 @@ export default function SuperAdminConsole({
       contractDurationMonths: tenantContractDuration,
       renewalStatus: "AUTO_RENEW",
       onboardingSetupStatus: "COMPLETED",
-      hardwareProvisioned: ["80mm Thermal Printer"],
+      hardwareProvisioned: hardwareAllocated && hardwareAllocated.length > 0 ? hardwareAllocated : ["80mm Thermal Printer"],
       onboardingNotes: tenantNotes,
       clientVerificationStatus: "VERIFIED",
       gstinRegNumber: tenantGstin || "07EXPAID" + Math.floor(1000 + Math.random() * 9000) + "A1Z1",
@@ -3460,6 +3462,38 @@ export default function SuperAdminConsole({
                         </div>
                       </div>
 
+                      {/* Hardware Bundle Allocation */}
+                      <div className="space-y-2 pt-2">
+                        <label className="text-[11px] font-extrabold text-slate-700 uppercase tracking-wider block">Provisioned Hardware Bundle</label>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                          {[
+                            "80mm Thermal Receipt Printer",
+                            "Heavy Duty Cash Drawer",
+                            "Wireless Laser Barcode Scanner",
+                            "Touch POS Terminal Display"
+                          ].map((hw) => {
+                            const isSelected = hardwareAllocated?.includes(hw);
+                            return (
+                              <label key={hw} className="flex items-center gap-2.5 p-2.5 bg-slate-50 rounded-xl border border-slate-200/60 text-xs font-bold text-slate-700 cursor-pointer hover:bg-slate-100">
+                                <input
+                                  type="checkbox"
+                                  checked={!!isSelected}
+                                  onChange={(e) => {
+                                    if (e.target.checked) {
+                                      setHardwareAllocated(prev => [...(prev || []), hw]);
+                                    } else {
+                                      setHardwareAllocated(prev => (prev || []).filter(item => item !== hw));
+                                    }
+                                  }}
+                                  className="w-4 h-4 text-purple-600 rounded border-slate-300 focus:ring-purple-500"
+                                />
+                                <span>{hw}</span>
+                              </label>
+                            );
+                          })}
+                        </div>
+                      </div>
+
                       {/* Feature Module Toggles */}
                       <div className="space-y-2 pt-2">
                         <label className="text-[11px] font-extrabold text-slate-700 uppercase tracking-wider block">Enabled Feature Modules</label>
@@ -3474,8 +3508,8 @@ export default function SuperAdminConsole({
                             <label key={mod.key} className="flex items-center gap-2 p-2.5 bg-slate-50 rounded-xl border border-slate-200/60 text-xs font-bold text-slate-700 cursor-pointer hover:bg-slate-100">
                               <input
                                 type="checkbox"
-                                checked={!!featureModulesEnabled[mod.key]}
-                                onChange={(e) => setFeatureModulesEnabled({ ...featureModulesEnabled, [mod.key]: e.target.checked })}
+                                checked={!!(featureModulesEnabled && featureModulesEnabled[mod.key])}
+                                onChange={(e) => setFeatureModulesEnabled(prev => ({ ...(prev || {}), [mod.key]: e.target.checked }))}
                                 className="w-4 h-4 text-blue-600 rounded border-slate-300 focus:ring-blue-500"
                               />
                               <span>{mod.label}</span>
@@ -3583,15 +3617,15 @@ export default function SuperAdminConsole({
                   <div className="space-y-1.5 pt-2 border-t border-slate-800 text-xs">
                     <div className="flex justify-between text-slate-400">
                       <span>Setup Fee:</span>
-                      <span className="font-mono text-white font-bold">₹ {tenantOnboardingFee.toLocaleString()}</span>
+                      <span className="font-mono text-white font-bold">₹ {(Number(tenantOnboardingFee) || 0).toLocaleString()}</span>
                     </div>
                     <div className="flex justify-between text-slate-400">
                       <span>Monthly Subscription:</span>
-                      <span className="font-mono text-white font-bold">₹ {tenantSubscriptionFee.toLocaleString()}/mo</span>
+                      <span className="font-mono text-white font-bold">₹ {(Number(tenantSubscriptionFee) || 0).toLocaleString()}/mo</span>
                     </div>
                     <div className="flex justify-between text-slate-400">
                       <span>Contract Tenure:</span>
-                      <span className="font-mono text-slate-300">{tenantContractDuration} Months</span>
+                      <span className="font-mono text-slate-300">{tenantContractDuration || 12} Months</span>
                     </div>
                   </div>
                 </div>
@@ -7348,7 +7382,7 @@ export default function SuperAdminConsole({
               </div>
               <button
                 type="button"
-                onClick={() => setShowOnboardingSuccessModal(false)}
+                onClick={() => setShowOnboardingSuccessModal(null)}
                 className="p-2 hover:bg-white/10 rounded-xl transition-all text-slate-300 hover:text-white cursor-pointer"
               >
                 <X className="w-5 h-5" />
@@ -7360,23 +7394,23 @@ export default function SuperAdminConsole({
                 <p className="text-[10px] text-slate-400 font-sans font-extrabold uppercase tracking-widest">Client Portal Credentials Summary</p>
                 <div className="flex justify-between items-center text-slate-200">
                   <span className="text-slate-500">Corporate Name:</span>
-                  <span className="font-bold text-white">{showOnboardingSuccessModal.tenantName}</span>
+                  <span className="font-bold text-white">{showOnboardingSuccessModal.name || (showOnboardingSuccessModal as any).tenantName || "Corporate Client"}</span>
                 </div>
                 <div className="flex justify-between items-center text-slate-200">
                   <span className="text-slate-500">Tenant Domain:</span>
-                  <span className="font-bold text-blue-400">https://{showOnboardingSuccessModal.tenantSubdomain}.expertbilling.in</span>
+                  <span className="font-bold text-blue-400">https://{showOnboardingSuccessModal.subdomain || (showOnboardingSuccessModal as any).tenantSubdomain || "client"}.expertbilling.in</span>
                 </div>
                 <div className="flex justify-between items-center text-slate-200">
                   <span className="text-slate-500">Admin Login UID:</span>
-                  <span className="font-bold text-emerald-400">{showOnboardingSuccessModal.adminLoginId}</span>
+                  <span className="font-bold text-emerald-400">{showOnboardingSuccessModal.adminLoginId || tenantAdminLoginId || "admin"}</span>
                 </div>
                 <div className="flex justify-between items-center text-slate-200">
                   <span className="text-slate-500">Password:</span>
-                  <span className="font-bold text-amber-400">{showOnboardingSuccessModal.adminPassword}</span>
+                  <span className="font-bold text-amber-400">{showOnboardingSuccessModal.adminPassword || tenantAdminPassword || "••••••••"}</span>
                 </div>
                 <div className="flex justify-between items-center text-slate-200">
                   <span className="text-slate-500">Plan Tier:</span>
-                  <span className="font-bold text-purple-400">{showOnboardingSuccessModal.tier} PLAN</span>
+                  <span className="font-bold text-purple-400">{showOnboardingSuccessModal.tier || "GROWTH"} PLAN</span>
                 </div>
               </div>
 
@@ -7387,7 +7421,7 @@ export default function SuperAdminConsole({
                 <ul className="list-disc list-inside text-[11px] space-y-1 text-slate-300">
                   <li>Provisioned isolated multi-tenant database slice and GSTIN record.</li>
                   <li>Bound corporate portal address handle to global load balancer.</li>
-                  <li>Logged initial onboarding setup fee invoice (₹ {showOnboardingSuccessModal.onboardingFee.toLocaleString()}).</li>
+                  <li>Logged initial onboarding setup fee invoice (₹ {((showOnboardingSuccessModal.onboardingFeePaid ?? (showOnboardingSuccessModal as any).onboardingFee) || 0).toLocaleString()}).</li>
                 </ul>
               </div>
 
@@ -7395,9 +7429,15 @@ export default function SuperAdminConsole({
                 <button
                   type="button"
                   onClick={() => {
-                    const text = `EXPERT POS CLIENT ONBOARDING PACK\n--------------------------------\nClient Name: ${showOnboardingSuccessModal.tenantName}\nDomain: https://${showOnboardingSuccessModal.tenantSubdomain}.expertbilling.in\nAdmin Login: ${showOnboardingSuccessModal.adminLoginId}\nPassword: ${showOnboardingSuccessModal.adminPassword}\nPlan: ${showOnboardingSuccessModal.tier}\nGSTIN: ${showOnboardingSuccessModal.gstin}`;
+                    const cName = showOnboardingSuccessModal.name || (showOnboardingSuccessModal as any).tenantName || "Corporate Client";
+                    const cDomain = showOnboardingSuccessModal.subdomain || (showOnboardingSuccessModal as any).tenantSubdomain || "client";
+                    const cUid = showOnboardingSuccessModal.adminLoginId || tenantAdminLoginId || "admin";
+                    const cPass = showOnboardingSuccessModal.adminPassword || tenantAdminPassword || "";
+                    const cPlan = showOnboardingSuccessModal.tier || "GROWTH";
+                    const cGstin = showOnboardingSuccessModal.gstinRegNumber || (showOnboardingSuccessModal as any).gstin || "";
+                    const text = `EXPERT POS CLIENT ONBOARDING PACK\n--------------------------------\nClient Name: ${cName}\nDomain: https://${cDomain}.expertbilling.in\nAdmin Login: ${cUid}\nPassword: ${cPass}\nPlan: ${cPlan}\nGSTIN: ${cGstin}`;
                     navigator.clipboard.writeText(text);
-                    alert("Onboarding Welcome Credentials copied to clipboard!");
+                    triggerNotification("Onboarding Welcome Credentials copied to clipboard!", "success");
                   }}
                   className="flex-1 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-extrabold flex items-center justify-center gap-2 transition-all cursor-pointer shadow-lg shadow-blue-500/20"
                 >
@@ -7406,7 +7446,7 @@ export default function SuperAdminConsole({
                 </button>
                 <button
                   type="button"
-                  onClick={() => setShowOnboardingSuccessModal(false)}
+                  onClick={() => setShowOnboardingSuccessModal(null)}
                   className="px-5 py-3 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-xs font-bold transition-all cursor-pointer"
                 >
                   Close
