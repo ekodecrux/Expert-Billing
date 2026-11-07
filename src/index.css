@@ -1,8 +1,8 @@
-@import url('https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400..800;1,400..800&family=Playfair+Display:ital,wght@0,400..900;1,400..900&family=Lora:ital,wght@0,400..700;1,400..700&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400..800;1,400..800&family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&family=Lora:ital,wght@0,400..700;1,400..700&family=Outfit:wght@400;500;600;700;800&family=Playfair+Display:ital,wght@0,400..900;1,400..900&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Roboto:wght@400;500;700&family=Space+Grotesk:wght@400;500;600;700&display=swap');
 @import "tailwindcss";
 
 @theme {
-  --font-sans: "EB Garamond", "Lora", "Georgia", serif;
+  --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   --font-display: "Playfair Display", "Georgia", serif;
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
 
@@ -24,6 +24,23 @@
   --color-slate-800: #3c372c;
   --color-slate-900: #221f19;
 }
+
+/* Tenant Custom Font Families */
+.tenant-font-inter { font-family: "Inter", system-ui, -apple-system, sans-serif !important; }
+.tenant-font-outfit { font-family: "Outfit", system-ui, -apple-system, sans-serif !important; }
+.tenant-font-jakarta { font-family: "Plus Jakarta Sans", system-ui, -apple-system, sans-serif !important; }
+.tenant-font-roboto { font-family: "Roboto", system-ui, -apple-system, sans-serif !important; }
+.tenant-font-playfair { font-family: "Playfair Display", Georgia, serif !important; }
+.tenant-font-grotesk { font-family: "Space Grotesk", system-ui, -apple-system, sans-serif !important; }
+.tenant-font-mono { font-family: "JetBrains Mono", monospace !important; }
+.tenant-font-garamond { font-family: "EB Garamond", serif !important; }
+.tenant-font-system { font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif !important; }
+
+/* Tenant Custom Font Scales */
+.tenant-scale-compact { font-size: 0.90rem; }
+.tenant-scale-standard { font-size: 1rem; }
+.tenant-scale-spacious { font-size: 1.08rem; }
+.tenant-scale-large { font-size: 1.20rem; }
 
 @layer base {
   body {

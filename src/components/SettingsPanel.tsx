@@ -3,7 +3,7 @@ import {
   User, Store, Printer, Database, Save, HelpCircle, 
   Volume2, VolumeX, RefreshCw, Trash2, Key, List, 
   Settings, CheckCircle, Smartphone, Globe, Plus, Trash, Users,
-  Eye, Edit, X, Check, Mail, Lock, ShieldAlert,
+  Eye, Edit, X, Check, Mail, Lock, Unlock, ShieldAlert,
   Sliders, Briefcase, Package, Clock, Plug, Layout, Zap, Percent, Cpu, Laptop, ChevronRight, Receipt, DollarSign,
   Upload, Image as ImageIcon, Building, RotateCcw, Camera, Sparkles, Tag, HardDrive, FileCode
 } from "lucide-react";
@@ -166,6 +166,20 @@ export default function SettingsPanel({
   const [profEmail, setProfEmail] = useState(currentUserEmail);
   const [profPassword, setProfPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [profEmailUnlocked, setProfEmailUnlocked] = useState(false);
+  const [selectedProfileEmail, setSelectedProfileEmail] = useState(currentUserEmail);
+
+  const handleSelectProfileToEdit = (email: string) => {
+    setSelectedProfileEmail(email);
+    const target = credentialsList.find(c => c.email.toLowerCase() === email.toLowerCase());
+    if (target) {
+      setProfName(target.name);
+      setProfEmail(target.email);
+      setProfPassword(target.password || "");
+      setProfEmailUnlocked(false);
+      triggerNotification(`Profile view changed to ${target.name} (${target.role})`, "success");
+    }
+  };
 
   // --- Category state variables ---
   const [newCategoryName, setNewCategoryName] = useState("");
@@ -489,16 +503,23 @@ export default function SettingsPanel({
       triggerNotification("Profile Name cannot be blank.", "warning");
       return;
     }
+    if (!profEmail.trim()) {
+      triggerNotification("Profile Email cannot be blank.", "warning");
+      return;
+    }
 
-    // 1. Update the master states
-    onUpdateCashierName(profName.trim());
+    // 1. Update the master cashier name if active user was edited
+    if (selectedProfileEmail.toLowerCase() === currentUserEmail.toLowerCase()) {
+      onUpdateCashierName(profName.trim());
+    }
 
-    // 2. Update the credentials list so password & name are persisted correctly
+    // 2. Update the credentials list so password & name & email are persisted correctly
     const updatedList = credentialsList.map(c => {
-      if (c.email === currentUserEmail) {
+      if (c.email.toLowerCase() === selectedProfileEmail.toLowerCase() || c.email.toLowerCase() === profEmail.toLowerCase()) {
         return {
           ...c,
           name: profName.trim(),
+          email: profEmail.trim(),
           password: profPassword.trim() || c.password
         };
       }
@@ -507,8 +528,10 @@ export default function SettingsPanel({
 
     onUpdateCredentials(updatedList);
     localStorage.setItem("expert_aid_credentials", JSON.stringify(updatedList));
+    setSelectedProfileEmail(profEmail.trim());
+    setProfEmailUnlocked(false);
 
-    triggerNotification("Your security credentials & user profile settings updated successfully!", "success");
+    triggerNotification(`Security credentials & profile for "${profName}" updated successfully!`, "success");
   };
 
   const handleSaveTenant = (e?: React.FormEvent) => {
@@ -726,46 +749,123 @@ export default function SettingsPanel({
 
       {activeSubTab === "profile" && (
         /* ================= SUB-TAB: USER PROFILE SETTINGS ================= */
-        <form onSubmit={handleSaveProfile} className="space-y-6 max-w-xl">
-          <div className="space-y-4">
-            <div className="flex items-center gap-3 p-4 bg-slate-50 rounded-2xl border border-slate-200">
-              <div className="w-12 h-12 rounded-xl bg-purple-600/10 text-purple-700 flex items-center justify-center text-lg font-black shrink-0 border border-purple-200">
-                {currentCashierName.substring(0,2).toUpperCase()}
+        <div className="space-y-6 max-w-2xl">
+          {/* Option to change profile / select account */}
+          {credentialsList && credentialsList.length > 0 && (
+            <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 sm:p-5 space-y-3">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-200/80 pb-3">
+                <div>
+                  <h3 className="text-xs font-black uppercase text-slate-900 tracking-wider flex items-center gap-2 font-mono">
+                    <Users className="w-4 h-4 text-purple-600" />
+                    Option to Change Profile / Switch Account
+                  </h3>
+                  <p className="text-[11px] text-slate-500 mt-0.5">
+                    Select any profile below to inspect credentials, adjust access keys, or update security signatures.
+                  </p>
+                </div>
+                <span className="text-[10px] font-mono bg-purple-100 text-purple-800 px-2.5 py-0.5 rounded-full font-bold self-start sm:self-auto">
+                  {credentialsList.length} Profiles
+                </span>
               </div>
-              <div>
-                <p className="font-extrabold text-sm text-slate-900 leading-snug">{currentCashierName}</p>
-                <div className="flex items-center gap-2 mt-1">
-                  <span className="text-[10px] text-slate-700 font-mono select-all shrink-0 bg-white border border-slate-200 px-2 py-0.5 rounded leading-none uppercase font-bold">{currentRole}</span>
-                  <p className="text-[10px] text-slate-500 font-medium">{currentUserEmail}</p>
+
+              {/* Profiles Grid */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
+                {credentialsList.map((cred, idx) => {
+                  const isSelected = cred.email.toLowerCase() === selectedProfileEmail.toLowerCase();
+                  return (
+                    <button
+                      key={idx}
+                      type="button"
+                      onClick={() => handleSelectProfileToEdit(cred.email)}
+                      className={`p-3 rounded-xl border text-left flex items-center gap-3 transition-all cursor-pointer ${
+                        isSelected
+                          ? "bg-purple-50/80 border-purple-400 shadow-sm ring-2 ring-purple-500/20"
+                          : "bg-white border-slate-200 hover:border-slate-300 hover:bg-slate-100/60"
+                      }`}
+                    >
+                      <div className={`w-9 h-9 rounded-xl flex items-center justify-center font-black text-xs shrink-0 ${
+                        isSelected 
+                          ? "bg-purple-600 text-white shadow-sm" 
+                          : "bg-purple-100 text-purple-700 border border-purple-200"
+                      }`}>
+                        {cred.name.substring(0, 2).toUpperCase()}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-xs font-bold text-slate-900 truncate">{cred.name}</p>
+                        <p className="text-[10px] text-slate-500 font-mono truncate">{cred.email}</p>
+                      </div>
+                      <span className="text-[9px] font-mono px-2 py-0.5 rounded uppercase font-bold bg-slate-100 text-slate-700 shrink-0 border border-slate-200">
+                        {cred.role}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          <form onSubmit={handleSaveProfile} className="space-y-6">
+            <div className="space-y-4">
+              <div className="flex items-center gap-3 p-4 bg-slate-50 rounded-2xl border border-slate-200">
+                <div className="w-12 h-12 rounded-xl bg-purple-600/10 text-purple-700 flex items-center justify-center text-lg font-black shrink-0 border border-purple-200">
+                  {profName.substring(0, 2).toUpperCase()}
+                </div>
+                <div>
+                  <p className="font-extrabold text-sm text-slate-900 leading-snug">{profName}</p>
+                  <div className="flex items-center gap-2 mt-1">
+                    <span className="text-[10px] text-slate-700 font-mono select-all shrink-0 bg-white border border-slate-200 px-2 py-0.5 rounded leading-none uppercase font-bold">
+                      {credentialsList.find(c => c.email.toLowerCase() === selectedProfileEmail.toLowerCase())?.role || currentRole}
+                    </span>
+                    <p className="text-[10px] text-slate-500 font-medium font-mono">{profEmail}</p>
+                  </div>
                 </div>
               </div>
-            </div>
 
-            <div>
-              <label className="block text-[11px] text-slate-600 font-bold uppercase tracking-wider mb-1.5 font-sans">
-                Full Display Name / Identity Signature
-              </label>
-              <input
-                type="text"
-                required
-                value={profName}
-                onChange={(e) => setProfName(e.target.value)}
-                className="w-full bg-white border border-slate-300 text-slate-900 rounded-xl py-2 px-3 text-xs focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-600 placeholder-slate-400 font-sans shadow-2xs"
-              />
-            </div>
+              <div>
+                <label className="block text-[11px] text-slate-600 font-bold uppercase tracking-wider mb-1.5 font-sans">
+                  Full Display Name / Identity Signature
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={profName}
+                  onChange={(e) => setProfName(e.target.value)}
+                  className="w-full bg-white border border-slate-300 text-slate-900 rounded-xl py-2 px-3 text-xs focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-600 placeholder-slate-400 font-sans shadow-2xs"
+                />
+              </div>
 
-            <div>
-              <label className="block text-[11px] text-slate-600 font-bold uppercase tracking-wider mb-1.5 font-sans">
-                Terminal Email Address/ID (Locked for security)
-              </label>
-              <input
-                type="text"
-                disabled
-                value={profEmail}
-                className="w-full bg-slate-100 border border-slate-200 text-slate-500 rounded-xl py-2 px-3 text-xs focus:outline-none cursor-not-allowed font-mono"
-              />
-              <p className="text-[10px] text-slate-500 mt-1">To update your coordinate email, please request support from the SaaS tenant sovereign.</p>
-            </div>
+              <div>
+                <div className="flex justify-between items-center mb-1.5">
+                  <label className="block text-[11px] text-slate-600 font-bold uppercase tracking-wider font-sans">
+                    Terminal Email Address/ID {profEmailUnlocked ? "(Editing Unlocked)" : "(Locked for security)"}
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => setProfEmailUnlocked(!profEmailUnlocked)}
+                    className="text-[10px] text-purple-600 hover:text-purple-800 font-bold flex items-center gap-1 cursor-pointer"
+                  >
+                    {profEmailUnlocked ? <Lock className="w-3 h-3" /> : <Unlock className="w-3 h-3" />}
+                    {profEmailUnlocked ? "Lock Email" : "Unlock to Change"}
+                  </button>
+                </div>
+                <input
+                  type="email"
+                  required
+                  disabled={!profEmailUnlocked}
+                  value={profEmail}
+                  onChange={(e) => setProfEmail(e.target.value)}
+                  className={`w-full rounded-xl py-2 px-3 text-xs font-mono transition-all ${
+                    profEmailUnlocked
+                      ? "bg-white border border-purple-400 text-slate-900 focus:outline-none focus:ring-2 focus:ring-purple-500/20"
+                      : "bg-slate-100 border border-slate-200 text-slate-500 cursor-not-allowed"
+                  }`}
+                />
+                <p className="text-[10px] text-slate-500 mt-1">
+                  {profEmailUnlocked
+                    ? "Email coordinate unlocked. Ensure this email is unique across systems."
+                    : "To update your coordinate email, click 'Unlock to Change' above or request support from the SaaS tenant sovereign."}
+                </p>
+              </div>
 
             <div>
               <div className="flex justify-between items-center mb-1.5">
@@ -790,16 +890,17 @@ export default function SettingsPanel({
             </div>
           </div>
 
-          <div className="pt-2">
-            <button
-              type="submit"
-              className="bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs py-2.5 px-6 rounded-xl shadow-md transition-all flex items-center gap-2 cursor-pointer uppercase tracking-wider font-sans whitespace-nowrap"
-            >
-              <Save className="w-4 h-4 shrink-0" />
-              Update Profile Credentials
-            </button>
-          </div>
-        </form>
+            <div className="pt-2">
+              <button
+                type="submit"
+                className="bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs py-2.5 px-6 rounded-xl shadow-md transition-all flex items-center gap-2 cursor-pointer uppercase tracking-wider font-sans whitespace-nowrap"
+              >
+                <Save className="w-4 h-4 shrink-0" />
+                Update Profile Credentials
+              </button>
+            </div>
+          </form>
+        </div>
       )}
 
       {activeSubTab === "tenant" && (

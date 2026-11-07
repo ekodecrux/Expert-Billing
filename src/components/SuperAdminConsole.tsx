@@ -76,9 +76,31 @@ import {
   ArrowUpRight,
   PieChart,
   ListFilter,
-  Building2
+  Building2,
+  Store,
+  List,
+  Unlock,
+  ImageIcon,
+  Utensils,
+  ShoppingBag,
+  ShoppingCart,
+  Pill,
+  Scissors,
+  Type
 } from "lucide-react";
-import { UserRole, Tenant, printElementById, saveElementAsPDF } from "../types";
+import { 
+  UserRole, 
+  Tenant, 
+  printElementById, 
+  saveElementAsPDF,
+  BusinessSector,
+  TenantFontFamily,
+  TenantFontSizeScale,
+  TenantTypography,
+  BUSINESS_SECTORS_CATALOG,
+  TENANT_FONT_OPTIONS,
+  TENANT_FONT_SIZE_OPTIONS
+} from "../types";
 import { ExpertAidLogo } from "./ExpertAidLogo";
 
 interface AccessProfile {
@@ -166,6 +188,7 @@ interface SuperAdminConsoleProps {
   onSelectTenant: (id: string) => void;
   onLogout?: () => void;
   onImpersonateClient?: (email: string) => void;
+  onSwitchProfile?: (profile: AccessProfile) => void;
 }
 
 export default function SuperAdminConsole({
@@ -177,10 +200,73 @@ export default function SuperAdminConsole({
   activeTenantId,
   onSelectTenant,
   onLogout,
-  onImpersonateClient
+  onImpersonateClient,
+  onSwitchProfile
 }: SuperAdminConsoleProps) {
   // Navigation
   const [activeMenuTab, setActiveMenuTab] = useState<string>("dashboard");
+  const [activeSystemSettingsSubTab, setActiveSystemSettingsSubTab] = useState<
+    "profile" | "tenant" | "branches" | "categories" | "suppliers" | "pos" | "backup" | "enterprise" | "typography"
+  >("profile");
+
+  // Super Profile / Workspace Profile Form States
+  const [superProfSelectedEmail, setSuperProfSelectedEmail] = useState<string>("superadmin@expertbilling.in");
+  const [superProfName, setSuperProfName] = useState<string>("System Sovereign (Super Admin)");
+  const [superProfEmail, setSuperProfEmail] = useState<string>("superadmin@expertbilling.in");
+  const [superProfPassword, setSuperProfPassword] = useState<string>("SuperAdminMasterKey2026");
+  const [superProfRole, setSuperProfRole] = useState<UserRole>(UserRole.ADMIN);
+  const [superProfPhone, setSuperProfPhone] = useState<string>("+91 9900112233");
+  const [superProfPin, setSuperProfPin] = useState<string>("9999");
+  const [superProfShowPassword, setSuperProfShowPassword] = useState<boolean>(false);
+  const [superProfEmailUnlocked, setSuperProfEmailUnlocked] = useState<boolean>(false);
+
+  // Sync profile details when selected profile or credentials change
+  const handleSelectProfileToEdit = (email: string) => {
+    setSuperProfSelectedEmail(email);
+    const found = credentialsList.find(c => c.email.toLowerCase() === email.toLowerCase());
+    if (found) {
+      setSuperProfName(found.name);
+      setSuperProfEmail(found.email);
+      setSuperProfPassword(found.password || "");
+      setSuperProfRole(found.role);
+      setSuperProfPhone(found.phone || "");
+      setSuperProfPin((found as any).pin || (found.email.toLowerCase().includes("super") ? "9999" : found.email.toLowerCase().includes("admin") ? "8888" : found.email.toLowerCase().includes("manager") ? "5555" : "1234"));
+      setSuperProfEmailUnlocked(false);
+    }
+  };
+
+  const handleSaveSuperProfile = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!superProfName.trim()) {
+      triggerNotification("Profile display name cannot be blank.", "warning");
+      return;
+    }
+    if (!superProfEmail.trim()) {
+      triggerNotification("Profile email coordinate cannot be blank.", "warning");
+      return;
+    }
+
+    const updatedList = credentialsList.map(c => {
+      if (c.email.toLowerCase() === superProfSelectedEmail.toLowerCase()) {
+        return {
+          ...c,
+          name: superProfName.trim(),
+          email: superProfEmail.trim(),
+          password: superProfPassword.trim() || c.password,
+          role: superProfRole,
+          phone: superProfPhone.trim(),
+          pin: superProfPin.trim()
+        };
+      }
+      return c;
+    });
+
+    onUpdateCredentials(updatedList);
+    localStorage.setItem("expert_aid_credentials", JSON.stringify(updatedList));
+    setSuperProfSelectedEmail(superProfEmail.trim());
+    setSuperProfEmailUnlocked(false);
+    triggerNotification(`Profile credentials for "${superProfName}" (${superProfEmail}) updated successfully!`, "success");
+  };
   const [isSuperMobileMenuOpen, setIsSuperMobileMenuOpen] = useState<boolean>(false);
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [showProfileDropdown, setShowProfileDropdown] = useState<boolean>(false);
@@ -228,7 +314,22 @@ export default function SuperAdminConsole({
 
   // Advanced Onboarding Wizard & Multi-tenant States
   const [onboardingWizardStep, setOnboardingWizardStep] = useState<1 | 2 | 3 | 4>(1);
+  const [tenantBusinessSector, setTenantBusinessSector] = useState<BusinessSector>("SUPERMARKET");
+  const [tenantFontFamily, setTenantFontFamily] = useState<TenantFontFamily>("Inter");
+  const [tenantFontSizeScale, setTenantFontSizeScale] = useState<TenantFontSizeScale>("standard");
+  const [domainActivated, setDomainActivated] = useState<boolean>(true);
   const [tenantCategory, setTenantCategory] = useState<string>("Supermarket & Grocery");
+
+  const handleSectorSelect = (sector: BusinessSector) => {
+    setTenantBusinessSector(sector);
+    const secMeta = BUSINESS_SECTORS_CATALOG[sector];
+    if (secMeta) {
+      setTenantCategory(secMeta.defaultCategories[0] || secMeta.label);
+      setHardwareAllocated(secMeta.recommendedHardware);
+      setFeatureModulesEnabled(secMeta.defaultModules as any);
+      triggerNotification(`Configured modules and hardware bundle for sector: ${secMeta.label}`, "success");
+    }
+  };
   const [tenantAddress, setTenantAddress] = useState<string>("Commercial Complex, Sector 18");
   const [tenantCity, setTenantCity] = useState<string>("New Delhi");
   const [tenantAdminFullName, setTenantAdminFullName] = useState<string>("");
@@ -625,6 +726,15 @@ export default function SuperAdminConsole({
   const [editTenantGstin, setEditTenantGstin] = useState<string>("");
   const [editTenantNotes, setEditTenantNotes] = useState<string>("");
   const [editTenantLogo, setEditTenantLogo] = useState<string>("");
+  const [editTenantBusinessSector, setEditTenantBusinessSector] = useState<BusinessSector>("SUPERMARKET");
+  const [editTenantFontFamily, setEditTenantFontFamily] = useState<TenantFontFamily>("Inter");
+  const [editTenantFontSizeScale, setEditTenantFontSizeScale] = useState<TenantFontSizeScale>("standard");
+
+  // Client Typography Customization Studio States
+  const [typographyTenantId, setTypographyTenantId] = useState<string>(activeTenantId || "TENANT-001");
+  const [typographyFontFamily, setTypographyFontFamily] = useState<TenantFontFamily>("Inter");
+  const [typographyFontSizeScale, setTypographyFontSizeScale] = useState<TenantFontSizeScale>("standard");
+  const [showTypographyModal, setShowTypographyModal] = useState<boolean>(false);
 
   // Add User Form States
   const [newName, setNewName] = useState<string>("");
@@ -1042,10 +1152,23 @@ export default function SuperAdminConsole({
       return;
     }
 
+    const sectorConfig = BUSINESS_SECTORS_CATALOG[tenantBusinessSector] || BUSINESS_SECTORS_CATALOG.SUPERMARKET;
+    const generatedDomainUrl = `https://${subdomain}.expertbilling.in`;
+
     const newTenant: Tenant = {
       id: `TENANT-0${tenantsList.length + 10}`,
       name,
       subdomain,
+      domainUrl: generatedDomainUrl,
+      domainStatus: "ACTIVE",
+      businessSector: tenantBusinessSector,
+      sectorConfig: sectorConfig,
+      typography: {
+        fontFamily: tenantFontFamily,
+        fontSizeScale: tenantFontSizeScale,
+        basePx: tenantFontSizeScale === "compact" ? 14 : tenantFontSizeScale === "spacious" ? 17 : tenantFontSizeScale === "large" ? 18 : 15,
+        headingFont: tenantFontFamily
+      },
       adminEmail: email,
       adminLoginId: loginId,
       adminPassword: password,
@@ -1065,7 +1188,7 @@ export default function SuperAdminConsole({
       contractDurationMonths: tenantContractDuration,
       renewalStatus: "AUTO_RENEW",
       onboardingSetupStatus: "COMPLETED",
-      hardwareProvisioned: hardwareAllocated && hardwareAllocated.length > 0 ? hardwareAllocated : ["80mm Thermal Printer"],
+      hardwareProvisioned: hardwareAllocated && hardwareAllocated.length > 0 ? hardwareAllocated : sectorConfig.recommendedHardware,
       onboardingNotes: tenantNotes,
       clientVerificationStatus: "VERIFIED",
       gstinRegNumber: tenantGstin || "07EXPAID" + Math.floor(1000 + Math.random() * 9000) + "A1Z1",
@@ -1280,10 +1403,21 @@ export default function SuperAdminConsole({
 
     const updatedList = tenantsList.map(t => {
       if (t.id === editingTenant.id) {
+        const sectorMeta = BUSINESS_SECTORS_CATALOG[editTenantBusinessSector] || BUSINESS_SECTORS_CATALOG.SUPERMARKET;
         return {
           ...t,
           name: editTenantName.trim() || t.name,
           subdomain,
+          domainUrl: `https://${subdomain}.expertbilling.in`,
+          domainStatus: "ACTIVE" as const,
+          businessSector: editTenantBusinessSector,
+          sectorConfig: sectorMeta,
+          typography: {
+            fontFamily: editTenantFontFamily,
+            fontSizeScale: editTenantFontSizeScale,
+            basePx: editTenantFontSizeScale === "compact" ? 14 : editTenantFontSizeScale === "spacious" ? 17 : editTenantFontSizeScale === "large" ? 18 : 15,
+            headingFont: editTenantFontFamily
+          },
           adminEmail: editTenantAdminEmail.trim() || t.adminEmail,
           phone: editTenantPhone.trim() || t.phone,
           tier: editTenantTier,
@@ -1305,7 +1439,40 @@ export default function SuperAdminConsole({
 
     onUpdateTenants(updatedList);
     setEditingTenant(null);
-    triggerNotification("Tenant database specifications updated successfully.", "success");
+    triggerNotification("Tenant specifications and typography updated successfully.", "success");
+  };
+
+  // Typography Modal Handlers
+  const handleOpenTypographyModal = (t: Tenant) => {
+    setTypographyTenantId(t.id);
+    setTypographyFontFamily(t.typography?.fontFamily || "Inter");
+    setTypographyFontSizeScale(t.typography?.fontSizeScale || "standard");
+    setShowTypographyModal(true);
+  };
+
+  const handleSaveTypography = (targetTenantId?: string) => {
+    const tid = targetTenantId || typographyTenantId;
+    const targetTenant = tenantsList.find(t => t.id === tid);
+    if (!targetTenant) return;
+
+    const updated = tenantsList.map(t => {
+      if (t.id === tid) {
+        return {
+          ...t,
+          typography: {
+            fontFamily: typographyFontFamily,
+            fontSizeScale: typographyFontSizeScale,
+            basePx: typographyFontSizeScale === "compact" ? 14 : typographyFontSizeScale === "spacious" ? 17 : typographyFontSizeScale === "large" ? 18 : 15,
+            headingFont: typographyFontFamily
+          }
+        };
+      }
+      return t;
+    });
+
+    onUpdateTenants(updated);
+    triggerNotification(`Applied ${typographyFontFamily} font (${typographyFontSizeScale} scale) to ${targetTenant.name}!`, "success");
+    setShowTypographyModal(false);
   };
 
   // Erase Client Tenant Handler
@@ -1626,19 +1793,27 @@ export default function SuperAdminConsole({
           <div className="pt-6">
             <p className="text-[9px] text-[#4b5b9f] font-extrabold font-mono tracking-widest uppercase px-3 mb-2">Security & Settings</p>
             {[
+              { id: "super-profile", label: "Super Profile", icon: User },
               { id: "roles", label: "Roles & Permissions", icon: Sliders },
               { id: "audit", label: "Cyber Audit Logs", icon: FileText },
               { id: "system-settings", label: "System Settings", icon: Settings },
               { id: "backup", label: "Backup & Restore", icon: DatabaseBackup }
             ].map((item) => {
               const IconComponent = item.icon;
-              const isActive = activeMenuTab === item.id;
+              const isActive = (item.id === "super-profile" && activeMenuTab === "system-settings" && activeSystemSettingsSubTab === "profile") ||
+                               (item.id === "system-settings" && activeMenuTab === "system-settings" && activeSystemSettingsSubTab !== "profile") ||
+                               activeMenuTab === item.id;
               return (
                 <button
                   key={item.id}
                   id={`sidebar-tab-${item.id}`}
                   onClick={() => {
-                    setActiveMenuTab(item.id);
+                    if (item.id === "super-profile") {
+                      setActiveMenuTab("system-settings");
+                      setActiveSystemSettingsSubTab("profile");
+                    } else {
+                      setActiveMenuTab(item.id);
+                    }
                     setIsSuperMobileMenuOpen(false);
                   }}
                   className={`w-full flex items-center gap-3.5 px-4 py-2.5 rounded-xl text-xs font-semibold tracking-wide transition-all ${
@@ -1768,11 +1943,23 @@ export default function SuperAdminConsole({
               </button>
 
               {showProfileDropdown && (
-                <div className="absolute right-0 mt-2 w-48 bg-white border border-slate-200 shadow-2xl rounded-2xl p-1.5 z-50">
+                <div className="absolute right-0 mt-2 w-52 bg-white border border-slate-200 shadow-2xl rounded-2xl p-1.5 z-50">
                   <button
                     onClick={() => {
                       setShowProfileDropdown(false);
                       setActiveMenuTab("system-settings");
+                      setActiveSystemSettingsSubTab("profile");
+                    }}
+                    className="w-full text-left px-3.5 py-2.5 text-xs font-bold text-purple-700 bg-purple-50/70 hover:bg-purple-100 rounded-xl flex items-center gap-2.5 transition-all"
+                  >
+                    <User className="w-4 h-4 text-purple-600" />
+                    <span>Super Profile</span>
+                  </button>
+                  <button
+                    onClick={() => {
+                      setShowProfileDropdown(false);
+                      setActiveMenuTab("system-settings");
+                      setActiveSystemSettingsSubTab("enterprise");
                     }}
                     className="w-full text-left px-3.5 py-2.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:text-slate-900 rounded-xl flex items-center gap-2.5"
                   >
@@ -2183,8 +2370,28 @@ export default function SuperAdminConsole({
                                 )}
                               </div>
                               <div>
-                                <p className="text-xs font-bold text-slate-800 leading-snug">{t.name}</p>
-                                <p className="text-[10px] text-slate-400 font-semibold font-mono tracking-wide">{t.subdomain}.expertbilling.in</p>
+                                <div className="flex items-center gap-2">
+                                  <p className="text-xs font-bold text-slate-800 leading-snug">{t.name}</p>
+                                  {t.businessSector && (
+                                    <span className="px-1.5 py-0.5 rounded text-[9px] font-black uppercase tracking-wider bg-indigo-50 text-indigo-700 border border-indigo-200/50">
+                                      {t.businessSector}
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="flex items-center gap-2 mt-0.5">
+                                  <span className="text-[10px] text-blue-600 font-semibold font-mono tracking-tight flex items-center gap-1">
+                                    <Globe className="w-2.5 h-2.5" />
+                                    https://{t.subdomain}.expertbilling.in
+                                  </span>
+                                  <span className="text-[8px] font-mono font-bold text-emerald-600 bg-emerald-50 px-1 py-0.2 rounded border border-emerald-200">
+                                    ACTIVE
+                                  </span>
+                                  {t.typography && (
+                                    <span className="text-[8.5px] font-mono text-purple-600 bg-purple-50 px-1 py-0.2 rounded border border-purple-200">
+                                      {t.typography.fontFamily} ({t.typography.fontSizeScale})
+                                    </span>
+                                  )}
+                                </div>
                               </div>
                             </div>
                           </td>
@@ -2232,6 +2439,13 @@ export default function SuperAdminConsole({
                                 </button>
                               )}
                               <button
+                                onClick={() => handleOpenTypographyModal(t)}
+                                className="p-1.5 hover:bg-purple-50 text-slate-400 hover:text-purple-600 rounded-lg transition-all"
+                                title={`Customize Font & Typography (${t.typography?.fontFamily || 'Inter'})`}
+                              >
+                                <Type className="w-4 h-4" />
+                              </button>
+                              <button
                                 onClick={() => setViewingTenant(t)}
                                 className="p-1.5 hover:bg-slate-100 text-slate-400 hover:text-blue-600 rounded-lg transition-all"
                                 title="View detailed specs"
@@ -2257,6 +2471,9 @@ export default function SuperAdminConsole({
                                   setEditTenantGstin(t.gstinRegNumber || "");
                                   setEditTenantNotes(t.onboardingNotes || "");
                                   setEditTenantLogo(t.companyLogo || "");
+                                  setEditTenantBusinessSector(t.businessSector || "SUPERMARKET");
+                                  setEditTenantFontFamily(t.typography?.fontFamily || "Inter");
+                                  setEditTenantFontSizeScale(t.typography?.fontSizeScale || "standard");
                                 }}
                                 className="p-1.5 hover:bg-slate-100 text-slate-400 hover:text-amber-600 rounded-lg transition-all"
                                 title="Edit specs"
@@ -3074,16 +3291,98 @@ export default function SuperAdminConsole({
                   
                   {/* STEP 1: BUSINESS IDENTITY & BRANDING */}
                   {onboardingWizardStep === 1 && (
-                    <div className="space-y-5 animate-fadeIn">
-                      <div className="border-b border-slate-100 pb-3">
-                        <h3 className="text-base font-extrabold text-slate-900 flex items-center gap-2">
-                          <Building className="w-5 h-5 text-blue-600" />
-                          <span>Client Business Profile & Domain Isolation</span>
-                        </h3>
-                        <p className="text-xs text-slate-400 font-medium">Set corporate identity, category, and custom subdomain slug.</p>
+                    <div className="space-y-6 animate-fadeIn">
+                      <div className="border-b border-slate-100 pb-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                        <div>
+                          <h3 className="text-base font-extrabold text-slate-900 flex items-center gap-2">
+                            <Building className="w-5 h-5 text-blue-600" />
+                            <span>Client Business Profile, Sector & Domain Provisioning</span>
+                          </h3>
+                          <p className="text-xs text-slate-400 font-medium">Select business sector, set corporate identity, and configure automated domain and typography.</p>
+                        </div>
+                        <div className="flex items-center gap-1.5 px-3 py-1 bg-amber-50 border border-amber-200/60 rounded-xl text-[10px] font-black text-amber-800 uppercase tracking-wider self-start sm:self-auto">
+                          <ShieldAlert className="w-3.5 h-3.5 text-amber-600" />
+                          <span>Super Admin Authority Exclusive</span>
+                        </div>
                       </div>
 
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      {/* Super Admin Authority Notice */}
+                      <div className="p-3.5 bg-gradient-to-r from-blue-50/80 to-indigo-50/80 border border-blue-200/60 rounded-2xl flex items-start gap-3">
+                        <div className="p-2 bg-blue-600 text-white rounded-xl shadow-sm shrink-0">
+                          <ShieldCheck className="w-4 h-4" />
+                        </div>
+                        <div className="text-xs">
+                          <p className="font-extrabold text-slate-900">Super Admin Sector Assignment Clearance</p>
+                          <p className="text-slate-600 text-[11px] mt-0.5 leading-relaxed">
+                            Only Super Admin has permission to onboard clients and assign business sectors. Choosing a sector automatically provisions the relevant modules (e.g., Table Ordering for Restaurant, Fast Barcode for Supermarket, Expiry/Batch for Pharmacy), default catalog, and hardware bundles.
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* BUSINESS SECTOR SELECTOR CARDS */}
+                      <div className="space-y-2.5">
+                        <label className="text-[11px] font-extrabold text-slate-700 uppercase tracking-wider block flex items-center justify-between">
+                          <span>Select Business Sector <span className="text-rose-500">*</span></span>
+                          <span className="text-[10px] font-normal text-blue-600 font-mono">Auto-configures modules & settings</span>
+                        </label>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                          {(Object.keys(BUSINESS_SECTORS_CATALOG) as BusinessSector[]).map((sectorKey) => {
+                            const sec = BUSINESS_SECTORS_CATALOG[sectorKey];
+                            const isSelected = tenantBusinessSector === sectorKey;
+                            const SectorIcon = sectorKey === "RESTAURANT" ? Utensils :
+                                              sectorKey === "RETAIL" ? ShoppingBag :
+                                              sectorKey === "PHARMACY" ? Pill :
+                                              sectorKey === "SERVICES" ? Scissors : ShoppingCart;
+                            return (
+                              <button
+                                key={sectorKey}
+                                type="button"
+                                onClick={() => handleSectorSelect(sectorKey)}
+                                className={`text-left p-3.5 rounded-2xl border transition-all cursor-pointer relative flex flex-col justify-between ${
+                                  isSelected
+                                    ? "bg-blue-50/90 border-blue-600 shadow-md ring-2 ring-blue-500/20"
+                                    : "bg-white border-slate-200 hover:border-slate-300 hover:bg-slate-50/50"
+                                }`}
+                              >
+                                {isSelected && (
+                                  <div className="absolute top-3 right-3 w-5 h-5 bg-blue-600 text-white rounded-full flex items-center justify-center shadow-sm">
+                                    <Check className="w-3 h-3" />
+                                  </div>
+                                )}
+                                <div className="space-y-1.5">
+                                  <div className="flex items-center gap-2">
+                                    <div className={`p-2 rounded-xl text-white ${
+                                      sectorKey === "RESTAURANT" ? "bg-amber-600" :
+                                      sectorKey === "RETAIL" ? "bg-blue-600" :
+                                      sectorKey === "PHARMACY" ? "bg-rose-600" :
+                                      sectorKey === "SERVICES" ? "bg-purple-600" : "bg-emerald-600"
+                                    }`}>
+                                      <SectorIcon className="w-4 h-4" />
+                                    </div>
+                                    <div>
+                                      <h4 className="text-xs font-black text-slate-900">{sec.label}</h4>
+                                      <span className="text-[9px] font-bold uppercase tracking-wider text-slate-400 font-mono">{sectorKey}</span>
+                                    </div>
+                                  </div>
+                                  <p className="text-[10px] text-slate-500 line-clamp-2 leading-relaxed">{sec.description}</p>
+                                </div>
+                                <div className="mt-3 pt-2.5 border-t border-slate-100/80 flex flex-wrap gap-1">
+                                  {sec.recommendedHardware.slice(0, 2).map((hw, idx) => (
+                                    <span key={idx} className="text-[8.5px] font-bold px-1.5 py-0.5 rounded bg-slate-100 text-slate-600">
+                                      {hw.split(" ")[0]}
+                                    </span>
+                                  ))}
+                                  <span className="text-[8.5px] font-bold px-1.5 py-0.5 rounded bg-blue-100 text-blue-700">
+                                    +{Object.values(sec.defaultModules).filter(Boolean).length} Modules
+                                  </span>
+                                </div>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
                         <div className="space-y-1.5 sm:col-span-2">
                           <label className="text-[11px] font-extrabold text-slate-700 uppercase tracking-wider block">
                             Corporate Client Name <span className="text-rose-500">*</span>
@@ -3103,18 +3402,30 @@ export default function SuperAdminConsole({
                           />
                         </div>
 
-                        <div className="space-y-1.5 sm:col-span-2">
-                          <label className="text-[11px] font-extrabold text-slate-700 uppercase tracking-wider block">
-                            Isolated Subdomain Slug (<code className="text-blue-600 font-mono">tenant.expertbilling.in</code>)
-                          </label>
-                          <div className="flex items-center gap-2">
+                        {/* AUTOMATIC TENANT DOMAIN GENERATION & ACTIVATION CARD */}
+                        <div className="space-y-2 sm:col-span-2 bg-gradient-to-br from-slate-900 to-slate-950 p-4 rounded-2xl border border-slate-800 text-white">
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-800 pb-3">
+                            <div className="flex items-center gap-2">
+                              <Globe className="w-4 h-4 text-emerald-400" />
+                              <span className="text-xs font-black text-white uppercase tracking-wider">Automated Tenant Domain Generation & Activation</span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <span className="px-2 py-0.5 rounded-full text-[9px] font-bold font-mono bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 flex items-center gap-1">
+                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                                AUTO-ACTIVATED
+                              </span>
+                              <span className="text-[9px] font-mono text-slate-400 font-bold">TLS 1.3 WILDCARD SSL</span>
+                            </div>
+                          </div>
+
+                          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 pt-1">
                             <div className="relative flex-1">
                               <input
                                 type="text"
                                 placeholder="metromart"
                                 value={tenantSubdomain}
                                 onChange={(e) => setTenantSubdomain(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ""))}
-                                className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-4 pr-32 py-2.5 text-xs font-mono font-bold text-blue-600 focus:bg-white focus:border-blue-500 focus:outline-none transition-all"
+                                className="w-full bg-slate-800 border border-slate-700 rounded-xl pl-4 pr-36 py-2.5 text-xs font-mono font-bold text-emerald-300 focus:border-emerald-500 focus:outline-none transition-all"
                               />
                               <span className="absolute right-3 top-2.5 text-xs text-slate-400 font-mono font-bold">.expertbilling.in</span>
                             </div>
@@ -3124,16 +3435,76 @@ export default function SuperAdminConsole({
                                 const gen = (tenantName || "tenant").toLowerCase().replace(/[^a-z0-9]/g, "").substring(0, 12) + Math.floor(10 + Math.random() * 89);
                                 setTenantSubdomain(gen);
                               }}
-                              className="px-3 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-all cursor-pointer shrink-0"
+                              className="px-3 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-xl text-xs font-bold transition-all cursor-pointer shrink-0"
                             >
-                              Auto Slug
+                              Regenerate Slug
                             </button>
                           </div>
-                          {tenantSubdomain && (
-                            <p className="text-[10px] font-mono text-emerald-600 flex items-center gap-1 font-bold mt-1">
-                              <CheckCircle className="w-3 h-3" /> https://{tenantSubdomain}.expertbilling.in is available for sandbox binding
+
+                          <div className="flex flex-wrap items-center justify-between text-[10px] text-slate-400 pt-1">
+                            <p className="font-mono text-emerald-400 font-bold flex items-center gap-1">
+                              <CheckCircle className="w-3 h-3 text-emerald-400" />
+                              Active Live URL: https://{tenantSubdomain || "client"}.expertbilling.in
                             </p>
-                          )}
+                            <p className="text-slate-400">DNS edge route configured automatically upon provisioning.</p>
+                          </div>
+                        </div>
+
+                        {/* CLIENT TYPOGRAPHY CUSTOMIZATION SETTINGS */}
+                        <div className="sm:col-span-2 bg-slate-50 p-4 rounded-2xl border border-slate-200/80 space-y-3">
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 border-b border-slate-200/60 pb-2">
+                            <div className="flex items-center gap-2">
+                              <Type className="w-4 h-4 text-purple-600" />
+                              <span className="text-xs font-extrabold text-slate-800 uppercase tracking-wider">Client Workspace Typography Customization</span>
+                            </div>
+                            <span className="text-[10px] text-slate-500 font-mono">Configurable separately for each client</span>
+                          </div>
+
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <div className="space-y-1">
+                              <label className="text-[10px] font-bold text-slate-600 uppercase tracking-wider">Font Family (Style)</label>
+                              <select
+                                value={tenantFontFamily}
+                                onChange={(e) => setTenantFontFamily(e.target.value as TenantFontFamily)}
+                                className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 focus:border-purple-500 focus:outline-none transition-all cursor-pointer"
+                              >
+                                {TENANT_FONT_OPTIONS.map((f) => (
+                                  <option key={f.id} value={f.id}>
+                                    {f.label} ({f.description})
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+
+                            <div className="space-y-1">
+                              <label className="text-[10px] font-bold text-slate-600 uppercase tracking-wider">Font Size Scale</label>
+                              <select
+                                value={tenantFontSizeScale}
+                                onChange={(e) => setTenantFontSizeScale(e.target.value as TenantFontSizeScale)}
+                                className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 focus:border-purple-500 focus:outline-none transition-all cursor-pointer"
+                              >
+                                {TENANT_FONT_SIZE_OPTIONS.map((s) => (
+                                  <option key={s.id} value={s.id}>
+                                    {s.label} ({s.scalePercent})
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+                          </div>
+
+                          <div className="p-3 bg-white rounded-xl border border-slate-200/60 flex items-center justify-between">
+                            <div className={`tenant-font-${tenantFontFamily.toLowerCase().replace(/\s+/g, '-')} tenant-scale-${tenantFontSizeScale}`}>
+                              <p className="text-xs font-extrabold text-slate-800">
+                                Live Typography Specimen: "EXPERT POS #{tenantSubdomain || 'tenant'} billing ₹1,450.00"
+                              </p>
+                              <p className="text-[10px] text-slate-400 mt-0.5">
+                                Font: {tenantFontFamily} • Scale: {tenantFontSizeScale}
+                              </p>
+                            </div>
+                            <span className="text-[9px] font-mono px-2 py-0.5 rounded bg-purple-50 text-purple-700 font-bold border border-purple-200/50">
+                              Preview
+                            </span>
+                          </div>
                         </div>
 
                         <div className="space-y-1.5">
@@ -3422,12 +3793,41 @@ export default function SuperAdminConsole({
                   {/* STEP 4: QUOTAS, HARDWARE & MODULES */}
                   {onboardingWizardStep === 4 && (
                     <div className="space-y-5 animate-fadeIn">
-                      <div className="border-b border-slate-100 pb-3">
-                        <h3 className="text-base font-extrabold text-slate-900 flex items-center gap-2">
-                          <Layers className="w-5 h-5 text-purple-600" />
-                          <span>Resource Limits, Hardware & Module Provisioning</span>
-                        </h3>
-                        <p className="text-xs text-slate-400 font-medium">Fine-tune system resource limits, hardware accessory bundles, and feature modules.</p>
+                      <div className="border-b border-slate-100 pb-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                        <div>
+                          <h3 className="text-base font-extrabold text-slate-900 flex items-center gap-2">
+                            <Layers className="w-5 h-5 text-purple-600" />
+                            <span>Resource Limits, Hardware & Module Provisioning</span>
+                          </h3>
+                          <p className="text-xs text-slate-400 font-medium">Fine-tune system resource limits, hardware accessory bundles, and feature modules.</p>
+                        </div>
+                        <span className="px-2.5 py-1 rounded-xl text-[10px] font-black uppercase tracking-wider bg-purple-50 text-purple-700 border border-purple-200/50 self-start sm:self-auto">
+                          Sector: {BUSINESS_SECTORS_CATALOG[tenantBusinessSector]?.label || tenantBusinessSector}
+                        </span>
+                      </div>
+
+                      {/* Auto-configured by Sector Banner */}
+                      <div className="p-3 bg-gradient-to-r from-purple-50 to-indigo-50 border border-purple-200/60 rounded-2xl flex items-center justify-between gap-3 text-xs">
+                        <div className="flex items-center gap-2.5">
+                          <div className="p-1.5 bg-purple-600 text-white rounded-lg shadow-sm">
+                            <Sparkles className="w-3.5 h-3.5" />
+                          </div>
+                          <div>
+                            <p className="font-extrabold text-slate-900">
+                              Auto-Configured for {BUSINESS_SECTORS_CATALOG[tenantBusinessSector]?.label || "Selected"} Sector
+                            </p>
+                            <p className="text-[11px] text-slate-500">
+                              Default modules ({BUSINESS_SECTORS_CATALOG[tenantBusinessSector]?.defaultModules.join(", ")}) and hardware bundle were automatically set.
+                            </p>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleSectorSelect(tenantBusinessSector)}
+                          className="px-2.5 py-1 bg-white hover:bg-slate-50 text-purple-700 border border-purple-200 rounded-lg text-[10px] font-bold shrink-0 transition-all cursor-pointer"
+                        >
+                          Reset to Defaults
+                        </button>
                       </div>
 
                       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -3685,8 +4085,29 @@ export default function SuperAdminConsole({
                             {t.companyLogo ? <img src={t.companyLogo} alt="" className="w-full h-full rounded-xl object-contain" /> : t.name.substring(0, 2)}
                           </div>
                           <div>
-                            <p className="font-bold text-slate-800 leading-tight">{t.name}</p>
-                            <p className="text-[10px] text-slate-400 font-mono tracking-widest font-black uppercase mt-0.5">{t.id}</p>
+                            <div className="flex items-center gap-2">
+                              <p className="font-bold text-slate-800 leading-tight">{t.name}</p>
+                              {t.businessSector && (
+                                <span className="px-1.5 py-0.5 rounded text-[8.5px] font-black uppercase tracking-wider bg-indigo-50 text-indigo-700 border border-indigo-200/50">
+                                  {t.businessSector}
+                                </span>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-2 mt-0.5">
+                              <span className="text-[10px] text-blue-600 font-mono tracking-tight font-semibold flex items-center gap-1">
+                                <Globe className="w-2.5 h-2.5" />
+                                https://{t.subdomain}.expertbilling.in
+                              </span>
+                              <span className="text-[8px] font-mono font-bold text-emerald-600 bg-emerald-50 px-1 py-0.2 rounded border border-emerald-200">
+                                ACTIVE
+                              </span>
+                              {t.typography && (
+                                <span className="text-[8px] font-mono text-purple-600 bg-purple-50 px-1 py-0.2 rounded border border-purple-200">
+                                  {t.typography.fontFamily} ({t.typography.fontSizeScale})
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-[9px] text-slate-400 font-mono tracking-widest font-black uppercase mt-0.5">{t.id}</p>
                           </div>
                         </div>
                       </td>
@@ -3739,6 +4160,14 @@ export default function SuperAdminConsole({
                             </button>
                           )}
                           <button
+                            onClick={() => handleOpenTypographyModal(t)}
+                            className="px-2.5 py-1.5 bg-purple-50 hover:bg-purple-100 text-purple-700 font-bold text-[10px] uppercase tracking-wider rounded-lg flex items-center gap-1 transition-all cursor-pointer border border-purple-200/40 shadow-sm"
+                            title={`Configure Typography (${t.typography?.fontFamily || 'Inter'})`}
+                          >
+                            <Type className="w-3.5 h-3.5 text-purple-600" />
+                            <span>Font</span>
+                          </button>
+                          <button
                             onClick={() => setViewingTenant(t)}
                             className="px-2.5 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold text-[10px] uppercase tracking-wider rounded-lg flex items-center gap-1 transition-all cursor-pointer border border-blue-200/40 shadow-sm"
                             title="View Spec Details & Credentials"
@@ -3775,6 +4204,9 @@ export default function SuperAdminConsole({
                               setEditTenantGstin(t.gstinRegNumber || "");
                               setEditTenantNotes(t.onboardingNotes || "");
                               setEditTenantLogo(t.companyLogo || "");
+                              setEditTenantBusinessSector(t.businessSector || "SUPERMARKET");
+                              setEditTenantFontFamily(t.typography?.fontFamily || "Inter");
+                              setEditTenantFontSizeScale(t.typography?.fontSizeScale || "standard");
                             }}
                             className="px-2.5 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-700 font-bold text-[10px] uppercase tracking-wider rounded-lg flex items-center gap-1 transition-all cursor-pointer border border-amber-200/40 shadow-sm"
                             title="Edit Spec Details"
@@ -5605,28 +6037,570 @@ export default function SuperAdminConsole({
             </div>
           </div>
         ) : activeMenuTab === "system-settings" ? (
-          /* System Settings panel content */
-          <div className="flex-1 p-8 overflow-y-auto space-y-6" id="system-settings-panel">
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-100 pb-5">
-              <div>
-                <h2 className="text-xl font-black text-slate-900 font-sans tracking-tight">Enterprise Operations Control Board</h2>
-                <p className="text-xs text-slate-400 font-medium">SaaS platform settings registry, multi-tenant sandbox modules, and localisation parameters.</p>
-              </div>
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => {
-                    triggerNotification(`All twelve system configurations synced successfully to cluster databases.`, "success");
-                  }}
-                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-xs rounded-xl shadow-md shadow-blue-500/10 flex items-center gap-1.5 transition-all cursor-pointer"
-                >
-                  <Save className="w-4 h-4" />
-                  <span>Sync Controls</span>
-                </button>
-              </div>
-            </div>
+          /* System Settings panel content - Workspace Operations Settings */
+          <div className="flex-1 p-6 md:p-8 overflow-y-auto space-y-6" id="system-settings-panel">
+            <div className="bg-white border border-slate-200 rounded-3xl p-6 md:p-8 space-y-6 text-slate-800 font-sans shadow-md">
+              {/* Upper Hub Section matching screenshot */}
+              <div className="flex flex-col pb-6 border-b border-slate-200 gap-5">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div>
+                    <h2 className="text-xl md:text-2xl font-black text-slate-900 flex items-center gap-2 font-display leading-tight tracking-tight">
+                      <Settings className="w-6 h-6 text-slate-500" />
+                      <span>Workspace Operations Settings</span>
+                    </h2>
+                    <p className="text-xs text-slate-500 mt-1">
+                      Configure credentials, branding, default margins, sound cues, and offline system database backups.
+                    </p>
+                  </div>
+                  {activeSystemSettingsSubTab === "enterprise" && (
+                    <button
+                      onClick={() => {
+                        triggerNotification(`All twelve system configurations synced successfully to cluster databases.`, "success");
+                      }}
+                      className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-xs rounded-xl shadow-md shadow-blue-500/10 flex items-center gap-1.5 transition-all cursor-pointer self-start sm:self-auto"
+                    >
+                      <Save className="w-4 h-4" />
+                      <span>Sync Controls</span>
+                    </button>
+                  )}
+                </div>
 
-            {/* 4-column Master Grid for 12 Categories */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 align-start items-start">
+                {/* Sub-tab Bar (matching the circled section in screenshot) */}
+                <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200 self-start shrink-0 select-none overflow-x-auto max-w-full">
+                  <button
+                    type="button"
+                    onClick={() => setActiveSystemSettingsSubTab("profile")}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1 shrink-0 cursor-pointer ${
+                      activeSystemSettingsSubTab === "profile" ? "bg-white text-slate-900 shadow border border-slate-200/50" : "text-slate-500 hover:text-slate-900"
+                    }`}
+                  >
+                    <User className="w-3.5 h-3.5" /> My Profile
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setActiveSystemSettingsSubTab("tenant")}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1 shrink-0 cursor-pointer ${
+                      activeSystemSettingsSubTab === "tenant" ? "bg-white text-slate-900 shadow border border-slate-200/50" : "text-slate-500 hover:text-slate-900"
+                    }`}
+                  >
+                    <Store className="w-3.5 h-3.5" /> Store Settings
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setActiveSystemSettingsSubTab("branches")}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1 shrink-0 cursor-pointer ${
+                      activeSystemSettingsSubTab === "branches" ? "bg-white text-slate-900 shadow border border-slate-200/50" : "text-slate-500 hover:text-slate-900"
+                    }`}
+                  >
+                    <Globe className="w-3.5 h-3.5" /> Store Branches
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setActiveSystemSettingsSubTab("categories")}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1 shrink-0 cursor-pointer ${
+                      activeSystemSettingsSubTab === "categories" ? "bg-white text-slate-900 shadow border border-slate-200/50" : "text-slate-500 hover:text-slate-900"
+                    }`}
+                  >
+                    <List className="w-3.5 h-3.5" /> Product Categories
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setActiveSystemSettingsSubTab("suppliers")}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1 shrink-0 cursor-pointer ${
+                      activeSystemSettingsSubTab === "suppliers" ? "bg-white text-slate-900 shadow border border-slate-200/50" : "text-slate-500 hover:text-slate-900"
+                    }`}
+                  >
+                    <Users className="w-3.5 h-3.5" /> Vendors & Suppliers
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setActiveSystemSettingsSubTab("pos")}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1 shrink-0 cursor-pointer ${
+                      activeSystemSettingsSubTab === "pos" ? "bg-white text-slate-900 shadow border border-slate-200/50" : "text-slate-500 hover:text-slate-900"
+                    }`}
+                  >
+                    <Printer className="w-3.5 h-3.5" /> POS Preferences
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setActiveSystemSettingsSubTab("backup")}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1 shrink-0 cursor-pointer ${
+                      activeSystemSettingsSubTab === "backup" ? "bg-white text-slate-900 shadow border border-slate-200/50" : "text-slate-500 hover:text-slate-900"
+                    }`}
+                  >
+                    <Database className="w-3.5 h-3.5" /> Data Backup
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setActiveSystemSettingsSubTab("enterprise")}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1 shrink-0 cursor-pointer ${
+                      activeSystemSettingsSubTab === "enterprise" ? "bg-white text-slate-900 shadow border border-slate-200/50" : "text-slate-500 hover:text-slate-900"
+                    }`}
+                  >
+                    <Sliders className="w-3.5 h-3.5" /> Enterprise Config
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setActiveSystemSettingsSubTab("typography")}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1 shrink-0 cursor-pointer ${
+                      activeSystemSettingsSubTab === "typography" ? "bg-white text-slate-900 shadow border border-slate-200/50" : "text-slate-500 hover:text-slate-900"
+                    }`}
+                  >
+                    <Type className="w-3.5 h-3.5 text-purple-600" /> Client Typography
+                  </button>
+                </div>
+              </div>
+
+              {/* Sub-tab 1: MY PROFILE / SUPER PROFILE + OPTION TO CHANGE PROFILE */}
+              {activeSystemSettingsSubTab === "profile" && (
+                <div className="space-y-6 max-w-2xl">
+                  {/* OPTION TO CHANGE PROFILE / SWITCH ACCOUNT */}
+                  <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 sm:p-5 space-y-3">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-200/80 pb-3">
+                      <div>
+                        <h3 className="text-xs font-black uppercase text-slate-900 tracking-wider flex items-center gap-2 font-mono">
+                          <Users className="w-4 h-4 text-purple-600" />
+                          Option to Change Profile / Switch Active Session
+                        </h3>
+                        <p className="text-[11px] text-slate-500 mt-0.5">
+                          Select any system profile to inspect credentials, customize permissions, or immediately switch active session.
+                        </p>
+                      </div>
+                      <span className="text-[10px] font-mono bg-purple-100 text-purple-800 px-2.5 py-0.5 rounded-full font-bold self-start sm:self-auto">
+                        {credentialsList.length} Profiles
+                      </span>
+                    </div>
+
+                    {/* Quick profile cards to select/change */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
+                      {credentialsList.map((cred, idx) => {
+                        const isSelected = cred.email.toLowerCase() === superProfSelectedEmail.toLowerCase();
+                        return (
+                          <button
+                            key={idx}
+                            type="button"
+                            onClick={() => handleSelectProfileToEdit(cred.email)}
+                            className={`p-3 rounded-xl border text-left flex items-center gap-3 transition-all cursor-pointer ${
+                              isSelected
+                                ? "bg-purple-50/80 border-purple-400 shadow-sm ring-2 ring-purple-500/20"
+                                : "bg-white border-slate-200 hover:border-slate-300 hover:bg-slate-100/60"
+                            }`}
+                          >
+                            <div className={`w-9 h-9 rounded-xl flex items-center justify-center font-black text-xs shrink-0 ${
+                              isSelected 
+                                ? "bg-purple-600 text-white shadow-sm" 
+                                : "bg-purple-100 text-purple-700 border border-purple-200"
+                            }`}>
+                              {cred.name.substring(0, 2).toUpperCase()}
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <p className="text-xs font-bold text-slate-900 truncate">{cred.name}</p>
+                              <p className="text-[10px] text-slate-500 font-mono truncate">{cred.email}</p>
+                            </div>
+                            <span className="text-[9px] font-mono px-2 py-0.5 rounded uppercase font-bold bg-slate-100 text-slate-700 shrink-0 border border-slate-200">
+                              {cred.role}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    {/* Quick Switch Action */}
+                    {onSwitchProfile && (
+                      <div className="pt-2 flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-t border-slate-200/60">
+                        <p className="text-[11px] text-slate-500 italic">
+                          Selected profile: <strong className="text-slate-800">{superProfName}</strong>
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const target = credentialsList.find(c => c.email.toLowerCase() === superProfSelectedEmail.toLowerCase());
+                            if (target) {
+                              onSwitchProfile(target);
+                              triggerNotification(`Switched active session to ${target.name} (${target.role})`, "success");
+                            }
+                          }}
+                          className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white font-bold text-xs rounded-xl shadow-sm flex items-center gap-1.5 shrink-0 transition-all cursor-pointer self-start sm:self-auto"
+                        >
+                          <Key className="w-3.5 h-3.5" />
+                          <span>Switch Active Session to This Profile</span>
+                        </button>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* EXACT FORM MODEL FROM SCREENSHOT */}
+                  <form onSubmit={handleSaveSuperProfile} className="space-y-6">
+                    <div className="space-y-4">
+                      {/* Profile Card Header matching screenshot */}
+                      <div className="flex items-center gap-3 p-4 bg-slate-50 rounded-2xl border border-slate-200">
+                        <div className="w-12 h-12 rounded-xl bg-purple-600/10 text-purple-700 flex items-center justify-center text-lg font-black shrink-0 border border-purple-200">
+                          {superProfName.substring(0, 2).toUpperCase()}
+                        </div>
+                        <div>
+                          <p className="font-extrabold text-sm text-slate-900 leading-snug">{superProfName}</p>
+                          <div className="flex items-center gap-2 mt-1">
+                            <span className="text-[10px] text-slate-700 font-mono select-all shrink-0 bg-white border border-slate-200 px-2 py-0.5 rounded leading-none uppercase font-bold">
+                              {superProfRole}
+                            </span>
+                            <p className="text-[10px] text-slate-500 font-medium font-mono">{superProfEmail}</p>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* FULL DISPLAY NAME / IDENTITY SIGNATURE */}
+                      <div>
+                        <label className="block text-[11px] text-slate-600 font-bold uppercase tracking-wider mb-1.5 font-sans">
+                          Full Display Name / Identity Signature
+                        </label>
+                        <input
+                          type="text"
+                          required
+                          value={superProfName}
+                          onChange={(e) => setSuperProfName(e.target.value)}
+                          className="w-full bg-white border border-slate-300 text-slate-900 rounded-xl py-2 px-3 text-xs focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-600 placeholder-slate-400 font-sans shadow-2xs"
+                        />
+                      </div>
+
+                      {/* TERMINAL EMAIL ADDRESS/ID (LOCKED FOR SECURITY) with UNLOCK OPTION */}
+                      <div>
+                        <div className="flex justify-between items-center mb-1.5">
+                          <label className="block text-[11px] text-slate-600 font-bold uppercase tracking-wider font-sans">
+                            Terminal Email Address/ID {superProfEmailUnlocked ? "(Editing Unlocked)" : "(Locked for security)"}
+                          </label>
+                          <button
+                            type="button"
+                            onClick={() => setSuperProfEmailUnlocked(!superProfEmailUnlocked)}
+                            className="text-[10px] text-purple-600 hover:text-purple-800 font-bold flex items-center gap-1 cursor-pointer"
+                          >
+                            {superProfEmailUnlocked ? <Lock className="w-3 h-3" /> : <Unlock className="w-3 h-3" />}
+                            {superProfEmailUnlocked ? "Lock Email" : "Unlock to Change"}
+                          </button>
+                        </div>
+                        <input
+                          type="email"
+                          required
+                          disabled={!superProfEmailUnlocked}
+                          value={superProfEmail}
+                          onChange={(e) => setSuperProfEmail(e.target.value)}
+                          className={`w-full rounded-xl py-2 px-3 text-xs font-mono transition-all ${
+                            superProfEmailUnlocked
+                              ? "bg-white border border-purple-400 text-slate-900 focus:outline-none focus:ring-2 focus:ring-purple-500/20"
+                              : "bg-slate-100 border border-slate-200 text-slate-500 cursor-not-allowed"
+                          }`}
+                        />
+                        <p className="text-[10px] text-slate-500 mt-1">
+                          {superProfEmailUnlocked 
+                            ? "Email coordinate unlocked. Ensure this email is unique across systems."
+                            : "To update your coordinate email, click 'Unlock to Change' above or request support from the SaaS tenant sovereign."}
+                        </p>
+                      </div>
+
+                      {/* CHANGE ACCESS PASSWORD KEY with Show/Hide toggle */}
+                      <div>
+                        <div className="flex justify-between items-center mb-1.5">
+                          <label className="block text-[11px] text-slate-600 font-bold uppercase tracking-wider font-sans">
+                            Change Access Password Key
+                          </label>
+                          <button
+                            type="button"
+                            onClick={() => setSuperProfShowPassword(!superProfShowPassword)}
+                            className="text-[10px] text-purple-600 hover:text-purple-800 font-bold cursor-pointer"
+                          >
+                            {superProfShowPassword ? "Hide password" : "Show password"}
+                          </button>
+                        </div>
+                        <input
+                          type={superProfShowPassword ? "text" : "password"}
+                          placeholder="Enter new security password to use inside terminals..."
+                          value={superProfPassword}
+                          onChange={(e) => setSuperProfPassword(e.target.value)}
+                          className="w-full bg-white border border-slate-300 text-slate-900 rounded-xl py-2 px-3 text-xs focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-600 placeholder-slate-400 font-mono shadow-2xs"
+                        />
+                      </div>
+
+                      {/* QUICK UNLOCK PIN & ROLE CLEARANCE */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
+                        <div>
+                          <label className="block text-[11px] text-slate-600 font-bold uppercase tracking-wider mb-1.5 font-sans">
+                            Terminal Access PIN (Quick Unlock)
+                          </label>
+                          <input
+                            type="text"
+                            maxLength={6}
+                            value={superProfPin}
+                            onChange={(e) => setSuperProfPin(e.target.value)}
+                            placeholder="e.g. 9999"
+                            className="w-full bg-white border border-slate-300 text-slate-900 rounded-xl py-2 px-3 text-xs focus:outline-none focus:ring-2 focus:ring-purple-500/20 font-mono tracking-widest"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[11px] text-slate-600 font-bold uppercase tracking-wider mb-1.5 font-sans">
+                            Role Clearance Tier
+                          </label>
+                          <select
+                            value={superProfRole}
+                            onChange={(e) => setSuperProfRole(e.target.value as UserRole)}
+                            className="w-full bg-white border border-slate-300 text-slate-900 rounded-xl py-2 px-3 text-xs focus:outline-none focus:ring-2 focus:ring-purple-500/20 font-sans"
+                          >
+                            <option value={UserRole.ADMIN}>ADMIN (Client / Master Admin)</option>
+                            <option value={UserRole.MANAGER}>MANAGER (Reports & Stock Audit)</option>
+                            <option value={UserRole.CASHIER}>CASHIER (Front Desk POS Checkout)</option>
+                            <option value={UserRole.STORE_KEEPER}>STORE KEEPER (Warehouse & Stock)</option>
+                          </select>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* PURPLE BUTTON AS SHOWN IN SCREENSHOT */}
+                    <div className="pt-2">
+                      <button
+                        type="submit"
+                        className="bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs py-2.5 px-6 rounded-xl shadow-md transition-all flex items-center gap-2 cursor-pointer uppercase tracking-wider font-sans whitespace-nowrap active:scale-95"
+                      >
+                        <Save className="w-4 h-4 shrink-0" />
+                        Update Profile Credentials
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              )}
+
+              {/* Sub-tab 2: STORE SETTINGS */}
+              {activeSystemSettingsSubTab === "tenant" && (
+                <div className="space-y-6 max-w-3xl">
+                  <div className="p-4 bg-emerald-50 text-emerald-800 rounded-xl border border-emerald-200 text-xs leading-relaxed font-medium flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-2">
+                      <Sparkles className="w-4 h-4 shrink-0 text-emerald-600" />
+                      <div>
+                        <strong className="text-emerald-950 font-bold">Store Settings & Branding:</strong> Configure active workspace identity, company name, GSTIN registration, currency, and official corporate logo.
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="bg-slate-50 p-5 rounded-2xl border border-slate-200 space-y-4">
+                    <h3 className="text-xs font-black text-slate-900 uppercase tracking-widest flex items-center gap-2 font-mono">
+                      <Store className="w-4 h-4 text-purple-600" />
+                      Store & Tenant Configuration
+                    </h3>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-[11px] text-slate-600 font-bold uppercase mb-1">Store / Tenant Name</label>
+                        <input
+                          type="text"
+                          value={tenantName || "Expert POS Retail Hub"}
+                          onChange={(e) => setTenantName(e.target.value)}
+                          className="w-full bg-white border border-slate-300 text-slate-900 rounded-xl py-2 px-3 text-xs"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[11px] text-slate-600 font-bold uppercase mb-1">Subdomain Slug</label>
+                        <input
+                          type="text"
+                          value={tenantSubdomain || "expertpos"}
+                          onChange={(e) => setTenantSubdomain(e.target.value)}
+                          className="w-full bg-white border border-slate-300 text-slate-900 rounded-xl py-2 px-3 text-xs font-mono"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[11px] text-slate-600 font-bold uppercase mb-1">Official GSTIN Number</label>
+                        <input
+                          type="text"
+                          value={tenantGstin || "07AAAAA0000A1Z5"}
+                          onChange={(e) => setTenantGstin(e.target.value)}
+                          className="w-full bg-white border border-slate-300 text-slate-900 rounded-xl py-2 px-3 text-xs font-mono"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[11px] text-slate-600 font-bold uppercase mb-1">Currency Symbol</label>
+                        <input
+                          type="text"
+                          value={tenantCurrencySymbol || "₹"}
+                          onChange={(e) => setTenantCurrencySymbol(e.target.value)}
+                          className="w-full bg-white border border-slate-300 text-slate-900 rounded-xl py-2 px-3 text-xs font-mono"
+                        />
+                      </div>
+                    </div>
+                    <div className="pt-2">
+                      <button
+                        type="button"
+                        onClick={() => triggerNotification("Store branding and corporate configuration saved successfully!", "success")}
+                        className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl flex items-center gap-2 cursor-pointer shadow-sm"
+                      >
+                        <Save className="w-3.5 h-3.5" />
+                        <span>Save Store Settings</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Sub-tab 3: STORE BRANCHES */}
+              {activeSystemSettingsSubTab === "branches" && (
+                <div className="space-y-4 max-w-3xl">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h3 className="text-sm font-bold text-slate-900">Multi-Branch Outlets Directory</h3>
+                      <p className="text-xs text-slate-500">Physical retail locations connected to the enterprise database.</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setActiveMenuTab("multibranch")}
+                      className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl flex items-center gap-1.5 cursor-pointer shadow-sm"
+                    >
+                      <GitBranch className="w-3.5 h-3.5" />
+                      <span>Open Multi-Branch HQ</span>
+                    </button>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
+                    {[
+                      { name: "Main Street Supermarket HQ", code: "BRANCH-HQ-01", city: "New Delhi", staff: 14, status: "ONLINE" },
+                      { name: "Connaught Place Express Outlet", code: "BRANCH-CP-02", city: "New Delhi", staff: 8, status: "ONLINE" },
+                      { name: "South City Hypermarket", code: "BRANCH-SC-03", city: "Gurugram", staff: 22, status: "ONLINE" },
+                      { name: "West Gate Mall Counter", code: "BRANCH-WG-04", city: "Noida", staff: 6, status: "ONLINE" }
+                    ].map((b, i) => (
+                      <div key={i} className="p-4 bg-slate-50 border border-slate-200 rounded-2xl flex items-center justify-between">
+                        <div>
+                          <p className="text-xs font-bold text-slate-900">{b.name}</p>
+                          <p className="text-[10px] text-slate-500 font-mono mt-0.5">{b.code} · {b.city}</p>
+                        </div>
+                        <span className="text-[9px] font-mono px-2 py-0.5 rounded font-bold bg-emerald-100 text-emerald-800">
+                          {b.status}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Sub-tab 4: PRODUCT CATEGORIES */}
+              {activeSystemSettingsSubTab === "categories" && (
+                <div className="space-y-4 max-w-3xl">
+                  <h3 className="text-sm font-bold text-slate-900">Product Categories & Tax Classifications</h3>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                    {[
+                      { name: "Dairy & Eggs", tax: "5% GST", items: 42 },
+                      { name: "Beverages & Drinks", tax: "18% GST", items: 68 },
+                      { name: "Bakery & Breads", tax: "5% GST", items: 35 },
+                      { name: "Fresh Produce", tax: "0% GST", items: 84 },
+                      { name: "Snacks & Confectionery", tax: "12% GST", items: 56 },
+                      { name: "Household Essentials", tax: "18% GST", items: 49 }
+                    ].map((c, i) => (
+                      <div key={i} className="p-3 bg-slate-50 border border-slate-200 rounded-xl">
+                        <p className="text-xs font-bold text-slate-800">{c.name}</p>
+                        <p className="text-[10px] text-purple-600 font-mono font-medium mt-0.5">{c.tax} · {c.items} SKU</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Sub-tab 5: VENDORS & SUPPLIERS */}
+              {activeSystemSettingsSubTab === "suppliers" && (
+                <div className="space-y-4 max-w-3xl">
+                  <h3 className="text-sm font-bold text-slate-900">Registered Commercial Vendors & Suppliers</h3>
+                  <div className="space-y-2">
+                    {[
+                      { name: "Amul Dairy Federation Ltd.", phone: "+91 9811223344", category: "Dairy & Milk", terms: "Net 15 days" },
+                      { name: "Britannia Industries Distributors", phone: "+91 9822334455", category: "Bakery & Biscuits", terms: "Net 30 days" },
+                      { name: "Hindustan Unilever Wholesale", phone: "+91 9833445566", category: "Household Goods", terms: "Net 21 days" },
+                      { name: "Metro Cash & Carry Wholesale Hub", phone: "+91 9844556677", category: "General Commodities", terms: "Immediate" }
+                    ].map((s, i) => (
+                      <div key={i} className="p-3 bg-slate-50 border border-slate-200 rounded-xl flex items-center justify-between">
+                        <div>
+                          <p className="text-xs font-bold text-slate-800">{s.name}</p>
+                          <p className="text-[10px] text-slate-500">{s.category} · {s.phone}</p>
+                        </div>
+                        <span className="text-[10px] font-mono text-slate-600 bg-white border border-slate-200 px-2 py-0.5 rounded">
+                          {s.terms}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Sub-tab 6: POS PREFERENCES */}
+              {activeSystemSettingsSubTab === "pos" && (
+                <div className="space-y-5 max-w-2xl">
+                  <h3 className="text-sm font-bold text-slate-900">POS Hardware & Printing Preferences</h3>
+                  <div className="space-y-3 bg-slate-50 p-5 rounded-2xl border border-slate-200">
+                    <div className="flex items-center justify-between py-2 border-b border-slate-200/60">
+                      <div>
+                        <p className="text-xs font-bold text-slate-800">Thermal Receipt Size</p>
+                        <p className="text-[10px] text-slate-400">Standard 80mm roll width with auto paper cut</p>
+                      </div>
+                      <span className="text-xs font-bold font-mono text-purple-700 bg-purple-50 px-3 py-1 rounded-lg border border-purple-200">
+                        80mm Thermal
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between py-2 border-b border-slate-200/60">
+                      <div>
+                        <p className="text-xs font-bold text-slate-800">Barcode Format</p>
+                        <p className="text-[10px] text-slate-400">EAN-13, UPC-A, Code 128 Auto Detection</p>
+                      </div>
+                      <span className="text-xs font-bold font-mono text-emerald-700 bg-emerald-50 px-3 py-1 rounded-lg border border-emerald-200">
+                        Auto Multi-Format
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between py-2">
+                      <div>
+                        <p className="text-xs font-bold text-slate-800">Sound Audio Feedback</p>
+                        <p className="text-[10px] text-slate-400">Audio chime on barcode scan and completed payment</p>
+                      </div>
+                      <span className="text-xs font-bold font-mono text-blue-700 bg-blue-50 px-3 py-1 rounded-lg border border-blue-200">
+                        Enabled
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Sub-tab 7: DATA BACKUP */}
+              {activeSystemSettingsSubTab === "backup" && (
+                <div className="space-y-5 max-w-3xl">
+                  <div className="p-4 bg-blue-50 text-blue-900 rounded-2xl border border-blue-200 space-y-2">
+                    <div className="flex items-center gap-2">
+                      <Database className="w-5 h-5 text-blue-600 shrink-0" />
+                      <h4 className="font-extrabold text-sm">MySQL Production Database Archive</h4>
+                    </div>
+                    <p className="text-xs text-blue-800/80 leading-relaxed">
+                      Download the production database schema and pre-seeded dataset for database <code className="font-mono bg-blue-100 px-1 rounded">u559264694_expertbilling</code>.
+                    </p>
+                    <div className="pt-2 flex flex-wrap gap-2.5">
+                      <a
+                        href="/expertbilling_production.sql"
+                        download="expertbilling_production.sql"
+                        className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl shadow-md flex items-center gap-2 transition-all cursor-pointer"
+                      >
+                        <Download className="w-4 h-4" />
+                        <span>Download Production MySQL Dump (.sql)</span>
+                      </a>
+                      <button
+                        type="button"
+                        onClick={handleExportBackup}
+                        className="px-4 py-2 bg-slate-900 hover:bg-black text-white font-bold text-xs rounded-xl shadow-md flex items-center gap-2 transition-all cursor-pointer"
+                      >
+                        <DatabaseBackup className="w-4 h-4" />
+                        <span>Create Local JSON Snapshot</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Sub-tab 8: ENTERPRISE CONFIG (The 12 Categories Master Grid) */}
+              {activeSystemSettingsSubTab === "enterprise" && (
+                <div className="space-y-6">
+                  <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+                    <div>
+                      <h3 className="text-sm font-bold text-slate-900">Enterprise Operations Control Board</h3>
+                      <p className="text-xs text-slate-400">Twelve operational system categories and cluster synchronization parameters.</p>
+                    </div>
+                  </div>
+
+                  {/* 4-column Master Grid for 12 Categories */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 align-start items-start">
               
               {/* ================= COLUMN 1 ================= */}
               <div className="space-y-6">
@@ -5988,7 +6962,288 @@ export default function SuperAdminConsole({
 
             </div>
           </div>
-        ) : activeMenuTab === "backup" ? (
+        )}
+
+        {/* Sub-tab 9: CLIENT TYPOGRAPHY & FONT CUSTOMIZATION STUDIO */}
+        {activeSystemSettingsSubTab === "typography" && (() => {
+          const selectedTenant = tenantsList.find(t => t.id === typographyTenantId) || tenantsList[0];
+          return (
+            <div className="space-y-6">
+              {/* Header with Client Picker */}
+              <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-4 border-b border-slate-200/80">
+                <div>
+                  <h3 className="text-base font-extrabold text-slate-900 flex items-center gap-2">
+                    <Type className="w-5 h-5 text-purple-600" />
+                    <span>Client Workspace Typography & Font Customizer</span>
+                  </h3>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Configure font family style and font size scale separately for each tenant. Editable exclusively by Super Admin.
+                  </p>
+                </div>
+
+                {/* Target Client Switcher */}
+                <div className="flex items-center gap-3 bg-slate-100 p-1.5 rounded-2xl border border-slate-200">
+                  <span className="text-[11px] font-extrabold text-slate-600 uppercase tracking-wider pl-2">Client:</span>
+                  <select
+                    value={typographyTenantId}
+                    onChange={(e) => {
+                      const tid = e.target.value;
+                      setTypographyTenantId(tid);
+                      const target = tenantsList.find(t => t.id === tid);
+                      if (target) {
+                        setTypographyFontFamily(target.typography?.fontFamily || "Inter");
+                        setTypographyFontSizeScale(target.typography?.fontSizeScale || "standard");
+                      }
+                    }}
+                    className="bg-white border border-slate-300 rounded-xl px-3 py-1.5 text-xs font-bold text-slate-800 shadow-sm focus:outline-none cursor-pointer"
+                  >
+                    {tenantsList.map(t => (
+                      <option key={t.id} value={t.id}>
+                        {t.name} ({t.businessSector || "SUPERMARKET"}) — {t.subdomain}.expertbilling.in
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {/* Informative Clearance Banner */}
+              <div className="p-4 bg-gradient-to-r from-purple-50 via-indigo-50 to-blue-50 border border-purple-200/80 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="flex items-start gap-3">
+                  <div className="p-2.5 bg-purple-600 text-white rounded-xl shadow-sm shrink-0">
+                    <Sparkles className="w-4 h-4 text-amber-300" />
+                  </div>
+                  <div className="text-xs">
+                    <p className="font-extrabold text-slate-900">
+                      Super Admin Font Customization for: <span className="text-purple-700">{selectedTenant?.name}</span>
+                    </p>
+                    <p className="text-slate-600 text-[11px] mt-0.5 leading-relaxed">
+                      This client belongs to the <strong className="text-indigo-700">{selectedTenant?.businessSector || "SUPERMARKET"}</strong> sector with domain <code className="text-blue-600 font-mono">https://{selectedTenant?.subdomain}.expertbilling.in</code>. Selected font style and size scale are saved separately in their tenant record and immediately dynamic on their terminals.
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => handleSaveTypography(selectedTenant?.id)}
+                  className="px-5 py-2.5 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-extrabold text-xs rounded-xl shadow-md shadow-purple-500/20 flex items-center gap-2 transition-all cursor-pointer shrink-0 self-start sm:self-auto"
+                >
+                  <Save className="w-4 h-4" />
+                  <span>Save Typography</span>
+                </button>
+              </div>
+
+              {/* Main 2-Column Studio Grid: Controls (Left) & Live Preview (Right) */}
+              <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 items-start">
+                
+                {/* Left Column: Font Family & Font Size Scales (7 Cols) */}
+                <div className="xl:col-span-7 space-y-6">
+                  
+                  {/* FONT FAMILY SELECTION */}
+                  <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-5 space-y-4">
+                    <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                      <div>
+                        <h4 className="text-xs font-black uppercase text-slate-900 tracking-wider">
+                          1. Workspace Font Style (Family)
+                        </h4>
+                        <p className="text-[11px] text-slate-500">Choose the typographic voice tailored for {selectedTenant?.name}.</p>
+                      </div>
+                      <span className="text-[10px] font-mono font-bold text-purple-700 bg-purple-50 px-2 py-0.5 rounded border border-purple-200">
+                        Active: {typographyFontFamily}
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      {TENANT_FONT_OPTIONS.map((f) => {
+                        const isSelected = typographyFontFamily === f.id;
+                        const fontClass = `tenant-font-${f.id.toLowerCase().replace(/\s+/g, '-')}`;
+                        return (
+                          <button
+                            key={f.id}
+                            type="button"
+                            onClick={() => setTypographyFontFamily(f.id)}
+                            className={`p-3.5 rounded-xl border text-left transition-all cursor-pointer relative flex flex-col justify-between ${
+                              isSelected
+                                ? "bg-purple-50/90 border-purple-600 shadow-md ring-2 ring-purple-500/20"
+                                : "bg-white border-slate-200 hover:border-slate-300 hover:bg-slate-50/60"
+                            }`}
+                          >
+                            {isSelected && (
+                              <div className="absolute top-2.5 right-2.5 w-4.5 h-4.5 bg-purple-600 text-white rounded-full flex items-center justify-center">
+                                <Check className="w-3 h-3" />
+                              </div>
+                            )}
+                            <div>
+                              <div className="flex items-center justify-between">
+                                <span className="text-xs font-extrabold text-slate-900">{f.label}</span>
+                              </div>
+                              <span className="text-[9px] font-bold uppercase tracking-wider text-slate-400 font-mono">{f.description}</span>
+                            </div>
+                            <div className="mt-3 pt-2 border-t border-slate-100">
+                              <p className={`text-base font-bold text-slate-800 ${fontClass}`}>
+                                Ag ₹4,990
+                              </p>
+                              <p className={`text-[10px] text-slate-500 truncate ${fontClass}`}>
+                                Smart Billing POS
+                              </p>
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* FONT SIZE SCALE SELECTION */}
+                  <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-5 space-y-4">
+                    <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                      <div>
+                        <h4 className="text-xs font-black uppercase text-slate-900 tracking-wider">
+                          2. Typography Size Scale
+                        </h4>
+                        <p className="text-[11px] text-slate-500">Fine-tune text hierarchy and compactness according to client monitor sizes.</p>
+                      </div>
+                      <span className="text-[10px] font-mono font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-200">
+                        Scale: {typographyFontSizeScale.toUpperCase()}
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      {TENANT_FONT_SIZE_OPTIONS.map((s) => {
+                        const isSelected = typographyFontSizeScale === s.id;
+                        return (
+                          <button
+                            key={s.id}
+                            type="button"
+                            onClick={() => setTypographyFontSizeScale(s.id)}
+                            className={`p-3.5 rounded-xl border text-left transition-all cursor-pointer relative ${
+                              isSelected
+                                ? "bg-indigo-50/90 border-indigo-600 shadow-md ring-2 ring-indigo-500/20"
+                                : "bg-white border-slate-200 hover:border-slate-300 hover:bg-slate-50/60"
+                            }`}
+                          >
+                            {isSelected && (
+                              <div className="absolute top-2.5 right-2.5 w-4.5 h-4.5 bg-indigo-600 text-white rounded-full flex items-center justify-center">
+                                <Check className="w-3 h-3" />
+                              </div>
+                            )}
+                            <div className="flex items-center justify-between pr-5">
+                              <h5 className="text-xs font-black text-slate-900">{s.label}</h5>
+                              <span className="text-[9px] font-mono font-bold text-slate-400">{s.scalePercent}</span>
+                            </div>
+                            <p className="text-[10px] text-slate-500 mt-1 leading-relaxed">{s.description}</p>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Quick Action Bar */}
+                  <div className="flex items-center justify-between pt-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setTypographyFontFamily("Inter");
+                        setTypographyFontSizeScale("standard");
+                      }}
+                      className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl text-xs font-bold transition-all cursor-pointer"
+                    >
+                      Reset to Default Inter
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleSaveTypography(selectedTenant?.id)}
+                      className="px-6 py-2.5 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-extrabold text-xs rounded-xl shadow-md shadow-purple-500/20 flex items-center gap-2 transition-all cursor-pointer"
+                    >
+                      <Save className="w-4 h-4" />
+                      <span>Apply & Save for {selectedTenant?.name}</span>
+                    </button>
+                  </div>
+
+                </div>
+
+                {/* Right Column: Live Interactive Preview Simulator (5 Cols) */}
+                <div className="xl:col-span-5 bg-slate-900 text-white rounded-3xl border border-slate-800 p-6 space-y-5 shadow-xl sticky top-6">
+                  <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+                    <div className="flex items-center gap-2">
+                      <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse" />
+                      <h4 className="text-xs font-extrabold text-slate-200 uppercase tracking-wider font-mono">
+                        Live Client Workspace Preview
+                      </h4>
+                    </div>
+                    <span className="text-[9px] font-mono text-purple-400 bg-purple-950 px-2 py-0.5 rounded border border-purple-800 font-bold">
+                      {typographyFontFamily} • {typographyFontSizeScale}
+                    </span>
+                  </div>
+
+                  {/* Simulated Terminal Window Rendered in Client's Chosen Typography */}
+                  <div className={`bg-slate-950 rounded-2xl border border-slate-800 p-4 space-y-4 tenant-font-${typographyFontFamily.toLowerCase().replace(/\s+/g, '-')} tenant-scale-${typographyFontSizeScale}`}>
+                    
+                    {/* Simulated Header */}
+                    <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+                      <div>
+                        <p className="text-xs font-black text-white">{selectedTenant?.name || "Client Store"}</p>
+                        <p className="text-[9.5px] font-mono text-blue-400">https://{selectedTenant?.subdomain || "client"}.expertbilling.in</p>
+                      </div>
+                      <span className="px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-wider bg-emerald-950 text-emerald-400 border border-emerald-800">
+                        {selectedTenant?.businessSector || "SUPERMARKET"}
+                      </span>
+                    </div>
+
+                    {/* Simulated POS Cart List */}
+                    <div className="space-y-2 text-xs">
+                      <p className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Thermal Checkout Receipt Sample</p>
+                      <div className="bg-slate-900/80 p-3 rounded-xl border border-slate-800 space-y-2">
+                        <div className="flex justify-between items-center text-slate-200">
+                          <span>1x Organic Cavendesh Banana (1.2 kg)</span>
+                          <span className="font-bold">₹ 72.00</span>
+                        </div>
+                        <div className="flex justify-between items-center text-slate-200">
+                          <span>2x Whole Grain Sourdough Loaf</span>
+                          <span className="font-bold">₹ 180.00</span>
+                        </div>
+                        <div className="flex justify-between items-center text-slate-200">
+                          <span>1x Dairy Pure Milk 1L Tetra</span>
+                          <span className="font-bold">₹ 78.00</span>
+                        </div>
+                        <div className="pt-2 border-t border-slate-800 flex justify-between items-center text-emerald-400 font-bold">
+                          <span>TOTAL PAYABLE (GST INCL.)</span>
+                          <span className="text-base font-black">₹ 330.00</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Simulated UI Buttons in Font */}
+                    <div className="grid grid-cols-2 gap-2 pt-1">
+                      <div className="py-2.5 px-3 bg-blue-600 text-white rounded-xl text-center font-bold text-xs shadow-md">
+                        💳 Spool Thermal Receipt
+                      </div>
+                      <div className="py-2.5 px-3 bg-emerald-600 text-white rounded-xl text-center font-bold text-xs shadow-md">
+                        📱 UPI QR Code
+                      </div>
+                    </div>
+
+                    <p className="text-[9.5px] text-slate-500 text-center">
+                      Styling applied: <span className="text-slate-300 font-semibold">{typographyFontFamily}</span> font family with <span className="text-slate-300 font-semibold">{typographyFontSizeScale}</span> sizing scale.
+                    </p>
+                  </div>
+
+                  <div className="p-3 bg-slate-800/60 rounded-xl border border-slate-700/60 text-[11px] text-slate-300 space-y-1">
+                    <p className="font-bold text-white flex items-center gap-1.5">
+                      <CheckCircle className="w-3.5 h-3.5 text-emerald-400" />
+                      Automatic Multi-Tenant Propagation
+                    </p>
+                    <p className="text-slate-400 text-[10px]">
+                      When saved, the active client session immediately switches to these typographic styles without requiring app reloading or restarts.
+                    </p>
+                  </div>
+                </div>
+
+              </div>
+            </div>
+          );
+        })()}
+
+      </div>
+    </div>
+  ) : activeMenuTab === "backup" ? (
           /* Backup & Restore panel content */
           <div className="flex-1 p-8 overflow-y-auto space-y-6" id="backup-panel">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -6604,6 +7859,67 @@ export default function SuperAdminConsole({
                 </div>
               </div>
 
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Business Sector</label>
+                  <select
+                    value={editTenantBusinessSector}
+                    onChange={(e) => setEditTenantBusinessSector(e.target.value as BusinessSector)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2 font-bold text-slate-800 focus:outline-none cursor-pointer"
+                  >
+                    {(Object.keys(BUSINESS_SECTORS_CATALOG) as BusinessSector[]).map((sec) => (
+                      <option key={sec} value={sec}>
+                        {BUSINESS_SECTORS_CATALOG[sec].label} ({sec})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Tenant Domain Status</label>
+                  <div className="p-2 bg-slate-50 border border-slate-200 rounded-xl font-mono text-[11px] font-bold text-emerald-600 flex items-center justify-between">
+                    <span className="truncate">https://{editTenantSubdomain || editingTenant.subdomain}.expertbilling.in</span>
+                    <span className="text-[8px] bg-emerald-100 px-1 py-0.2 rounded">ACTIVE</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="p-3 bg-purple-50/60 rounded-xl border border-purple-200/60 space-y-2">
+                <div className="flex items-center gap-1.5 text-purple-900 font-extrabold text-[11px]">
+                  <Type className="w-3.5 h-3.5 text-purple-600" />
+                  <span>Client Workspace Typography Customization</span>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[9.5px] font-bold text-slate-600 uppercase mb-1">Font Family (Style)</label>
+                    <select
+                      value={editTenantFontFamily}
+                      onChange={(e) => setEditTenantFontFamily(e.target.value as TenantFontFamily)}
+                      className="w-full bg-white border border-purple-200 rounded-lg p-2 font-bold text-slate-800 focus:outline-none cursor-pointer text-xs"
+                    >
+                      {TENANT_FONT_OPTIONS.map((f) => (
+                        <option key={f.id} value={f.id}>
+                          {f.label} ({f.description})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-[9.5px] font-bold text-slate-600 uppercase mb-1">Font Size Scale</label>
+                    <select
+                      value={editTenantFontSizeScale}
+                      onChange={(e) => setEditTenantFontSizeScale(e.target.value as TenantFontSizeScale)}
+                      className="w-full bg-white border border-purple-200 rounded-lg p-2 font-bold text-slate-800 focus:outline-none cursor-pointer text-xs"
+                    >
+                      {TENANT_FONT_SIZE_OPTIONS.map((s) => (
+                        <option key={s.id} value={s.id}>
+                          {s.label} ({s.scalePercent})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              </div>
+
               <div>
                 <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Onboarding Notes</label>
                 <textarea
@@ -7092,12 +8408,15 @@ export default function SuperAdminConsole({
               </button>
               <button
                 onClick={async () => {
-                  triggerNotification(`Compiling high-fidelity ${selectedPrinterLayout === 'standard-a4' ? 'Office A4' : 'Thermal'} print file for ${selectedInvoice.id}...`, "success");
-                  const success = await printElementById("superadmin-invoice-print", selectedPrinterLayout);
+                  const filename = `Invoice-${selectedInvoice.id}.pdf`;
+                  const success = await printElementById("superadmin-invoice-print", selectedPrinterLayout, {
+                    invoiceId: selectedInvoice.id,
+                    filename
+                  });
                   if (success) {
-                    triggerNotification(`Invoice ${selectedInvoice.id} print job compiled successfully!`, "success");
+                    triggerNotification(`Invoice ${selectedInvoice.id} print job dispatched! PDF downloaded to your device.`, "success");
                   } else {
-                    triggerNotification("Failed to compile high-fidelity invoice copy.", "warning");
+                    triggerNotification("Failed to compile invoice copy.", "warning");
                   }
                 }}
                 className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl font-bold text-xs shadow-md shadow-slate-900/10 flex items-center gap-1.5 cursor-pointer transition-all"
@@ -7397,8 +8716,19 @@ export default function SuperAdminConsole({
                   <span className="font-bold text-white">{showOnboardingSuccessModal.name || (showOnboardingSuccessModal as any).tenantName || "Corporate Client"}</span>
                 </div>
                 <div className="flex justify-between items-center text-slate-200">
+                  <span className="text-slate-500">Business Sector:</span>
+                  <span className="font-black text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">{showOnboardingSuccessModal.businessSector || "SUPERMARKET"}</span>
+                </div>
+                <div className="flex justify-between items-center text-slate-200">
                   <span className="text-slate-500">Tenant Domain:</span>
-                  <span className="font-bold text-blue-400">https://{showOnboardingSuccessModal.subdomain || (showOnboardingSuccessModal as any).tenantSubdomain || "client"}.expertbilling.in</span>
+                  <div className="flex items-center gap-1.5">
+                    <span className="font-bold text-blue-400">https://{showOnboardingSuccessModal.subdomain || (showOnboardingSuccessModal as any).tenantSubdomain || "client"}.expertbilling.in</span>
+                    <span className="text-[8px] font-bold text-emerald-400 bg-emerald-950 px-1.5 py-0.2 rounded border border-emerald-800">ACTIVE</span>
+                  </div>
+                </div>
+                <div className="flex justify-between items-center text-slate-200">
+                  <span className="text-slate-500">Workspace Font:</span>
+                  <span className="font-bold text-purple-400">{showOnboardingSuccessModal.typography?.fontFamily || "Inter"} ({showOnboardingSuccessModal.typography?.fontSizeScale || "standard"})</span>
                 </div>
                 <div className="flex justify-between items-center text-slate-200">
                   <span className="text-slate-500">Admin Login UID:</span>
@@ -7420,7 +8750,9 @@ export default function SuperAdminConsole({
                 </p>
                 <ul className="list-disc list-inside text-[11px] space-y-1 text-slate-300">
                   <li>Provisioned isolated multi-tenant database slice and GSTIN record.</li>
-                  <li>Bound corporate portal address handle to global load balancer.</li>
+                  <li>Configured sector-specific feature modules ({showOnboardingSuccessModal.sectorConfig?.defaultModules?.join(", ") || "POS, Inventory"}).</li>
+                  <li>Bound corporate portal address handle to global load balancer with TLS 1.3 wildcard SSL.</li>
+                  <li>Applied custom client typography: {showOnboardingSuccessModal.typography?.fontFamily || "Inter"} ({showOnboardingSuccessModal.typography?.fontSizeScale || "standard"} scale).</li>
                   <li>Logged initial onboarding setup fee invoice (₹ {((showOnboardingSuccessModal.onboardingFeePaid ?? (showOnboardingSuccessModal as any).onboardingFee) || 0).toLocaleString()}).</li>
                 </ul>
               </div>
@@ -7430,12 +8762,14 @@ export default function SuperAdminConsole({
                   type="button"
                   onClick={() => {
                     const cName = showOnboardingSuccessModal.name || (showOnboardingSuccessModal as any).tenantName || "Corporate Client";
+                    const cSector = showOnboardingSuccessModal.businessSector || "SUPERMARKET";
                     const cDomain = showOnboardingSuccessModal.subdomain || (showOnboardingSuccessModal as any).tenantSubdomain || "client";
+                    const cFont = `${showOnboardingSuccessModal.typography?.fontFamily || "Inter"} (${showOnboardingSuccessModal.typography?.fontSizeScale || "standard"})`;
                     const cUid = showOnboardingSuccessModal.adminLoginId || tenantAdminLoginId || "admin";
                     const cPass = showOnboardingSuccessModal.adminPassword || tenantAdminPassword || "";
                     const cPlan = showOnboardingSuccessModal.tier || "GROWTH";
                     const cGstin = showOnboardingSuccessModal.gstinRegNumber || (showOnboardingSuccessModal as any).gstin || "";
-                    const text = `EXPERT POS CLIENT ONBOARDING PACK\n--------------------------------\nClient Name: ${cName}\nDomain: https://${cDomain}.expertbilling.in\nAdmin Login: ${cUid}\nPassword: ${cPass}\nPlan: ${cPlan}\nGSTIN: ${cGstin}`;
+                    const text = `EXPERT POS CLIENT ONBOARDING PACK\n--------------------------------\nClient Name: ${cName}\nBusiness Sector: ${cSector}\nDomain: https://${cDomain}.expertbilling.in (ACTIVE)\nTypography: ${cFont}\nAdmin Login: ${cUid}\nPassword: ${cPass}\nPlan: ${cPlan}\nGSTIN: ${cGstin}`;
                     navigator.clipboard.writeText(text);
                     triggerNotification("Onboarding Welcome Credentials copied to clipboard!", "success");
                   }}
@@ -7954,6 +9288,156 @@ export default function SuperAdminConsole({
           </div>
         </div>
       )}
+
+      {/* QUICK CLIENT TYPOGRAPHY CUSTOMIZATION MODAL */}
+      {showTypographyModal && (() => {
+        const modalTenant = tenantsList.find(t => t.id === typographyTenantId) || tenantsList[0];
+        return (
+          <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fadeIn">
+            <div className="bg-white text-slate-800 w-full max-w-2xl rounded-3xl overflow-hidden shadow-2xl border border-slate-200 flex flex-col max-h-[90vh]">
+              
+              <div className="p-6 bg-gradient-to-r from-purple-600 via-indigo-600 to-slate-900 text-white flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-2xl bg-white/20 text-white flex items-center justify-center shadow-inner">
+                    <Type className="w-5 h-5 text-purple-200" />
+                  </div>
+                  <div>
+                    <h3 className="text-base font-black text-white">Client Typography Customizer</h3>
+                    <p className="text-[11px] text-purple-200 mt-0.5">
+                      Configuring for {modalTenant?.name} ({modalTenant?.businessSector || "SUPERMARKET"})
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowTypographyModal(false)}
+                  className="p-1.5 hover:bg-white/10 rounded-xl transition-all text-slate-300 hover:text-white cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <div className="p-6 space-y-5 overflow-y-auto text-xs">
+                
+                {/* Domain & Sector info */}
+                <div className="bg-slate-50 p-3.5 rounded-2xl border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <div>
+                    <p className="text-[10px] uppercase font-bold text-slate-400">Target Tenant Slice</p>
+                    <p className="text-sm font-extrabold text-slate-900">{modalTenant?.name}</p>
+                    <p className="text-[10px] font-mono text-blue-600 mt-0.5">https://{modalTenant?.subdomain}.expertbilling.in</p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="px-2.5 py-1 rounded-xl text-[10px] font-black uppercase tracking-wider bg-indigo-50 text-indigo-700 border border-indigo-200/50">
+                      Sector: {modalTenant?.businessSector || "SUPERMARKET"}
+                    </span>
+                    <span className="px-2 py-0.5 rounded text-[9px] font-mono font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                      ACTIVE
+                    </span>
+                  </div>
+                </div>
+
+                {/* Font Family Selector Cards */}
+                <div className="space-y-2">
+                  <label className="text-[11px] font-extrabold text-slate-700 uppercase tracking-wider block">
+                    Choose Font Family (Style)
+                  </label>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+                    {TENANT_FONT_OPTIONS.map((f) => {
+                      const isSelected = typographyFontFamily === f.id;
+                      const fontClass = `tenant-font-${f.id.toLowerCase().replace(/\s+/g, '-')}`;
+                      return (
+                        <button
+                          key={f.id}
+                          type="button"
+                          onClick={() => setTypographyFontFamily(f.id)}
+                          className={`p-3 rounded-xl border text-left transition-all cursor-pointer relative ${
+                            isSelected
+                              ? "bg-purple-50/90 border-purple-600 shadow-md ring-2 ring-purple-500/20"
+                              : "bg-white border-slate-200 hover:border-slate-300"
+                          }`}
+                        >
+                          {isSelected && (
+                            <div className="absolute top-2 right-2 w-4 h-4 bg-purple-600 text-white rounded-full flex items-center justify-center">
+                              <Check className="w-2.5 h-2.5" />
+                            </div>
+                          )}
+                          <p className="text-xs font-black text-slate-900">{f.label}</p>
+                          <p className="text-[9px] font-mono text-slate-400">{f.description}</p>
+                          <p className={`mt-2 text-sm font-bold text-slate-800 ${fontClass}`}>
+                            Ag 123
+                          </p>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Font Size Scale Selector */}
+                <div className="space-y-2">
+                  <label className="text-[11px] font-extrabold text-slate-700 uppercase tracking-wider block">
+                    Choose Font Size Scale
+                  </label>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                    {TENANT_FONT_SIZE_OPTIONS.map((s) => {
+                      const isSelected = typographyFontSizeScale === s.id;
+                      return (
+                        <button
+                          key={s.id}
+                          type="button"
+                          onClick={() => setTypographyFontSizeScale(s.id)}
+                          className={`p-3 rounded-xl border text-left transition-all cursor-pointer relative ${
+                            isSelected
+                              ? "bg-indigo-50/90 border-indigo-600 shadow-md ring-2 ring-indigo-500/20"
+                              : "bg-white border-slate-200 hover:border-slate-300"
+                          }`}
+                        >
+                          <p className="text-xs font-black text-slate-900">{s.label}</p>
+                          <p className="text-[9px] font-mono font-bold text-indigo-600">{s.scalePercent}</p>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Live Specimen Preview */}
+                <div className={`p-4 bg-slate-900 text-white rounded-2xl border border-slate-800 space-y-2 tenant-font-${typographyFontFamily.toLowerCase().replace(/\s+/g, '-')} tenant-scale-${typographyFontSizeScale}`}>
+                  <div className="flex justify-between items-center text-xs">
+                    <span className="font-extrabold text-purple-300 uppercase">Live Font Simulation</span>
+                    <span className="text-[10px] font-mono text-slate-400">{typographyFontFamily} • {typographyFontSizeScale}</span>
+                  </div>
+                  <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 flex justify-between items-center">
+                    <div>
+                      <p className="text-xs font-bold text-white">Invoice #INV-2026-902</p>
+                      <p className="text-[10px] text-slate-400">Total Bill Payable</p>
+                    </div>
+                    <p className="text-lg font-black text-emerald-400">₹ 2,450.00</p>
+                  </div>
+                </div>
+
+              </div>
+
+              <div className="p-4 bg-slate-50 border-t border-slate-200 flex justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={() => setShowTypographyModal(false)}
+                  className="px-4 py-2 border border-slate-300 text-slate-600 rounded-xl text-xs font-bold hover:bg-slate-100 transition-all cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleSaveTypography(modalTenant?.id)}
+                  className="px-5 py-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white rounded-xl text-xs font-extrabold shadow-md shadow-purple-500/20 transition-all cursor-pointer flex items-center gap-1.5"
+                >
+                  <Save className="w-4 h-4" />
+                  <span>Apply & Save for {modalTenant?.name}</span>
+                </button>
+              </div>
+
+            </div>
+          </div>
+        );
+      })()}
 
     </div>
   );

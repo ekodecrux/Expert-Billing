@@ -171,6 +171,55 @@ export interface StockAdjustment {
   storeBranchId?: string;
 }
 
+export type BusinessSector = 
+  | "RETAIL" 
+  | "RESTAURANT" 
+  | "SUPERMARKET" 
+  | "PHARMACY" 
+  | "SERVICES";
+
+export type TenantFontFamily = 
+  | "Inter" 
+  | "Outfit" 
+  | "Plus Jakarta Sans" 
+  | "Roboto" 
+  | "Playfair Display" 
+  | "Space Grotesk" 
+  | "JetBrains Mono" 
+  | "EB Garamond" 
+  | "System Sans";
+
+export type TenantFontSizeScale = "compact" | "standard" | "spacious" | "large";
+
+export interface TenantTypography {
+  fontFamily: TenantFontFamily;
+  fontSizeScale: TenantFontSizeScale;
+  customHeadingFont?: string;
+  basePx?: number;
+  headingFont?: string;
+}
+
+export interface TenantSectorConfig {
+  sector: BusinessSector;
+  sectorName: string;
+  enabledModules: {
+    kdsTableManagement: boolean;
+    weighingScaleScanning: boolean;
+    batchExpiryRx: boolean;
+    variantMatrix: boolean;
+    appointmentsBooking: boolean;
+    loyaltyPoints: boolean;
+    stockTransfers: boolean;
+    barcodeLabelPrinting: boolean;
+    kotPrinting: boolean;
+    discountRules: boolean;
+  };
+  posMode: "RETAIL_QUICK" | "RESTAURANT_TABLES" | "SUPERMARKET_FAST_SCAN" | "PHARMACY_RX" | "SERVICES_BOOKING";
+  defaultCategories: string[];
+  unitPresets: MeasurementUnit[];
+  quickActions: string[];
+}
+
 export interface Tenant {
   id: string;
   name: string;
@@ -186,6 +235,17 @@ export interface Tenant {
   maxProducts: number;
   onboardingFeePaid: number;
   companyLogo?: string;
+
+  // Business Sector & Automated Modular Engine
+  businessSector?: BusinessSector;
+  sectorConfig?: TenantSectorConfig;
+
+  // Automated Domain Routing & Activation
+  domainUrl?: string;
+  domainStatus?: "ACTIVE" | "PENDING_PROPAGATION" | "SSL_CONFIGURED";
+
+  // Per-Client Typography & Styling
+  typography?: TenantTypography;
 
   // Client Admin Credentials
   adminLoginId?: string;
@@ -213,6 +273,184 @@ export interface Tenant {
   gstinRegNumber?: string;
 }
 
+export const BUSINESS_SECTORS_CATALOG: Record<BusinessSector, {
+  id: BusinessSector;
+  label: string;
+  subtitle: string;
+  icon: string;
+  accentColor: string;
+  bgLight: string;
+  borderLight: string;
+  badgeClass: string;
+  description: string;
+  recommendedHardware: string[];
+  defaultCategories: string[];
+  unitPresets: MeasurementUnit[];
+  defaultModules: TenantSectorConfig["enabledModules"];
+  posMode: TenantSectorConfig["posMode"];
+  quickActions: string[];
+}> = {
+  RETAIL: {
+    id: "RETAIL",
+    label: "Retail & Apparel",
+    subtitle: "Fashion, Electronics, Footwear & Specialty Boutiques",
+    icon: "🛍️",
+    accentColor: "indigo",
+    bgLight: "bg-indigo-50",
+    borderLight: "border-indigo-200",
+    badgeClass: "bg-indigo-100 text-indigo-800 border-indigo-300",
+    description: "Tailored for retail boutiques and chains with apparel sizes/colors, barcode shelf tagging, returns, and customer loyalty rewards.",
+    recommendedHardware: ["80mm Thermal Receipt Printer", "Wireless Laser Barcode Scanner", "Heavy Duty Cash Drawer", "Barcode Label Printer"],
+    defaultCategories: ["Men's Apparel", "Women's Wear", "Footwear", "Accessories", "Electronics & Gadgets", "Cosmetics"],
+    unitPresets: [MeasurementUnit.PIECE, MeasurementUnit.PACK],
+    defaultModules: {
+      kdsTableManagement: false,
+      weighingScaleScanning: false,
+      batchExpiryRx: false,
+      variantMatrix: true,
+      appointmentsBooking: false,
+      loyaltyPoints: true,
+      stockTransfers: true,
+      barcodeLabelPrinting: true,
+      kotPrinting: false,
+      discountRules: true
+    },
+    posMode: "RETAIL_QUICK",
+    quickActions: ["Size/Color Lookup", "Print Shelf Labels", "Apply VIP Discount", "Process Return"]
+  },
+  RESTAURANT: {
+    id: "RESTAURANT",
+    label: "Restaurant & F&B",
+    subtitle: "Dine-In, Cafe, QSR, Bar, Bakery & Cloud Kitchen",
+    icon: "🍽️",
+    accentColor: "amber",
+    bgLight: "bg-amber-50",
+    borderLight: "border-amber-200",
+    badgeClass: "bg-amber-100 text-amber-800 border-amber-300",
+    description: "Configured for culinary businesses with table management, Kitchen Display System (KDS), KOT printing, and course modifiers.",
+    recommendedHardware: ["Kitchen KOT Thermal Printer", "80mm POS Receipt Printer", "Touch POS Terminal Display", "Cash Drawer"],
+    defaultCategories: ["Appetizers & Starters", "Main Courses", "Breads & Rice", "Beverages & Mocktails", "Desserts", "Combos & Thali"],
+    unitPresets: [MeasurementUnit.PIECE, MeasurementUnit.PACK, MeasurementUnit.LITER],
+    defaultModules: {
+      kdsTableManagement: true,
+      weighingScaleScanning: false,
+      batchExpiryRx: false,
+      variantMatrix: false,
+      appointmentsBooking: false,
+      loyaltyPoints: true,
+      stockTransfers: true,
+      barcodeLabelPrinting: false,
+      kotPrinting: true,
+      discountRules: true
+    },
+    posMode: "RESTAURANT_TABLES",
+    quickActions: ["Select Table", "Spool KOT to Kitchen", "Dine-in / Takeaway Toggle", "Add Cooking Note"]
+  },
+  SUPERMARKET: {
+    id: "SUPERMARKET",
+    label: "Supermarket & Grocery",
+    subtitle: "Hypermarkets, FMCG, Marts & Fresh Produce",
+    icon: "🛒",
+    accentColor: "emerald",
+    bgLight: "bg-emerald-50",
+    borderLight: "border-emerald-200",
+    badgeClass: "bg-emerald-100 text-emerald-800 border-emerald-300",
+    description: "Built for ultra high-speed barcode checkout, weighing scale integration, bulk FMCG packs, and automated MRP savings calculation.",
+    recommendedHardware: ["High-Speed Laser Scanner", "Electronic Weighing Scale RS-232", "80mm Thermal Receipt Printer", "Heavy Duty Cash Drawer"],
+    defaultCategories: ["Dairy & Eggs", "Beverages & Juices", "Snacks & Confectionery", "Fresh Produce & Fruits", "Personal Care & Hygiene", "Household Cleaning"],
+    unitPresets: [MeasurementUnit.KG, MeasurementUnit.GRAM, MeasurementUnit.LITER, MeasurementUnit.PIECE, MeasurementUnit.PACK],
+    defaultModules: {
+      kdsTableManagement: false,
+      weighingScaleScanning: true,
+      batchExpiryRx: true,
+      variantMatrix: false,
+      appointmentsBooking: false,
+      loyaltyPoints: true,
+      stockTransfers: true,
+      barcodeLabelPrinting: true,
+      kotPrinting: false,
+      discountRules: true
+    },
+    posMode: "SUPERMARKET_FAST_SCAN",
+    quickActions: ["Fast Scan Mode", "Weighing Scale Sync", "MRP Savings Banner", "Batch Expiry Check"]
+  },
+  PHARMACY: {
+    id: "PHARMACY",
+    label: "Pharmacy & Healthcare",
+    subtitle: "Chemist, Drugs, Surgical Supplies & Wellness",
+    icon: "💊",
+    accentColor: "rose",
+    bgLight: "bg-rose-50",
+    borderLight: "border-rose-200",
+    badgeClass: "bg-rose-100 text-rose-800 border-rose-300",
+    description: "Strict compliance with drug batch number validation, expiry date checks, prescription (Rx) doctor/patient records, and Schedule H tags.",
+    recommendedHardware: ["Wireless Barcode Scanner", "80mm Thermal Receipt Printer", "Medicine Label Printer", "Cash Drawer"],
+    defaultCategories: ["Antibiotics & Tablets", "Syrups & Suspensions", "Ointments & Creams", "Health Supplements", "Surgicals & First Aid", "Personal Care"],
+    unitPresets: [MeasurementUnit.PIECE, MeasurementUnit.PACK],
+    defaultModules: {
+      kdsTableManagement: false,
+      weighingScaleScanning: false,
+      batchExpiryRx: true,
+      variantMatrix: false,
+      appointmentsBooking: false,
+      loyaltyPoints: false,
+      stockTransfers: true,
+      barcodeLabelPrinting: true,
+      kotPrinting: false,
+      discountRules: true
+    },
+    posMode: "PHARMACY_RX",
+    quickActions: ["Prescription Rx Entry", "Batch/Expiry Enforcement", "Doctor Details", "Substitute Drug Lookup"]
+  },
+  SERVICES: {
+    id: "SERVICES",
+    label: "Services & Salon / Spa",
+    subtitle: "Hair Salon, Spa, Wellness Clinics & Service Studios",
+    icon: "✂️",
+    accentColor: "violet",
+    bgLight: "bg-violet-50",
+    borderLight: "border-violet-200",
+    badgeClass: "bg-violet-100 text-violet-800 border-violet-300",
+    description: "Designed for service professionals with appointment scheduling, stylist/therapist commission tracking, service durations, and client packages.",
+    recommendedHardware: ["80mm Thermal Receipt Printer", "Touch POS Terminal", "Cash Drawer", "Appointment Tablet Display"],
+    defaultCategories: ["Hair Services", "Skin & Facial", "Massage & Spa", "Nail Art & Manicure", "Bridal & Packages", "Retail Aftercare"],
+    unitPresets: [MeasurementUnit.PIECE, MeasurementUnit.PACK],
+    defaultModules: {
+      kdsTableManagement: false,
+      weighingScaleScanning: false,
+      batchExpiryRx: false,
+      variantMatrix: false,
+      appointmentsBooking: true,
+      loyaltyPoints: true,
+      stockTransfers: false,
+      barcodeLabelPrinting: false,
+      kotPrinting: false,
+      discountRules: true
+    },
+    posMode: "SERVICES_BOOKING",
+    quickActions: ["Book Appointment", "Assign Stylist / Staff", "Service Duration Selector", "Membership Package"]
+  }
+};
+
+export const TENANT_FONT_OPTIONS: { id: TenantFontFamily; label: string; preview: string; description: string; className: string }[] = [
+  { id: "Inter", label: "Inter (Modern Sans)", preview: "The quick brown fox jumps over 123", description: "Ultra-crisp, highly readable neutral sans-serif", className: "tenant-font-inter" },
+  { id: "Outfit", label: "Outfit (Friendly Sans)", preview: "The quick brown fox jumps over 123", description: "Geometric, contemporary digital retail aesthetics", className: "tenant-font-outfit" },
+  { id: "Plus Jakarta Sans", label: "Plus Jakarta Sans (Corporate)", preview: "The quick brown fox jumps over 123", description: "Sophisticated corporate & enterprise typography", className: "tenant-font-jakarta" },
+  { id: "Roboto", label: "Roboto (Clean Standard)", preview: "The quick brown fox jumps over 123", description: "Standard, clean, industry-proven geometric sans", className: "tenant-font-roboto" },
+  { id: "Playfair Display", label: "Playfair Display (Luxury Serif)", preview: "The quick brown fox jumps over 123", description: "High-contrast serif for luxury, boutiques & fine dining", className: "tenant-font-playfair" },
+  { id: "Space Grotesk", label: "Space Grotesk (Tech & Street)", preview: "The quick brown fox jumps over 123", description: "Avant-garde, tech-forward, distinctive streetwear vibe", className: "tenant-font-grotesk" },
+  { id: "JetBrains Mono", label: "JetBrains Mono (Monospace)", preview: "The quick brown fox jumps over 123", description: "High-precision monospace for financial & high-speed POS", className: "tenant-font-mono" },
+  { id: "EB Garamond", label: "EB Garamond (Heritage)", preview: "The quick brown fox jumps over 123", description: "Classical book & heritage humanist aesthetic", className: "tenant-font-garamond" },
+  { id: "System Sans", label: "System Default UI", preview: "The quick brown fox jumps over 123", description: "Native operating system UI font for raw speed", className: "tenant-font-system" }
+];
+
+export const TENANT_FONT_SIZE_OPTIONS: { id: TenantFontSizeScale; label: string; scalePercent: string; description: string; className: string }[] = [
+  { id: "compact", label: "Compact / High-Density", scalePercent: "88%", description: "Maximum data density for fast cashier workstations", className: "tenant-scale-compact" },
+  { id: "standard", label: "Standard (Default)", scalePercent: "100%", description: "Default clean balance between density and readability", className: "tenant-scale-standard" },
+  { id: "spacious", label: "Spacious / Tablet", scalePercent: "110%", description: "Slightly enlarged text for tablet & 15-inch touch displays", className: "tenant-scale-spacious" },
+  { id: "large", label: "Large / Touchscreen", scalePercent: "122%", description: "Extra-large high-contrast text for distance viewing", className: "tenant-scale-large" }
+];
+
 export interface AppSettings {
   autoPrintReceipt: boolean;
   enableSound: boolean;
@@ -237,9 +475,16 @@ export interface StockTransfer {
   comments?: string;
 }
 
+export interface PrintOptions {
+  filename?: string;
+  invoiceId?: string;
+  autoDownloadPdf?: boolean;
+}
+
 export async function printElementById(
   elementId: string, 
-  layoutProfile: "standard-a4" | "thermal-80mm" | "thermal-58mm" = "standard-a4"
+  layoutProfile: "standard-a4" | "thermal-80mm" | "thermal-58mm" = "standard-a4",
+  options?: PrintOptions
 ): Promise<boolean> {
   // Wait/poll for the element to exist in the DOM (up to 1500ms, checking every 50ms)
   let element = document.getElementById(elementId);
@@ -256,185 +501,237 @@ export async function printElementById(
     return false;
   }
 
-  // Gather stylesheet markup to pass into the print layout
-  const stylesHtml = Array.from(document.querySelectorAll("style, link[rel='stylesheet']"))
-    .map(style => style.outerHTML)
-    .join("\n");
+  const isA4 = layoutProfile === "standard-a4";
+  const is58 = layoutProfile === "thermal-58mm";
+  const widthCss = is58 ? "58mm" : isA4 ? "210mm" : "80mm";
+  const paddingCss = isA4 ? "15mm" : is58 ? "2mm" : "4mm";
+  const fontFamilyCss = isA4
+    ? 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
+    : 'monospace, "Courier New", Courier';
+  const fontSizeCss = is58 ? "10px" : isA4 ? "12px" : "11px";
 
-  let layoutCssOverride = "";
-  if (layoutProfile === "standard-a4") {
-    layoutCssOverride = `
-      body, html {
-        background: white !important;
-        color: black !important;
-        width: 100% !important;
-        margin: 0 !important;
-        padding: 0 !important;
-      }
-      .print-target-wrapper, #${elementId}, #print-temporary-container {
-        max-width: 100% !important;
-        width: 100% !important;
-        margin: 0 !important;
-        padding: 40px !important;
-        box-sizing: border-box !important;
-        font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
-        border: none !important;
-        box-shadow: none !important;
-        border-radius: 0 !important;
-      }
-      /* Remove forced narrow scroll bounds on standard A4 printers */
-      .max-w-sm, .max-w-md, .max-w-lg {
-        max-width: 100% !important;
-        width: 100% !important;
-      }
-      /* Expand layout grids beautifully */
-      .grid {
-        display: grid !important;
-        width: 100% !important;
-      }
-    `;
-  } else if (layoutProfile === "thermal-58mm") {
-    layoutCssOverride = `
-      body, html {
-        background: white !important;
-        color: black !important;
-        width: 58mm !important;
-        margin: 0 !important;
-        padding: 0 !important;
-      }
-      .print-target-wrapper, #${elementId}, #print-temporary-container {
-        max-width: 52mm !important;
-        width: 52mm !important;
-        margin: 0 auto !important;
-        padding: 4px !important;
-        box-sizing: border-box !important;
-        font-family: monospace !important;
-        border: none !important;
-        box-shadow: none !important;
-        border-radius: 0 !important;
-        font-size: 10px !important;
-      }
-      * {
-        font-size: 10px !important;
-      }
-      h4 {
-        font-size: 11px !important;
-      }
-    `;
-  } else { // thermal-80mm
-    layoutCssOverride = `
-      body, html {
-        background: white !important;
-        color: black !important;
-        width: 80mm !important;
-        margin: 0 !important;
-        padding: 0 !important;
-      }
-      .print-target-wrapper, #${elementId}, #print-temporary-container {
-        max-width: 76mm !important;
-        width: 76mm !important;
-        margin: 0 auto !important;
-        padding: 12px !important;
-        box-sizing: border-box !important;
-        font-family: monospace !important;
-        border: none !important;
-        box-shadow: none !important;
-        border-radius: 0 !important;
-        font-size: 12px !important;
-      }
-      * {
-        font-size: 12px !important;
-      }
-      h4 {
-        font-size: 14px !important;
-      }
-    `;
-  }
+  // Clean copy of element HTML without interactive buttons
+  const clone = element.cloneNode(true) as HTMLElement;
+  clone.querySelectorAll("button, .no-print, .action-buttons, [role='button']").forEach(el => el.remove());
 
-  // Add printing-active class to body
-  document.body.classList.add("printing-active");
-
-  const printStyle = document.createElement("style");
-  printStyle.id = "print-element-style";
-  printStyle.innerHTML = `
-    @media print {
-      html, body {
-        background: white !important;
-        color: black !important;
-        height: auto !important;
-        overflow: visible !important;
-      }
-      body > *:not(#print-temporary-container) {
-        display: none !important;
-      }
-      #print-temporary-container {
-        display: block !important;
-        position: absolute !important;
-        left: 0 !important;
-        top: 0 !important;
-        width: 100% !important;
-        background: white !important;
-        color: black !important;
-        z-index: 999999 !important;
-      }
-      button, .no-print, .action-buttons, [role="button"] {
-        display: none !important;
-      }
-      * {
-        -webkit-print-color-adjust: exact !important;
-        print-color-adjust: exact !important;
-      }
-      ${layoutCssOverride}
-    }
-  `;
-  document.head.appendChild(printStyle);
-
-  const tempContainer = document.createElement("div");
-  tempContainer.id = "print-temporary-container";
-  tempContainer.className = "print-target-wrapper";
-  // Copy innerHTML to avoid ID duplication clashing
-  tempContainer.innerHTML = element.innerHTML;
-
-  // Clean up buttons & interactive elements inside the copy
-  const interactiveElements = tempContainer.querySelectorAll("button, .no-print, .action-buttons, [role='button']");
-  interactiveElements.forEach(el => {
-    (el as HTMLElement).style.display = "none";
-  });
-
-  document.body.appendChild(tempContainer);
-
-  // Allow browser layout and rendering to settle down before triggering print dialog
-  await new Promise<void>((resolve) => setTimeout(resolve, 350));
-
-  let printSuccess = false;
+  // 1. Hardware iframe spooler execution
+  let iframePrinted = false;
   try {
-    window.print();
-    printSuccess = true;
-  } catch (error) {
-    console.warn("In-page browser printing failed or was blocked by sandbox security. Instantly triggering high-fidelity PDF compile...", error);
-    // Fallback: Direct high-fidelity PDF compile and downloader
-    const filename = `Print-${elementId}-${new Date().toISOString().slice(0, 10)}.pdf`;
-    printSuccess = await saveElementAsPDF(elementId, filename, layoutProfile);
+    const existingFrame = document.getElementById("pos-hardware-print-iframe");
+    if (existingFrame) existingFrame.remove();
+
+    const iframe = document.createElement("iframe");
+    iframe.id = "pos-hardware-print-iframe";
+    iframe.style.position = "fixed";
+    iframe.style.right = "0";
+    iframe.style.bottom = "0";
+    iframe.style.width = "0";
+    iframe.style.height = "0";
+    iframe.style.border = "none";
+    iframe.style.visibility = "hidden";
+    iframe.setAttribute("aria-hidden", "true");
+    document.body.appendChild(iframe);
+
+    const doc = iframe.contentWindow?.document;
+    if (doc) {
+      doc.open();
+      doc.write(`<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Receipt Spool - ${options?.invoiceId || elementId}</title>
+  <style>
+    @page {
+      size: ${isA4 ? "A4 portrait" : is58 ? "58mm auto" : "80mm auto"};
+      margin: 0;
+    }
+    * {
+      box-sizing: border-box;
+      -webkit-print-color-adjust: exact !important;
+      print-color-adjust: exact !important;
+    }
+    html, body {
+      background: #ffffff !important;
+      color: #000000 !important;
+      margin: 0 !important;
+      padding: ${paddingCss} !important;
+      width: ${widthCss} !important;
+      font-family: ${fontFamilyCss} !important;
+      font-size: ${fontSizeCss} !important;
+    }
+    .print-target-wrapper {
+      width: 100% !important;
+      max-width: 100% !important;
+    }
+    button, .no-print, .action-buttons, [role="button"] { display: none !important; }
+  </style>
+</head>
+<body>
+  <div class="print-target-wrapper">
+    ${clone.innerHTML}
+  </div>
+</body>
+</html>`);
+      doc.close();
+
+      await new Promise(resolve => setTimeout(resolve, 300));
+      try {
+        iframe.contentWindow?.focus();
+        iframe.contentWindow?.print();
+        iframePrinted = true;
+      } catch (e) {
+        console.warn("Direct iframe.print() was suppressed by browser security:", e);
+      } finally {
+        setTimeout(() => {
+          if (document.body.contains(iframe)) {
+            document.body.removeChild(iframe);
+          }
+        }, 3000);
+      }
+    }
+  } catch (err) {
+    console.warn("Iframe spooler init error:", err);
   }
 
-  // Defer cleanup of DOM nodes and print styles so the browser print preview
-  // has ample time to spool the layout and content.
-  const cleanup = () => {
-    document.body.classList.remove("printing-active");
-    if (document.body.contains(tempContainer)) {
-      document.body.removeChild(tempContainer);
-    }
-    const styleEl = document.getElementById("print-element-style");
-    if (styleEl) {
-      styleEl.remove();
-    }
-  };
+  // 2. Guaranteed PDF receipt compilation & automatic download
+  // In iframe sandboxes (e.g. AI Studio preview), modal dialogs from window.print() are blocked silently.
+  // We ALWAYS compile and download the PDF so the user gets their tangible receipt document immediately!
+  const filename = options?.filename || 
+    (options?.invoiceId ? `Receipt-${options.invoiceId}.pdf` : `Receipt-${elementId}-${new Date().toISOString().slice(0, 10)}.pdf`);
 
-  window.addEventListener("afterprint", cleanup, { once: true });
-  // Safe 2.5 second fallback cleanup
-  setTimeout(cleanup, 2500);
+  let pdfSuccess = false;
+  try {
+    pdfSuccess = await saveElementAsPDF(elementId, filename, layoutProfile);
+  } catch (pdfErr) {
+    console.error("PDF generation error during spool:", pdfErr);
+  }
 
-  return printSuccess;
+  return iframePrinted || pdfSuccess;
+}
+
+/**
+ * Downloads a standalone, self-contained HTML slip that opens in any browser
+ * and triggers the system printer dialog automatically without sandbox restrictions.
+ */
+export function downloadPrintableHtmlSlip(
+  elementId: string,
+  filename: string = "receipt-slip.html",
+  layoutProfile: "standard-a4" | "thermal-80mm" | "thermal-58mm" = "thermal-80mm"
+): boolean {
+  const element = document.getElementById(elementId);
+  if (!element) {
+    console.error(`Element with id ${elementId} not found.`);
+    return false;
+  }
+
+  const clone = element.cloneNode(true) as HTMLElement;
+  clone.querySelectorAll("button, .no-print, .action-buttons, [role='button']").forEach(b => b.remove());
+
+  const isA4 = layoutProfile === "standard-a4";
+  const is58 = layoutProfile === "thermal-58mm";
+  const widthCss = is58 ? "58mm" : isA4 ? "210mm" : "80mm";
+  const bodyPadding = isA4 ? "15mm" : is58 ? "2mm" : "4mm";
+  const fontFamily = isA4 
+    ? 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
+    : 'monospace, "Courier New", Courier';
+  const fontSize = is58 ? "10px" : isA4 ? "13px" : "11px";
+
+  const cleanFilename = filename.endsWith(".html") ? filename : `${filename}.html`;
+
+  const html = `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>${cleanFilename.replace(/\.html$/, "")}</title>
+  <style>
+    @page {
+      size: ${isA4 ? "A4 portrait" : is58 ? "58mm auto" : "80mm auto"};
+      margin: 0;
+    }
+    * {
+      box-sizing: border-box;
+      -webkit-print-color-adjust: exact !important;
+      print-color-adjust: exact !important;
+    }
+    body {
+      margin: 0 auto;
+      padding: ${bodyPadding};
+      max-width: ${widthCss};
+      font-family: ${fontFamily};
+      font-size: ${fontSize};
+      color: #000;
+      background: #fff;
+    }
+    .print-control-bar {
+      text-align: center;
+      margin-bottom: 14px;
+      padding: 10px 14px;
+      background: #0f172a;
+      color: #fff;
+      border-radius: 8px;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+    }
+    .print-btn {
+      background: #10b981;
+      color: #ffffff;
+      border: none;
+      padding: 8px 18px;
+      font-size: 13px;
+      font-weight: 700;
+      border-radius: 6px;
+      cursor: pointer;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+    }
+    .print-btn:hover {
+      background: #059669;
+    }
+    @media print {
+      .print-control-bar {
+        display: none !important;
+      }
+      body {
+        padding: ${isA4 ? "10mm" : "1mm"};
+        max-width: 100% !important;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="print-control-bar">
+    <button class="print-btn" onclick="window.print()">🖨️ Click Here to Print Receipt Now</button>
+    <div style="font-size: 11px; margin-top: 6px; opacity: 0.85;">Opens printer dialog automatically with your paper dimensions</div>
+  </div>
+  <div class="receipt-body">
+    ${clone.innerHTML}
+  </div>
+  <script>
+    window.addEventListener('load', function() {
+      setTimeout(function() {
+        try {
+          window.focus();
+          window.print();
+        } catch(e) {}
+      }, 350);
+    });
+  </script>
+</body>
+</html>`;
+
+  const blob = new Blob([html], { type: "text/html;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = cleanFilename;
+  document.body.appendChild(link);
+  link.click();
+  setTimeout(() => {
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  }, 1000);
+  return true;
 }
 
 export async function saveElementAsPDF(
@@ -652,97 +949,104 @@ function generateVectorPDFFallback(
         }
       });
 
-      const pdfWidth = layoutProfile === "thermal-58mm" ? 180 : 250; 
-      const approxHeight = 220 + (metaLines.length * 12) + (items.length * 15) + (mathLines.length * 12);
+      const isA4 = layoutProfile === "standard-a4";
+      const pdfWidth = isA4 ? 595 : (layoutProfile === "thermal-58mm" ? 180 : 250); 
+      const approxHeight = isA4 ? 842 : (220 + (metaLines.length * 12) + (items.length * 15) + (mathLines.length * 12));
       const pdf = new jsPDF({
         orientation: "portrait",
         unit: "pt",
-        format: [pdfWidth, approxHeight]
+        format: isA4 ? "a4" : [pdfWidth, approxHeight]
       });
 
-      pdf.setFont("courier", "bold");
-      pdf.setFontSize(10);
-      let y = 20;
+      const fontFamily = isA4 ? "helvetica" : "courier";
+      pdf.setFont(fontFamily, "bold");
+      pdf.setFontSize(isA4 ? 14 : 10);
+      let y = isA4 ? 35 : 20;
+
+      const padX = isA4 ? 40 : 10;
+      const rightX = pdfWidth - padX;
+      const qtyX = isA4 ? pdfWidth - 140 : pdfWidth - 65;
+      const priceX = rightX;
 
       pdf.text(cleanText(storeTitle || "RETAIL CASH RECEIPT"), pdfWidth / 2, y, { align: "center" });
-      y += 12;
+      y += (isA4 ? 16 : 12);
 
-      pdf.setFont("courier", "normal");
-      pdf.setFontSize(8);
+      pdf.setFont(fontFamily, "normal");
+      pdf.setFontSize(isA4 ? 9 : 8);
       if (branchName) {
         pdf.text(cleanText(branchName), pdfWidth / 2, y, { align: "center" });
-        y += 10;
+        y += (isA4 ? 12 : 10);
       }
       if (branchAddress) {
-        const splitAddress = pdf.splitTextToSize(cleanText(branchAddress), pdfWidth - 20);
+        const splitAddress = pdf.splitTextToSize(cleanText(branchAddress), pdfWidth - (padX * 2));
         splitAddress.forEach((line: string) => {
           pdf.text(line, pdfWidth / 2, y, { align: "center" });
-          y += 10;
+          y += (isA4 ? 12 : 10);
         });
       }
       if (branchPhone) {
         pdf.text(cleanText(branchPhone), pdfWidth / 2, y, { align: "center" });
-        y += 10;
+        y += (isA4 ? 12 : 10);
       }
 
-      y += 2;
-      pdf.line(10, y, pdfWidth - 10, y);
+      y += 4;
+      pdf.line(padX, y, rightX, y);
       y += 10;
 
       metaLines.forEach(m => {
-        pdf.setFont("courier", "normal");
-        pdf.text(cleanText(m.key), 10, y);
-        pdf.setFont("courier", "bold");
-        pdf.text(cleanText(m.val), pdfWidth - 10, y, { align: "right" });
-        y += 11;
+        pdf.setFont(fontFamily, "normal");
+        pdf.text(cleanText(m.key), padX, y);
+        pdf.setFont(fontFamily, "bold");
+        pdf.text(cleanText(m.val), rightX, y, { align: "right" });
+        y += (isA4 ? 13 : 11);
       });
 
       y += 2;
-      pdf.line(10, y, pdfWidth - 10, y);
+      pdf.line(padX, y, rightX, y);
       y += 10;
 
-      pdf.setFont("courier", "bold");
-      pdf.text("Description", 10, y);
-      pdf.text("Qty", pdfWidth - 65, y, { align: "right" });
-      pdf.text("Price", pdfWidth - 10, y, { align: "right" });
+      pdf.setFont(fontFamily, "bold");
+      pdf.text("Description", padX, y);
+      pdf.text("Qty", qtyX, y, { align: "right" });
+      pdf.text("Price", priceX, y, { align: "right" });
       y += 11;
-      pdf.line(10, y, pdfWidth - 10, y);
+      pdf.line(padX, y, rightX, y);
       y += 10;
 
-      pdf.setFont("courier", "normal");
+      pdf.setFont(fontFamily, "normal");
       items.forEach(it => {
-        const nameLines = pdf.splitTextToSize(cleanText(it.name), pdfWidth - 90);
+        const nameLines = pdf.splitTextToSize(cleanText(it.name), isA4 ? (pdfWidth - 220) : (pdfWidth - 90));
         const startY = y;
         nameLines.forEach((line: string) => {
-          pdf.text(line, 10, y);
-          y += 10;
+          pdf.text(line, padX, y);
+          y += (isA4 ? 12 : 10);
         });
         
-        const finalY = Math.max(y - 10, startY);
-        pdf.setFont("courier", "bold");
-        pdf.text(cleanText(it.qty), pdfWidth - 65, finalY, { align: "right" });
-        pdf.text(cleanText(it.price), pdfWidth - 10, finalY, { align: "right" });
-        pdf.setFont("courier", "normal");
-        y = Math.max(y, finalY + 11);
+        const finalY = Math.max(y - (isA4 ? 12 : 10), startY);
+        pdf.setFont(fontFamily, "bold");
+        pdf.text(cleanText(it.qty), qtyX, finalY, { align: "right" });
+        pdf.text(cleanText(it.price), priceX, finalY, { align: "right" });
+        pdf.setFont(fontFamily, "normal");
+        y = Math.max(y, finalY + (isA4 ? 13 : 11));
       });
 
       y += 2;
-      pdf.line(10, y, pdfWidth - 10, y);
+      pdf.line(padX, y, rightX, y);
       y += 11;
 
       mathLines.forEach(m => {
         if (m.key.includes("TOTAL PAYABLE") || m.key.includes("NET PAYABLE")) {
-          pdf.setFont("courier", "bold");
-          pdf.setFontSize(10);
-          pdf.text(cleanText(m.key), 10, y);
-          pdf.text(cleanText(m.val), pdfWidth - 10, y, { align: "right" });
-          y += 13;
+          pdf.setFont(fontFamily, "bold");
+          pdf.setFontSize(isA4 ? 12 : 10);
+          pdf.text(cleanText(m.key), padX, y);
+          pdf.text(cleanText(m.val), rightX, y, { align: "right" });
+          y += 14;
         } else {
-          pdf.setFont("courier", "normal");
-          pdf.setFontSize(8);
-          pdf.text(cleanText(m.key), 10, y);
-          pdf.text(cleanText(m.val), pdfWidth - 10, y, { align: "right" });
-          y += 11;
+          pdf.setFont(fontFamily, "normal");
+          pdf.setFontSize(isA4 ? 9 : 8);
+          pdf.text(cleanText(m.key), padX, y);
+          pdf.text(cleanText(m.val), rightX, y, { align: "right" });
+          y += (isA4 ? 13 : 11);
         }
       });
 

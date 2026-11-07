@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import {
   ShoppingCart,
   Layers,
@@ -80,7 +80,15 @@ import {
   StockTransfer,
   AppSettings,
   printElementById,
-  saveElementAsPDF
+  saveElementAsPDF,
+  downloadPrintableHtmlSlip,
+  BusinessSector,
+  TenantFontFamily,
+  TenantFontSizeScale,
+  TenantTypography,
+  BUSINESS_SECTORS_CATALOG,
+  TENANT_FONT_OPTIONS,
+  TENANT_FONT_SIZE_OPTIONS
 } from "./types";
 
 import SuperAdminConsole from "./components/SuperAdminConsole";
@@ -94,6 +102,22 @@ const PRESET_TENANTS: Tenant[] = [
     id: "TENANT-001",
     name: "Expert POS Retail Hub",
     subdomain: "hub",
+    domainUrl: "https://hub.expertbilling.in",
+    domainStatus: "ACTIVE",
+    businessSector: "SUPERMARKET",
+    sectorConfig: {
+      sector: "SUPERMARKET",
+      sectorName: "Supermarket & Grocery",
+      enabledModules: BUSINESS_SECTORS_CATALOG.SUPERMARKET.defaultModules,
+      posMode: "SUPERMARKET_FAST_SCAN",
+      defaultCategories: BUSINESS_SECTORS_CATALOG.SUPERMARKET.defaultCategories,
+      unitPresets: BUSINESS_SECTORS_CATALOG.SUPERMARKET.unitPresets,
+      quickActions: BUSINESS_SECTORS_CATALOG.SUPERMARKET.quickActions
+    },
+    typography: {
+      fontFamily: "Inter",
+      fontSizeScale: "standard"
+    },
     adminEmail: "admin@expertbilling.in",
     phone: "+91 9988776655",
     currency: "₹",
@@ -113,7 +137,7 @@ const PRESET_TENANTS: Tenant[] = [
     contractDurationMonths: 12,
     renewalStatus: "AUTO_RENEW",
     onboardingSetupStatus: "COMPLETED",
-    hardwareProvisioned: ["Heavy Duty Cash Drawer", "Bluetooth Barcode Scanner", "80mm Thermal Printer"],
+    hardwareProvisioned: ["Electronic Weighing Scale RS-232", "High-Speed Laser Scanner", "Heavy Duty Cash Drawer", "80mm Thermal Printer"],
     onboardingNotes: "Initial sandbox isolation slice provisioned and physical hardware package dispatched.",
     clientVerificationStatus: "VERIFIED",
     gstinRegNumber: "07AAAAA1111A1Z1"
@@ -122,6 +146,22 @@ const PRESET_TENANTS: Tenant[] = [
     id: "TENANT-002",
     name: "Tech Solutions Pvt. Ltd.",
     subdomain: "techsolutions",
+    domainUrl: "https://techsolutions.expertbilling.in",
+    domainStatus: "ACTIVE",
+    businessSector: "RETAIL",
+    sectorConfig: {
+      sector: "RETAIL",
+      sectorName: "Retail & Apparel",
+      enabledModules: BUSINESS_SECTORS_CATALOG.RETAIL.defaultModules,
+      posMode: "RETAIL_QUICK",
+      defaultCategories: BUSINESS_SECTORS_CATALOG.RETAIL.defaultCategories,
+      unitPresets: BUSINESS_SECTORS_CATALOG.RETAIL.unitPresets,
+      quickActions: BUSINESS_SECTORS_CATALOG.RETAIL.quickActions
+    },
+    typography: {
+      fontFamily: "Plus Jakarta Sans",
+      fontSizeScale: "standard"
+    },
     adminEmail: "info@techsolutions.com",
     phone: "+91 9811223344",
     currency: "₹",
@@ -139,15 +179,31 @@ const PRESET_TENANTS: Tenant[] = [
     contractDurationMonths: 12,
     renewalStatus: "AUTO_RENEW",
     onboardingSetupStatus: "COMPLETED",
-    hardwareProvisioned: ["Heavy Duty Cash Drawer", "80mm Thermal Printer"],
+    hardwareProvisioned: ["Barcode Label Printer", "Wireless Laser Scanner", "Heavy Duty Cash Drawer", "80mm Thermal Printer"],
     clientVerificationStatus: "VERIFIED",
     gstinRegNumber: "07EXPAID2026A1Z1"
   },
   {
     id: "TENANT-003",
-    name: "ABC Retailers",
-    subdomain: "abcretailers",
-    adminEmail: "contact@abcretailers.com",
+    name: "The Gourmet Bistro & Cafe",
+    subdomain: "gourmetbistro",
+    domainUrl: "https://gourmetbistro.expertbilling.in",
+    domainStatus: "ACTIVE",
+    businessSector: "RESTAURANT",
+    sectorConfig: {
+      sector: "RESTAURANT",
+      sectorName: "Restaurant & F&B",
+      enabledModules: BUSINESS_SECTORS_CATALOG.RESTAURANT.defaultModules,
+      posMode: "RESTAURANT_TABLES",
+      defaultCategories: BUSINESS_SECTORS_CATALOG.RESTAURANT.defaultCategories,
+      unitPresets: BUSINESS_SECTORS_CATALOG.RESTAURANT.unitPresets,
+      quickActions: BUSINESS_SECTORS_CATALOG.RESTAURANT.quickActions
+    },
+    typography: {
+      fontFamily: "Playfair Display",
+      fontSizeScale: "spacious"
+    },
+    adminEmail: "contact@gourmetbistro.com",
     phone: "+91 9822334455",
     currency: "₹",
     tier: "GROWTH",
@@ -164,15 +220,31 @@ const PRESET_TENANTS: Tenant[] = [
     contractDurationMonths: 12,
     renewalStatus: "AUTO_RENEW",
     onboardingSetupStatus: "COMPLETED",
-    hardwareProvisioned: ["80mm Thermal Printer"],
+    hardwareProvisioned: ["Kitchen KOT Thermal Printer", "80mm POS Receipt Printer", "Touch POS Display"],
     clientVerificationStatus: "VERIFIED",
     gstinRegNumber: "07ABCRE1818B2Y2"
   },
   {
     id: "TENANT-004",
-    name: "Global Enterprises",
-    subdomain: "globalenterprises",
-    adminEmail: "hello@globalenterprises.com",
+    name: "MedPlus Chemist & Pharmacy",
+    subdomain: "medpluscare",
+    domainUrl: "https://medpluscare.expertbilling.in",
+    domainStatus: "ACTIVE",
+    businessSector: "PHARMACY",
+    sectorConfig: {
+      sector: "PHARMACY",
+      sectorName: "Pharmacy & Healthcare",
+      enabledModules: BUSINESS_SECTORS_CATALOG.PHARMACY.defaultModules,
+      posMode: "PHARMACY_RX",
+      defaultCategories: BUSINESS_SECTORS_CATALOG.PHARMACY.defaultCategories,
+      unitPresets: BUSINESS_SECTORS_CATALOG.PHARMACY.unitPresets,
+      quickActions: BUSINESS_SECTORS_CATALOG.PHARMACY.quickActions
+    },
+    typography: {
+      fontFamily: "Roboto",
+      fontSizeScale: "compact"
+    },
+    adminEmail: "hello@medpluscare.com",
     phone: "+91 9833445566",
     currency: "₹",
     tier: "ENTERPRISE",
@@ -189,34 +261,50 @@ const PRESET_TENANTS: Tenant[] = [
     contractDurationMonths: 12,
     renewalStatus: "AUTO_RENEW",
     onboardingSetupStatus: "COMPLETED",
-    hardwareProvisioned: ["Heavy Duty Cash Drawer", "Bluetooth Barcode Scanner", "80mm Thermal Printer"],
+    hardwareProvisioned: ["Wireless Barcode Scanner", "80mm Thermal Receipt Printer", "Medicine Label Printer"],
     clientVerificationStatus: "VERIFIED",
     gstinRegNumber: "07GLOBA1515C3X3"
   },
   {
     id: "TENANT-005",
-    name: "Smart Infotech",
-    subdomain: "smartinfotech",
-    adminEmail: "support@smartinfotech.com",
+    name: "Luxe Glow Salon & Spa",
+    subdomain: "luxeglow",
+    domainUrl: "https://luxeglow.expertbilling.in",
+    domainStatus: "ACTIVE",
+    businessSector: "SERVICES",
+    sectorConfig: {
+      sector: "SERVICES",
+      sectorName: "Services & Salon / Spa",
+      enabledModules: BUSINESS_SECTORS_CATALOG.SERVICES.defaultModules,
+      posMode: "SERVICES_BOOKING",
+      defaultCategories: BUSINESS_SECTORS_CATALOG.SERVICES.defaultCategories,
+      unitPresets: BUSINESS_SECTORS_CATALOG.SERVICES.unitPresets,
+      quickActions: BUSINESS_SECTORS_CATALOG.SERVICES.quickActions
+    },
+    typography: {
+      fontFamily: "Outfit",
+      fontSizeScale: "spacious"
+    },
+    adminEmail: "support@luxeglow.com",
     phone: "+91 9844556677",
     currency: "₹",
     tier: "STARTER",
-    status: "TRIAL",
+    status: "ACTIVE",
     createdAt: "2024-05-12T14:15:00Z",
     colorTheme: "violet",
-    maxBranches: 1,
-    maxProducts: 20,
-    onboardingFeePaid: 25000,
-    monthlySubscriptionFee: 1200,
+    maxBranches: 2,
+    maxProducts: 40,
+    onboardingFeePaid: 35000,
+    monthlySubscriptionFee: 1800,
     billingCycle: "MONTHLY",
     subscriptionStartDate: "2024-05-12",
-    subscriptionEndDate: "2024-11-12",
-    contractDurationMonths: 6,
-    renewalStatus: "MANUAL",
-    onboardingSetupStatus: "SYSTEM_PROVISIONED",
-    hardwareProvisioned: [],
-    clientVerificationStatus: "PENDING_KYC",
-    gstinRegNumber: "PENDING"
+    subscriptionEndDate: "2025-05-12",
+    contractDurationMonths: 12,
+    renewalStatus: "AUTO_RENEW",
+    onboardingSetupStatus: "COMPLETED",
+    hardwareProvisioned: ["80mm Thermal Receipt Printer", "Appointment Tablet Display"],
+    clientVerificationStatus: "VERIFIED",
+    gstinRegNumber: "07LUXEG1212D4W4"
   },
   {
     id: "TENANT-006",
@@ -642,6 +730,21 @@ export default function App() {
   });
 
   const activeTenant = tenantsList.find(t => t.id === activeTenantId) || tenantsList[0] || PRESET_TENANTS[0];
+
+  // Active Tenant Typography Classes
+  const activeTenantFontClass = useMemo(() => {
+    const fId = activeTenant.typography?.fontFamily;
+    if (!fId) return "tenant-font-inter";
+    const found = TENANT_FONT_OPTIONS.find(f => f.id === fId);
+    return found ? found.className : "tenant-font-inter";
+  }, [activeTenant.typography?.fontFamily]);
+
+  const activeTenantScaleClass = useMemo(() => {
+    const sId = activeTenant.typography?.fontSizeScale;
+    if (!sId) return "tenant-scale-standard";
+    const found = TENANT_FONT_SIZE_OPTIONS.find(s => s.id === sId);
+    return found ? found.className : "tenant-scale-standard";
+  }, [activeTenant.typography?.fontSizeScale]);
 
   const tenantProducts = products.filter(p => !p.tenantId || p.tenantId === activeTenantId);
 
@@ -2973,7 +3076,7 @@ export default function App() {
   }
 
   return (
-    <div className={`flex h-screen w-screen ${bgMode.rootBg} ${bgMode.text} overflow-hidden font-sans`} id="smart-billing-root">
+    <div className={`flex h-screen w-screen ${bgMode.rootBg} ${bgMode.text} overflow-hidden ${activeTenantFontClass} ${activeTenantScaleClass}`} id="smart-billing-root">
       {/* Dynamic Native Alert Bar */}
       {notifText && (
         <div className={`fixed top-4 right-4 z-50 p-4 rounded-xl shadow-xl flex items-center gap-3 transition-transform animate-bounce ${
@@ -3285,6 +3388,20 @@ export default function App() {
               )}
             </div>
             <div className="hidden sm:block h-4 w-[1px] bg-slate-200"></div>
+
+            {/* Business Sector & Domain Badge */}
+            <div className="hidden md:flex items-center gap-1.5 px-2.5 py-1 bg-white/80 dark:bg-slate-800/80 rounded-xl border border-slate-200/80 dark:border-slate-700/80 shadow-2xs text-xs font-bold shrink-0">
+              <span className="text-sm">
+                {BUSINESS_SECTORS_CATALOG[activeTenant.businessSector || "SUPERMARKET"]?.icon || "🛒"}
+              </span>
+              <span className="text-slate-800 dark:text-slate-100 font-extrabold text-[11px]">
+                {BUSINESS_SECTORS_CATALOG[activeTenant.businessSector || "SUPERMARKET"]?.label || "Supermarket"}
+              </span>
+              <span className="text-[9px] font-mono font-bold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/60 px-1.5 py-0.5 rounded border border-blue-200 dark:border-blue-800">
+                {activeTenant.subdomain}.expertbilling.in
+              </span>
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" title="Domain Active"></span>
+            </div>
             
             {/* Quick checkout search simulator */}
             <form onSubmit={handleBarcodeSubmit} className="relative hidden sm:block">
@@ -6124,6 +6241,20 @@ Payment Mode:   ${selectedInv.paymentMode}
                   setActiveTenantId(id);
                   localStorage.setItem("expert_aid_active_tenant_id", id);
                 }}
+                onLogout={() => {
+                  setIsLoggedIn(false);
+                  triggerNotification("Logged out of Super Admin sovereign session.", "success");
+                }}
+                onImpersonateClient={(email) => {
+                  const cred = credentialsList.find(c => c.email.toLowerCase() === email.toLowerCase());
+                  if (cred) {
+                    handleQuickLogin(cred);
+                  }
+                }}
+                onSwitchProfile={(profile) => {
+                  const cred = credentialsList.find(c => c.email.toLowerCase() === profile.email.toLowerCase()) || (profile as any);
+                  handleQuickLogin(cred);
+                }}
               />
             </div>
           )}
@@ -6264,11 +6395,9 @@ Payment Mode:   ${selectedInv.paymentMode}
                   ? "✓ Formats perfectly for standard 3-inch roll POS receipt printers."
                   : "✓ Formats tightly for mini 2-inch roll handheld thermal printers."}
               </p>
-              {typeof window !== "undefined" && window.self !== window.top && (
-                <div className="mt-1.5 p-2 bg-amber-50 rounded-xl border border-amber-200 text-[9px] font-semibold leading-normal text-amber-800 text-left">
-                  <strong>ℹ️ Print Preview & Saving:</strong> Since you are running in the sandbox workspace, browser print popups are restricted in the iframe. Click <strong>"Save PDF Receipt"</strong> below to instantly compile and download a high-fidelity PDF formatted to your choice to save locally!
-                </div>
-              )}
+              <div className="mt-1.5 p-2 bg-blue-50/80 rounded-xl border border-blue-200 text-[9px] font-medium leading-normal text-blue-900 text-left">
+                <strong className="text-blue-950">ℹ️ Hardware & Local Printing:</strong> Click <strong>"Spool Paper Print Receipt"</strong> to trigger printer spooling and download your printable PDF file. You can also click <strong>"Download Printable HTML Slip"</strong> to open and print in any external browser window!
+              </div>
             </div>
 
             {/* Thermal Receipt Body */}
@@ -6440,36 +6569,67 @@ Payment Mode:   ${selectedInv.paymentMode}
               <button
                 type="button"
                 onClick={async () => {
-                  triggerNotification(`Initiating print receipt request for ${selectedPrinterLayout === 'standard-a4' ? 'Standard Printer' : 'Thermal Printer'}...`, "success");
-                  const success = await printElementById("invoice-receipt-theme", selectedPrinterLayout);
+                  const invoiceId = showInvoicePrintPreview.id;
+                  const pdfFilename = `Receipt-${invoiceId}.pdf`;
+                  triggerNotification(`Spooling paper print job for ${selectedPrinterLayout === 'standard-a4' ? 'Standard A4 Printer' : 'Thermal POS Printer'}...`, "success");
+                  
+                  // Trigger both iframe hardware spooler and automatic PDF download guarantee
+                  const success = await printElementById("invoice-receipt-theme", selectedPrinterLayout, {
+                    invoiceId,
+                    filename: pdfFilename
+                  });
+
                   if (success) {
-                    triggerNotification("Print job compiled successfully! Check your printer dialog or downloads folder.", "success");
+                    triggerNotification(`✓ Print spooler dispatched! Downloaded ${pdfFilename} to your device.`, "success");
                   } else {
-                    triggerNotification("Print spool / PDF compilation failed.", "warning");
+                    // Fallback to standalone HTML slip
+                    downloadPrintableHtmlSlip("invoice-receipt-theme", `Receipt-${invoiceId}.html`, selectedPrinterLayout);
+                    triggerNotification(`Downloaded Printable Slip (Receipt-${invoiceId}.html). Open to print immediately!`, "success");
                   }
                 }}
-                className="w-full py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-xs font-bold font-display tracking-wider uppercase transition-all flex items-center justify-center gap-2 cursor-pointer shadow-sm"
+                className="w-full py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-xs font-bold font-display tracking-wider uppercase transition-all flex items-center justify-center gap-2 cursor-pointer shadow-sm active:scale-[0.99]"
               >
                 <Printer className="w-4 h-4 text-emerald-400" />
                 Spool Paper Print Receipt
               </button>
 
-              <button
-                type="button"
-                onClick={async () => {
-                  triggerNotification(`Compiling high-fidelity PDF copy of receipt and launching local downloader...`, "success");
-                  const success = await saveElementAsPDF("invoice-receipt-theme", `Receipt-${showInvoicePrintPreview.id}.pdf`, selectedPrinterLayout);
-                  if (success) {
-                    triggerNotification("PDF receipt downloaded successfully to local system.", "success");
-                  } else {
-                    triggerNotification("Failed to generate PDF receipt.", "warning");
-                  }
-                }}
-                className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold font-display tracking-wider uppercase transition-all flex items-center justify-center gap-2 cursor-pointer shadow-sm"
-              >
-                <Download className="w-4 h-4 text-blue-100" />
-                Save PDF Receipt
-              </button>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={async () => {
+                    const invoiceId = showInvoicePrintPreview.id;
+                    const pdfFilename = `Receipt-${invoiceId}.pdf`;
+                    triggerNotification(`Compiling high-resolution PDF (${selectedPrinterLayout})...`, "success");
+                    const success = await saveElementAsPDF("invoice-receipt-theme", pdfFilename, selectedPrinterLayout);
+                    if (success) {
+                      triggerNotification(`✓ Saved PDF receipt (${pdfFilename})!`, "success");
+                    } else {
+                      downloadPrintableHtmlSlip("invoice-receipt-theme", `Receipt-${invoiceId}.html`, selectedPrinterLayout);
+                      triggerNotification(`Exported Printable Slip (Receipt-${invoiceId}.html).`, "success");
+                    }
+                  }}
+                  className="py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold font-display tracking-wider uppercase transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-sm active:scale-[0.99]"
+                >
+                  <Download className="w-3.5 h-3.5 text-blue-100" />
+                  Save PDF
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    const invoiceId = showInvoicePrintPreview.id;
+                    const htmlFilename = `Receipt-${invoiceId}.html`;
+                    const ok = downloadPrintableHtmlSlip("invoice-receipt-theme", htmlFilename, selectedPrinterLayout);
+                    if (ok) {
+                      triggerNotification(`✓ Downloaded ${htmlFilename}! Double-click to print in browser.`, "success");
+                    }
+                  }}
+                  className="py-2.5 bg-amber-50 hover:bg-amber-100 border border-amber-300 text-amber-900 rounded-lg text-xs font-bold font-display tracking-wide uppercase transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-xs active:scale-[0.99]"
+                >
+                  <FileText className="w-3.5 h-3.5 text-amber-600" />
+                  HTML Slip
+                </button>
+              </div>
 
               <div className="border-t border-slate-200 pt-2 mt-2">
                 <button
@@ -6483,7 +6643,7 @@ Payment Mode:   ${selectedInv.paymentMode}
                     setVirtualPrintDone(false);
                     triggerNotification("Opened Virtual Printer Simulator! Click 'Virtual Print / Spool Paper' below.", "success");
                   }}
-                  className="w-full py-2 bg-emerald-550 hover:bg-emerald-600 text-emerald-800 hover:text-emerald-950 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-lg text-[10.5px] font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                  className="w-full py-2 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-800 hover:text-emerald-950 rounded-lg text-[10.5px] font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer"
                 >
                   <span>🔌 Open Virtual Printer Simulator</span>
                 </button>
