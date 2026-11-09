@@ -14,7 +14,10 @@
       "minStockAlert": 20,
       "batchNumber": "B-APL-05A",
       "expiryDate": "2026-06-15",
-      "supplierName": "Organica Green Farm Producers"
+      "supplierName": "Organica Green Farm Producers",
+      "unitQuantity": 1,
+      "unitLabel": "1 Kg",
+      "mrp": 207
     },
     {
       "id": "PROD-F02",
@@ -30,7 +33,10 @@
       "minStockAlert": 25,
       "batchNumber": "B-BAN-08V",
       "expiryDate": "2026-05-28",
-      "supplierName": "Organica Green Farm Producers"
+      "supplierName": "Organica Green Farm Producers",
+      "unitQuantity": 1,
+      "unitLabel": "1 Kg",
+      "mrp": 69
     },
     {
       "id": "PROD-D01",
@@ -46,7 +52,10 @@
       "minStockAlert": 15,
       "batchNumber": "MFT-BUT-C6",
       "expiryDate": "2026-08-10",
-      "supplierName": "Supreme Agro Foods Ltd."
+      "supplierName": "Supreme Agro Foods Ltd.",
+      "unitQuantity": 500,
+      "unitLabel": "500 Pieces",
+      "mrp": 299
     },
     {
       "id": "PROD-D02",
@@ -62,7 +71,10 @@
       "minStockAlert": 30,
       "batchNumber": "MFT-MLK-M1",
       "expiryDate": "2026-06-03",
-      "supplierName": "Supreme Agro Foods Ltd."
+      "supplierName": "Supreme Agro Foods Ltd.",
+      "unitQuantity": 1,
+      "unitLabel": "1 Pieces",
+      "mrp": 90
     },
     {
       "id": "PROD-G01",
@@ -78,7 +90,10 @@
       "minStockAlert": 30,
       "batchNumber": "B-BAS-09",
       "expiryDate": "2027-12-31",
-      "supplierName": "Apex Retail Supplies"
+      "supplierName": "Apex Retail Supplies",
+      "unitQuantity": 5,
+      "unitLabel": "5 Pieces",
+      "mrp": 747
     },
     {
       "id": "PROD-G02",
@@ -94,7 +109,10 @@
       "minStockAlert": 25,
       "batchNumber": "B-ATT-242",
       "expiryDate": "2026-11-20",
-      "supplierName": "Apex Retail Supplies"
+      "supplierName": "Apex Retail Supplies",
+      "unitQuantity": 10,
+      "unitLabel": "10 Pieces",
+      "mrp": 506
     },
     {
       "id": "PROD-B01",
@@ -110,7 +128,10 @@
       "minStockAlert": 100,
       "batchNumber": "B-COL-990",
       "expiryDate": "2026-12-05",
-      "supplierName": "Apex Retail Supplies"
+      "supplierName": "Apex Retail Supplies",
+      "unitQuantity": 1,
+      "unitLabel": "1 Pieces",
+      "mrp": 46
     },
     {
       "id": "PROD-B02",
@@ -126,7 +147,10 @@
       "minStockAlert": 10,
       "batchNumber": "B-CFB-A1",
       "expiryDate": "2026-05-30",
-      "supplierName": "Apex Retail Supplies"
+      "supplierName": "Apex Retail Supplies",
+      "unitQuantity": 1,
+      "unitLabel": "1 Pieces",
+      "mrp": 574
     },
     {
       "id": "PROD-S01",
@@ -142,7 +166,10 @@
       "minStockAlert": 50,
       "batchNumber": "B-POT-88",
       "expiryDate": "2026-09-18",
-      "supplierName": "Apex Retail Supplies"
+      "supplierName": "Apex Retail Supplies",
+      "unitQuantity": 1,
+      "unitLabel": "1 Pieces",
+      "mrp": 23
     },
     {
       "id": "PROD-H01",
@@ -158,7 +185,10 @@
       "minStockAlert": 12,
       "batchNumber": "B-HSD-312",
       "expiryDate": "2028-04-12",
-      "supplierName": "Zenith Household Brands"
+      "supplierName": "Zenith Household Brands",
+      "unitQuantity": 1,
+      "unitLabel": "1 Pieces",
+      "mrp": 109
     }
   ],
   "suppliers": [

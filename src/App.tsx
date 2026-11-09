@@ -59,7 +59,19 @@ import {
   Link2,
   ExternalLink,
   ArrowRight,
-  Globe
+  Globe,
+  Calendar,
+  FileSpreadsheet,
+  ArrowDownRight,
+  ArrowUpRight,
+  BarChart3,
+  Filter,
+  Building2,
+  MapPin,
+  Table,
+  Receipt,
+  Scan,
+  Package
 } from "lucide-react";
 
 import {
@@ -82,6 +94,7 @@ import {
   printElementById,
   saveElementAsPDF,
   downloadPrintableHtmlSlip,
+  exportToExcelCSV,
   BusinessSector,
   TenantFontFamily,
   TenantFontSizeScale,
@@ -96,6 +109,8 @@ import StaffRegistry from "./components/StaffRegistry";
 import SettingsPanel from "./components/SettingsPanel";
 import { ExpertAidLogo } from "./components/ExpertAidLogo";
 import { ProductLabelGeneratorModal } from "./components/ProductLabelGeneratorModal";
+import { BarcodeScannerModal } from "./components/BarcodeScannerModal";
+import { EditReceiptAddressModal } from "./components/EditReceiptAddressModal";
 
 const PRESET_TENANTS: Tenant[] = [
   {
@@ -140,7 +155,13 @@ const PRESET_TENANTS: Tenant[] = [
     hardwareProvisioned: ["Electronic Weighing Scale RS-232", "High-Speed Laser Scanner", "Heavy Duty Cash Drawer", "80mm Thermal Printer"],
     onboardingNotes: "Initial sandbox isolation slice provisioned and physical hardware package dispatched.",
     clientVerificationStatus: "VERIFIED",
-    gstinRegNumber: "07AAAAA1111A1Z1"
+    gstinRegNumber: "07AAAAA1111A1Z1",
+    businessLocation: "Downtown Smart Hypermarket (New Delhi)",
+    address: "Plot 14, Barakhamba Road, Connaught Place",
+    city: "New Delhi",
+    state: "Delhi",
+    pincode: "110001",
+    country: "India"
   },
   {
     id: "TENANT-002",
@@ -181,7 +202,13 @@ const PRESET_TENANTS: Tenant[] = [
     onboardingSetupStatus: "COMPLETED",
     hardwareProvisioned: ["Barcode Label Printer", "Wireless Laser Scanner", "Heavy Duty Cash Drawer", "80mm Thermal Printer"],
     clientVerificationStatus: "VERIFIED",
-    gstinRegNumber: "07EXPAID2026A1Z1"
+    gstinRegNumber: "07EXPAID2026A1Z1",
+    businessLocation: "Cyber City Tech Hub Branch",
+    address: "Tower B, Level 4, DLF Cyber City, Sector 24",
+    city: "Gurugram",
+    state: "Haryana",
+    pincode: "122002",
+    country: "India"
   },
   {
     id: "TENANT-003",
@@ -222,7 +249,13 @@ const PRESET_TENANTS: Tenant[] = [
     onboardingSetupStatus: "COMPLETED",
     hardwareProvisioned: ["Kitchen KOT Thermal Printer", "80mm POS Receipt Printer", "Touch POS Display"],
     clientVerificationStatus: "VERIFIED",
-    gstinRegNumber: "07ABCRE1818B2Y2"
+    gstinRegNumber: "07ABCRE1818B2Y2",
+    businessLocation: "The Gourmet Bistro & Cafe (Indiranagar)",
+    address: "100 Feet Road, HAL 2nd Stage, Indiranagar",
+    city: "Bengaluru",
+    state: "Karnataka",
+    pincode: "560038",
+    country: "India"
   },
   {
     id: "TENANT-004",
@@ -263,7 +296,13 @@ const PRESET_TENANTS: Tenant[] = [
     onboardingSetupStatus: "COMPLETED",
     hardwareProvisioned: ["Wireless Barcode Scanner", "80mm Thermal Receipt Printer", "Medicine Label Printer"],
     clientVerificationStatus: "VERIFIED",
-    gstinRegNumber: "07GLOBA1515C3X3"
+    gstinRegNumber: "07GLOBA1515C3X3",
+    businessLocation: "MedPlus Chemist Central Outlet",
+    address: "Shop 4-5, Ground Floor, Bandra West Link Road",
+    city: "Mumbai",
+    state: "Maharashtra",
+    pincode: "400050",
+    country: "India"
   },
   {
     id: "TENANT-005",
@@ -304,7 +343,13 @@ const PRESET_TENANTS: Tenant[] = [
     onboardingSetupStatus: "COMPLETED",
     hardwareProvisioned: ["80mm Thermal Receipt Printer", "Appointment Tablet Display"],
     clientVerificationStatus: "VERIFIED",
-    gstinRegNumber: "07LUXEG1212D4W4"
+    gstinRegNumber: "07LUXEG1212D4W4",
+    businessLocation: "Luxe Glow Flagship Salon",
+    address: "Jubilee Hills Road No. 36",
+    city: "Hyderabad",
+    state: "Telangana",
+    pincode: "500033",
+    country: "India"
   },
   {
     id: "TENANT-006",
@@ -1141,15 +1186,22 @@ export default function App() {
   const [soundEnabled, setSoundEnabled] = useState<boolean>(true);
   
   // Forms states
+  const [isBarcodeScanModalOpen, setIsBarcodeScanModalOpen] = useState<boolean>(false);
+  const [barcodeScanInitialCode, setBarcodeScanInitialCode] = useState<string>("");
+  const [isEditReceiptAddressModalOpen, setIsEditReceiptAddressModalOpen] = useState<boolean>(false);
+
   const [newProduct, setNewProduct] = useState<Partial<Product>>({
     name: "",
     barcode: "",
     category: "Grains & Grocery",
     sku: "",
     purchasePrice: 0,
+    mrp: 0,
     price: 0,
     gstRate: 18,
     unit: MeasurementUnit.PIECE,
+    unitQuantity: 1,
+    unitLabel: "1 Piece",
     stock: 50,
     minStockAlert: 10,
     batchNumber: "B-2026-X",
@@ -1839,13 +1891,16 @@ export default function App() {
     }
   };
 
-  // Create new Product
+  // Create or Update Product
   const handleCreateProductSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newProduct.name || !newProduct.sku || !newProduct.barcode || !newProduct.price) {
       triggerNotification("Please fill in name, SKU, Barcode, and MRP Price fields.", "warning");
       return;
     }
+
+    const unitQty = Number(newProduct.unitQuantity || 1);
+    const unitLabel = `${unitQty} ${newProduct.unit || MeasurementUnit.PIECE}`;
 
     // Assign dynamic product ID
     const productPayload: Product = {
@@ -1855,9 +1910,12 @@ export default function App() {
       category: newProduct.category || "General",
       sku: newProduct.sku,
       purchasePrice: Number(newProduct.purchasePrice || 0),
+      mrp: Number(newProduct.mrp || (newProduct.price ? newProduct.price * 1.15 : 0)),
       price: Number(newProduct.price || 0),
       gstRate: Number(newProduct.gstRate || 0),
       unit: newProduct.unit || MeasurementUnit.PIECE,
+      unitQuantity: unitQty,
+      unitLabel: unitLabel,
       stock: Number(newProduct.stock || 0),
       minStockAlert: Number(newProduct.minStockAlert || 5),
       batchNumber: newProduct.batchNumber || "B-NEW",
@@ -1883,9 +1941,12 @@ export default function App() {
           category: "Grains & Grocery",
           sku: "",
           purchasePrice: 0,
+          mrp: 0,
           price: 0,
           gstRate: 5,
           unit: MeasurementUnit.PIECE,
+          unitQuantity: 1,
+          unitLabel: "1 Piece",
           stock: 45,
           minStockAlert: 10,
           batchNumber: `B-${String(new Date().getFullYear())}-A`,
@@ -1905,15 +1966,123 @@ export default function App() {
       category: "Grains & Grocery",
       sku: "",
       purchasePrice: 0,
+      mrp: 0,
       price: 0,
       gstRate: 18,
       unit: MeasurementUnit.PIECE,
+      unitQuantity: 1,
+      unitLabel: "1 Piece",
       stock: 50,
       minStockAlert: 10,
       batchNumber: "B-2026-X",
       expiryDate: "2027-12-31",
       supplierName: ""
     });
+  };
+
+  // Receipt Address & Store Details Update Handler
+  const handleSaveReceiptAddress = async (details: {
+    storeName: string;
+    receiptHeader: string;
+    receiptFooter: string;
+    address: string;
+    city: string;
+    state: string;
+    pincode: string;
+    phone: string;
+    gstin: string;
+  }) => {
+    // 1. Update activeTenant
+    const updatedTenant: Tenant = {
+      ...activeTenant,
+      name: details.storeName || activeTenant.name,
+      businessLocation: details.storeName || activeTenant.businessLocation,
+      address: details.address,
+      city: details.city,
+      state: details.state,
+      pincode: details.pincode,
+      phone: details.phone,
+      gstinRegNumber: details.gstin
+    };
+    const updatedTenantsList = tenantsList.map(t => t.id === updatedTenant.id ? updatedTenant : t);
+    setTenantsList(updatedTenantsList);
+    localStorage.setItem("expert_aid_tenants", JSON.stringify(updatedTenantsList));
+
+    // 2. Update currentBranch if existing
+    if (currentBranch) {
+      const updatedBranch: StoreBranch = {
+        ...currentBranch,
+        name: details.storeName || currentBranch.name,
+        address: details.address,
+        city: details.city,
+        phone: details.phone,
+        gstin: details.gstin
+      };
+      setCurrentBranch(updatedBranch);
+      try {
+        const res = await fetch("/api/branches", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(updatedBranch)
+        });
+        const data = await res.json();
+        if (data.success) {
+          setBranches(data.branches);
+        }
+      } catch (e) {
+        console.error("Failed to sync updated branch address to server:", e);
+      }
+    }
+
+    // 3. Update opsSettings
+    const newOps = {
+      ...opsSettings,
+      receiptHeader: details.receiptHeader,
+      receiptFooter: details.receiptFooter
+    };
+    setOpsSettings(newOps);
+    localStorage.setItem("expert_aid_terminal_settings", JSON.stringify(newOps));
+
+    triggerNotification("Receipt address and store details updated successfully! Live receipt preview refreshed.", "success");
+  };
+
+  // Scanner modal callbacks
+  const handleSaveProductFromScanner = async (productToSave: Product): Promise<boolean> => {
+    try {
+      const res = await fetch("/api/products", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(productToSave)
+      });
+      const data = await res.json();
+      if (data.success) {
+        setProducts(data.products);
+        return true;
+      }
+      return false;
+    } catch (e) {
+      console.error("Error saving product from barcode scanner:", e);
+      return false;
+    }
+  };
+
+  const handleBulkUploadFromScanner = async (productsToUpload: Product[]): Promise<boolean> => {
+    try {
+      const res = await fetch("/api/products/bulk", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ products: productsToUpload })
+      });
+      const data = await res.json();
+      if (data.success) {
+        setProducts(data.products);
+        return true;
+      }
+      return false;
+    } catch (e) {
+      console.error("Error bulk uploading products from scanner:", e);
+      return false;
+    }
   };
 
   const handleDeleteProduct = (id: string, name: string) => {
@@ -2534,6 +2703,567 @@ export default function App() {
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
     return diffDays >= 0 && diffDays <= 30; // 30 day shelf-life warning
   });
+
+  // ==========================================
+  // CUSTOM REPORTS ENGINE (Daily, Weekly, Monthly, Custom Range)
+  // Collection, Stock, Stock Cost, Expenditure
+  // ==========================================
+  type ReportType = "collection" | "stock" | "stock-cost" | "expenditure";
+  type ReportDatePreset = "today" | "yesterday" | "this-week" | "last-7-days" | "this-month" | "last-month" | "last-30-days" | "custom";
+
+  const [activeReportType, setActiveReportType] = useState<ReportType>("collection");
+  const [reportDatePreset, setReportDatePreset] = useState<ReportDatePreset>("this-month");
+  const [reportCustomStartDate, setReportCustomStartDate] = useState<string>(() => {
+    const d = new Date();
+    d.setDate(1);
+    const pad = (n: number) => String(n).padStart(2, "0");
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-01`;
+  });
+  const [reportCustomEndDate, setReportCustomEndDate] = useState<string>(() => {
+    const d = new Date();
+    const pad = (n: number) => String(n).padStart(2, "0");
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  });
+  const [reportSearchQuery, setReportSearchQuery] = useState<string>("");
+  const [reportPaymentFilter, setReportPaymentFilter] = useState<string>("ALL");
+  const [reportCategoryFilter, setReportCategoryFilter] = useState<string>("ALL");
+  const [isExportingPDF, setIsExportingPDF] = useState<boolean>(false);
+
+  // Compute active date range based on preset or custom input
+  const reportDateRange = useMemo(() => {
+    const today = new Date();
+    const pad = (n: number) => String(n).padStart(2, "0");
+    const formatYMD = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+
+    let start = "";
+    let end = formatYMD(today);
+    let label = "This Month";
+
+    if (reportDatePreset === "today") {
+      start = formatYMD(today);
+      end = formatYMD(today);
+      label = `Today (${start})`;
+    } else if (reportDatePreset === "yesterday") {
+      const y = new Date(today);
+      y.setDate(y.getDate() - 1);
+      start = formatYMD(y);
+      end = formatYMD(y);
+      label = `Yesterday (${start})`;
+    } else if (reportDatePreset === "this-week") {
+      const d = new Date(today);
+      const day = d.getDay();
+      const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+      const monday = new Date(d.setDate(diff));
+      start = formatYMD(monday);
+      label = `This Week (${start} to ${end})`;
+    } else if (reportDatePreset === "last-7-days") {
+      const d = new Date(today);
+      d.setDate(d.getDate() - 7);
+      start = formatYMD(d);
+      label = `Last 7 Days (${start} to ${end})`;
+    } else if (reportDatePreset === "this-month") {
+      const d = new Date(today.getFullYear(), today.getMonth(), 1);
+      start = formatYMD(d);
+      label = `This Month (${start} to ${end})`;
+    } else if (reportDatePreset === "last-30-days") {
+      const d = new Date(today);
+      d.setDate(d.getDate() - 30);
+      start = formatYMD(d);
+      label = `Last 30 Days (${start} to ${end})`;
+    } else if (reportDatePreset === "last-month") {
+      const first = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+      const last = new Date(today.getFullYear(), today.getMonth(), 0);
+      start = formatYMD(first);
+      end = formatYMD(last);
+      label = `Last Month (${start} to ${end})`;
+    } else if (reportDatePreset === "custom") {
+      start = reportCustomStartDate || "2000-01-01";
+      end = reportCustomEndDate || formatYMD(today);
+      label = `Custom Range (${start} to ${end})`;
+    }
+
+    return { start, end, label };
+  }, [reportDatePreset, reportCustomStartDate, reportCustomEndDate]);
+
+  // Filtered invoices for Collection Report
+  const filteredReportInvoices = useMemo(() => {
+    return tenantAndBranchInvoices.filter((inv) => {
+      const invDate = inv.date || (inv as any).createdAt?.split("T")[0] || "";
+      if (invDate && (invDate < reportDateRange.start || invDate > reportDateRange.end)) {
+        return false;
+      }
+      if (reportPaymentFilter !== "ALL" && inv.paymentMode !== reportPaymentFilter) {
+        return false;
+      }
+      if (reportSearchQuery.trim()) {
+        const q = reportSearchQuery.toLowerCase();
+        const matchId = inv.id.toLowerCase().includes(q);
+        const matchCust = inv.customerName?.toLowerCase().includes(q) || false;
+        const matchPhone = inv.customerPhone?.toLowerCase().includes(q) || false;
+        const matchCashier = inv.cashierName?.toLowerCase().includes(q) || false;
+        if (!matchId && !matchCust && !matchPhone && !matchCashier) return false;
+      }
+      return true;
+    });
+  }, [tenantAndBranchInvoices, reportDateRange, reportPaymentFilter, reportSearchQuery]);
+
+  // Collection Report Metrics
+  const collectionMetrics = useMemo(() => {
+    const totalGross = filteredReportInvoices.reduce((acc, inv) => acc + inv.grandTotal, 0);
+    const totalSubtotal = filteredReportInvoices.reduce((acc, inv) => acc + (inv.subtotal || (inv.grandTotal - (inv.taxAmount || 0))), 0);
+    const totalTax = filteredReportInvoices.reduce((acc, inv) => acc + (inv.taxAmount || 0), 0);
+    const totalDiscounts = filteredReportInvoices.reduce((acc, inv) => acc + (inv.discountAmount || 0), 0);
+    const count = filteredReportInvoices.length;
+    const aov = count > 0 ? totalGross / count : 0;
+
+    const cashTotal = filteredReportInvoices.filter(i => i.paymentMode === "CASH").reduce((a, b) => a + b.grandTotal, 0);
+    const upiTotal = filteredReportInvoices.filter(i => i.paymentMode === "UPI").reduce((a, b) => a + b.grandTotal, 0);
+    const cardTotal = filteredReportInvoices.filter(i => i.paymentMode === "CARD").reduce((a, b) => a + b.grandTotal, 0);
+    const creditTotal = filteredReportInvoices.filter(i => i.paymentMode === "STORE_CREDIT").reduce((a, b) => a + b.grandTotal, 0);
+
+    return {
+      totalGross,
+      totalSubtotal,
+      totalTax,
+      totalDiscounts,
+      count,
+      aov,
+      cashTotal,
+      upiTotal,
+      cardTotal,
+      creditTotal
+    };
+  }, [filteredReportInvoices]);
+
+  // Filtered stock for Stock and Stock Cost Reports
+  const filteredReportStock = useMemo(() => {
+    return tenantProducts.filter((p) => {
+      if (reportCategoryFilter !== "ALL" && p.category !== reportCategoryFilter) {
+        return false;
+      }
+      if (reportSearchQuery.trim()) {
+        const q = reportSearchQuery.toLowerCase();
+        const matchName = p.name.toLowerCase().includes(q);
+        const matchSku = p.sku.toLowerCase().includes(q);
+        const matchBarcode = p.barcode.toLowerCase().includes(q);
+        const matchCat = p.category.toLowerCase().includes(q);
+        if (!matchName && !matchSku && !matchBarcode && !matchCat) return false;
+      }
+      return true;
+    });
+  }, [tenantProducts, reportCategoryFilter, reportSearchQuery]);
+
+  // Stock and Stock Cost Metrics
+  const stockReportMetrics = useMemo(() => {
+    let totalUnits = 0;
+    let inStockCount = 0;
+    let lowStockCount = 0;
+    let outOfStockCount = 0;
+    let totalPurchaseVal = 0;
+    let totalSellingVal = 0;
+    let totalMrpVal = 0;
+
+    filteredReportStock.forEach((p) => {
+      const qty = getProductStock(p);
+      totalUnits += qty;
+      if (qty <= 0) {
+        outOfStockCount++;
+      } else if (qty <= p.minStockAlert) {
+        lowStockCount++;
+      } else {
+        inStockCount++;
+      }
+      const cost = p.purchasePrice || (p.price * 0.7);
+      const mrp = p.mrp || p.price;
+      totalPurchaseVal += (qty * cost);
+      totalSellingVal += (qty * p.price);
+      totalMrpVal += (qty * mrp);
+    });
+
+    const potentialProfit = totalSellingVal - totalPurchaseVal;
+    const profitMarginPercent = totalSellingVal > 0 ? (potentialProfit / totalSellingVal) * 100 : 0;
+
+    return {
+      totalSkus: filteredReportStock.length,
+      totalUnits,
+      inStockCount,
+      lowStockCount,
+      outOfStockCount,
+      totalPurchaseVal,
+      totalSellingVal,
+      totalMrpVal,
+      potentialProfit,
+      profitMarginPercent
+    };
+  }, [filteredReportStock]);
+
+  // Filtered expenses for Expenditure Report
+  const filteredReportExpenses = useMemo(() => {
+    return tenantAndBranchExpenses.filter((exp) => {
+      const expDate = exp.date || "";
+      if (expDate && (expDate < reportDateRange.start || expDate > reportDateRange.end)) {
+        return false;
+      }
+      if (reportCategoryFilter !== "ALL" && exp.category !== reportCategoryFilter) {
+        return false;
+      }
+      if (reportSearchQuery.trim()) {
+        const q = reportSearchQuery.toLowerCase();
+        const matchDesc = exp.description.toLowerCase().includes(q);
+        const matchCat = exp.category.toLowerCase().includes(q);
+        const matchApp = exp.approvedBy.toLowerCase().includes(q);
+        const matchId = exp.id.toLowerCase().includes(q);
+        if (!matchDesc && !matchCat && !matchApp && !matchId) return false;
+      }
+      return true;
+    });
+  }, [tenantAndBranchExpenses, reportDateRange, reportCategoryFilter, reportSearchQuery]);
+
+  // Expenditure Report Metrics
+  const expenditureMetrics = useMemo(() => {
+    const totalExpenses = filteredReportExpenses.reduce((acc, e) => acc + e.amount, 0);
+    const totalPeriodCollections = filteredReportInvoices.reduce((acc, i) => acc + i.grandTotal, 0);
+    const expenseRatio = totalPeriodCollections > 0 ? (totalExpenses / totalPeriodCollections) * 100 : 0;
+    const netCashFlow = totalPeriodCollections - totalExpenses;
+
+    const categorySums: Record<string, number> = {};
+    filteredReportExpenses.forEach((e) => {
+      categorySums[e.category] = (categorySums[e.category] || 0) + e.amount;
+    });
+    let topCategory = "General";
+    let topCategoryAmount = 0;
+    Object.entries(categorySums).forEach(([cat, sum]) => {
+      if (sum > topCategoryAmount) {
+        topCategoryAmount = sum;
+        topCategory = cat;
+      }
+    });
+
+    return {
+      totalExpenses,
+      totalPeriodCollections,
+      expenseRatio,
+      netCashFlow,
+      topCategory,
+      topCategoryAmount,
+      count: filteredReportExpenses.length
+    };
+  }, [filteredReportExpenses, filteredReportInvoices]);
+
+  const handleExportExcel = () => {
+    const tenantLoc = activeTenant.businessLocation || "Primary Outlet";
+    const tenantAddr = [activeTenant.address, activeTenant.city, activeTenant.state, activeTenant.pincode, activeTenant.country].filter(Boolean).join(", ");
+    const periodStr = `${reportDateRange.label} [${reportDateRange.start} to ${reportDateRange.end}]`;
+    const safeTenantName = (activeTenant.name || "Store").replace(/[^a-zA-Z0-9]/g, "_");
+
+    if (activeReportType === "collection") {
+      const filename = `${safeTenantName}_Collection_Report_${reportDateRange.start}_to_${reportDateRange.end}.csv`;
+      const columns = [
+        "Invoice ID",
+        "Date",
+        "Time",
+        "Customer Name",
+        "Customer Phone",
+        "Payment Mode",
+        "Item Count",
+        "Subtotal (Rs.)",
+        "Tax GST (Rs.)",
+        "Discount (Rs.)",
+        "Grand Total (Rs.)",
+        "Cashier",
+        "Status"
+      ];
+      const rows: (string | number)[][] = filteredReportInvoices.map(inv => [
+        inv.id,
+        inv.date,
+        inv.time || "",
+        inv.customerName || "Walk-in Guest",
+        inv.customerPhone || "N/A",
+        inv.paymentMode,
+        inv.items.reduce((sum, item) => sum + item.quantity, 0),
+        inv.subtotal ? inv.subtotal.toFixed(2) : (inv.grandTotal - (inv.taxAmount || 0)).toFixed(2),
+        inv.taxAmount ? inv.taxAmount.toFixed(2) : "0.00",
+        inv.discountAmount ? inv.discountAmount.toFixed(2) : "0.00",
+        inv.grandTotal.toFixed(2),
+        inv.cashierName,
+        inv.status || "PAID"
+      ]);
+      rows.push([
+        "TOTALS",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        collectionMetrics.totalSubtotal.toFixed(2),
+        collectionMetrics.totalTax.toFixed(2),
+        collectionMetrics.totalDiscounts.toFixed(2),
+        collectionMetrics.totalGross.toFixed(2),
+        "",
+        ""
+      ]);
+
+      const summaryMetrics = [
+        { label: "Total Gross Collections (Rs.)", value: collectionMetrics.totalGross.toFixed(2) },
+        { label: "Total Tax (GST) Collected (Rs.)", value: collectionMetrics.totalTax.toFixed(2) },
+        { label: "Total Discounts Given (Rs.)", value: collectionMetrics.totalDiscounts.toFixed(2) },
+        { label: "Total Invoices Filed", value: collectionMetrics.count },
+        { label: "Average Ticket Value / AOV (Rs.)", value: collectionMetrics.aov.toFixed(2) },
+        { label: "Cash Mode Collections (Rs.)", value: collectionMetrics.cashTotal.toFixed(2) },
+        { label: "UPI Mode Collections (Rs.)", value: collectionMetrics.upiTotal.toFixed(2) },
+        { label: "Card Mode Collections (Rs.)", value: collectionMetrics.cardTotal.toFixed(2) },
+        { label: "Store Credit Collections (Rs.)", value: collectionMetrics.creditTotal.toFixed(2) }
+      ];
+
+      exportToExcelCSV({
+        filename,
+        title: `${activeTenant.name} - Collection Report`,
+        subtitle: `Store Financial Revenue & Tender Breakdown | Generated on ${new Date().toLocaleDateString()}`,
+        tenantInfo: {
+          name: activeTenant.name,
+          location: tenantLoc,
+          address: tenantAddr,
+          phone: activeTenant.phone,
+          gstin: activeTenant.gstinRegNumber
+        },
+        filterPeriod: periodStr,
+        summaryMetrics,
+        columns,
+        rows
+      });
+      triggerNotification(`Collection Report exported as formatted Excel CSV (${filename})`, "success");
+    } else if (activeReportType === "stock") {
+      const filename = `${safeTenantName}_Stock_Inventory_Report.csv`;
+      const columns = [
+        "SKU Code",
+        "Product Name",
+        "Category",
+        "Current Stock",
+        "Unit",
+        "Min Alert Level",
+        "Stock Health",
+        "Batch Number",
+        "Expiry Date",
+        "Supplier"
+      ];
+      const rows: (string | number)[][] = filteredReportStock.map(p => {
+        const qty = getProductStock(p);
+        const health = qty <= 0 ? "OUT OF STOCK" : qty <= p.minStockAlert ? "LOW STOCK ALERT" : "HEALTHY IN-STOCK";
+        return [
+          p.sku,
+          p.name,
+          p.category,
+          qty,
+          p.unit,
+          p.minStockAlert,
+          health,
+          p.batchNumber || "N/A",
+          p.expiryDate || "N/A",
+          p.supplierName || "N/A"
+        ];
+      });
+      rows.push([
+        "TOTALS",
+        "",
+        "",
+        stockReportMetrics.totalUnits,
+        "",
+        "",
+        "",
+        "",
+        "",
+        ""
+      ]);
+
+      const summaryMetrics = [
+        { label: "Total Catalog SKUs", value: stockReportMetrics.totalSkus },
+        { label: "Total Physical Stock Units on Hand", value: stockReportMetrics.totalUnits },
+        { label: "Healthy In-Stock Items", value: stockReportMetrics.inStockCount },
+        { label: "Low Stock Alert Items", value: stockReportMetrics.lowStockCount },
+        { label: "Out of Stock Items", value: stockReportMetrics.outOfStockCount }
+      ];
+
+      exportToExcelCSV({
+        filename,
+        title: `${activeTenant.name} - Stock Inventory Position Report`,
+        subtitle: `Current Stock Quantities & Warehouse Health | Generated on ${new Date().toLocaleDateString()}`,
+        tenantInfo: {
+          name: activeTenant.name,
+          location: tenantLoc,
+          address: tenantAddr,
+          phone: activeTenant.phone,
+          gstin: activeTenant.gstinRegNumber
+        },
+        filterPeriod: periodStr,
+        summaryMetrics,
+        columns,
+        rows
+      });
+      triggerNotification(`Stock Report exported as formatted Excel CSV (${filename})`, "success");
+    } else if (activeReportType === "stock-cost") {
+      const filename = `${safeTenantName}_Stock_Cost_Valuation_Report.csv`;
+      const columns = [
+        "SKU Code",
+        "Product Name",
+        "Category",
+        "Stock Qty",
+        "Cost Price (Rs.)",
+        "Selling Price (Rs.)",
+        "MRP (Rs.)",
+        "Total Purchase COGS (Rs.)",
+        "Total Retail Valuation (Rs.)",
+        "Potential Profit (Rs.)",
+        "Gross Margin (%)"
+      ];
+      const rows: (string | number)[][] = filteredReportStock.map(p => {
+        const qty = getProductStock(p);
+        const cost = p.purchasePrice || (p.price * 0.7);
+        const selling = p.price;
+        const mrp = p.mrp || p.price;
+        const totalCost = qty * cost;
+        const totalRetail = qty * selling;
+        const profit = totalRetail - totalCost;
+        const marginPct = totalRetail > 0 ? (profit / totalRetail) * 100 : 0;
+        return [
+          p.sku,
+          p.name,
+          p.category,
+          qty,
+          cost.toFixed(2),
+          selling.toFixed(2),
+          mrp.toFixed(2),
+          totalCost.toFixed(2),
+          totalRetail.toFixed(2),
+          profit.toFixed(2),
+          `${marginPct.toFixed(1)}%`
+        ];
+      });
+      rows.push([
+        "TOTALS",
+        "",
+        "",
+        stockReportMetrics.totalUnits,
+        "",
+        "",
+        "",
+        stockReportMetrics.totalPurchaseVal.toFixed(2),
+        stockReportMetrics.totalSellingVal.toFixed(2),
+        stockReportMetrics.potentialProfit.toFixed(2),
+        `${stockReportMetrics.profitMarginPercent.toFixed(1)}%`
+      ]);
+
+      const summaryMetrics = [
+        { label: "Total Physical Inventory Units", value: stockReportMetrics.totalUnits },
+        { label: "Total Cost Valuation / COGS (Rs.)", value: stockReportMetrics.totalPurchaseVal.toFixed(2) },
+        { label: "Total Retail Valuation at Selling Price (Rs.)", value: stockReportMetrics.totalSellingVal.toFixed(2) },
+        { label: "Total MRP Valuation (Rs.)", value: stockReportMetrics.totalMrpVal.toFixed(2) },
+        { label: "Projected Gross Profit (Rs.)", value: stockReportMetrics.potentialProfit.toFixed(2) },
+        { label: "Overall Potential Margin (%)", value: `${stockReportMetrics.profitMarginPercent.toFixed(2)}%` }
+      ];
+
+      exportToExcelCSV({
+        filename,
+        title: `${activeTenant.name} - Stock Cost & Valuation Report`,
+        subtitle: `Cost of Goods Sold (COGS) vs Retail Margin Analysis | Generated on ${new Date().toLocaleDateString()}`,
+        tenantInfo: {
+          name: activeTenant.name,
+          location: tenantLoc,
+          address: tenantAddr,
+          phone: activeTenant.phone,
+          gstin: activeTenant.gstinRegNumber
+        },
+        filterPeriod: periodStr,
+        summaryMetrics,
+        columns,
+        rows
+      });
+      triggerNotification(`Stock Cost Report exported as formatted Excel CSV (${filename})`, "success");
+    } else if (activeReportType === "expenditure") {
+      const filename = `${safeTenantName}_Expenditure_Report_${reportDateRange.start}_to_${reportDateRange.end}.csv`;
+      const columns = [
+        "Voucher ID",
+        "Expense Date",
+        "Expense Category",
+        "Description / Payee Details",
+        "Approved By Authority",
+        "Branch ID",
+        "Amount Paid (Rs.)"
+      ];
+      const rows: (string | number)[][] = filteredReportExpenses.map(exp => [
+        exp.id,
+        exp.date,
+        exp.category,
+        exp.description,
+        exp.approvedBy,
+        exp.storeBranchId || "Main",
+        exp.amount.toFixed(2)
+      ]);
+      rows.push([
+        "TOTAL EXPENDITURE",
+        "",
+        "",
+        "",
+        "",
+        "",
+        expenditureMetrics.totalExpenses.toFixed(2)
+      ]);
+
+      const summaryMetrics = [
+        { label: "Total Operational Expenditures (Rs.)", value: expenditureMetrics.totalExpenses.toFixed(2) },
+        { label: "Total Period Collections (Rs.)", value: expenditureMetrics.totalPeriodCollections.toFixed(2) },
+        { label: "Expense-to-Collection Ratio (%)", value: `${expenditureMetrics.expenseRatio.toFixed(2)}%` },
+        { label: "Net Operating Cash Flow (Rs.)", value: expenditureMetrics.netCashFlow.toFixed(2) },
+        { label: "Highest Expense Category", value: `${expenditureMetrics.topCategory} (Rs. ${expenditureMetrics.topCategoryAmount.toFixed(2)})` },
+        { label: "Total Filed Expense Vouchers", value: expenditureMetrics.count }
+      ];
+
+      exportToExcelCSV({
+        filename,
+        title: `${activeTenant.name} - Store Expenditure & Overhead Report`,
+        subtitle: `Operational Expenses, Utility Ledgers & Net Cash Flow | Generated on ${new Date().toLocaleDateString()}`,
+        tenantInfo: {
+          name: activeTenant.name,
+          location: tenantLoc,
+          address: tenantAddr,
+          phone: activeTenant.phone,
+          gstin: activeTenant.gstinRegNumber
+        },
+        filterPeriod: periodStr,
+        summaryMetrics,
+        columns,
+        rows
+      });
+      triggerNotification(`Expenditure Report exported as formatted Excel CSV (${filename})`, "success");
+    }
+  };
+
+  const handleExportPDF = async () => {
+    setIsExportingPDF(true);
+    triggerNotification("Compiling A4 PDF document with corporate headers, tables & watermark...", "success");
+    const safeTenantName = (activeTenant.name || "Store").replace(/[^a-zA-Z0-9]/g, "_");
+    const filename = `${safeTenantName}_${activeReportType.toUpperCase()}_Report_${reportDateRange.start}_to_${reportDateRange.end}.pdf`;
+    try {
+      const ok = await saveElementAsPDF("custom-report-printable-sheet", filename, "standard-a4");
+      if (ok) {
+        triggerNotification(`Report PDF successfully downloaded: ${filename}`, "success");
+      } else {
+        triggerNotification("Direct PDF save completed or print dialog ready.", "success");
+        printElementById("custom-report-printable-sheet", "standard-a4", { filename });
+      }
+    } catch (e) {
+      console.error("PDF export error:", e);
+      printElementById("custom-report-printable-sheet", "standard-a4", { filename });
+    } finally {
+      setIsExportingPDF(false);
+    }
+  };
+
+  const handlePrintReport = () => {
+    printElementById("custom-report-printable-sheet", "standard-a4", {
+      filename: `${activeTenant.name}_${activeReportType.toUpperCase()}_Report.pdf`
+    });
+  };
 
   if (!isLoggedIn) {
     const handleOtpSubmit = (e: React.FormEvent) => {
@@ -4303,51 +5033,122 @@ export default function App() {
           {/* TAB 2: INVENTORY & STOCK EXPIRES SYSTEM */}
           {activeTab === "inventory" && (
             <div className="space-y-6" id="inventory-module-layout">
-              {/* Stats highlights */}
-              <div className="grid grid-cols-3 gap-6">
-                <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
-                  <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Stock Count Valuation</h4>
-                  <p className="text-2xl font-black font-mono text-slate-950">
-                    ₹{tenantProducts.reduce((acc, p) => acc + (p.purchasePrice * getProductStock(p)), 0).toLocaleString()}
-                  </p>
-                  <p className="text-xs text-slate-500 mt-2">Valuation at Cost Price (COGS Index)</p>
-                </div>
-                <div className="bg-white p-6 rounded-xl border border-slate-200/80 shadow-sm bg-gradient-to-br from-amber-50 to-white">
-                  <div className="flex justify-between items-center text-amber-700">
-                    <h4 className="text-xs font-bold uppercase tracking-wider mb-1">Critical Low Stock Limits</h4>
-                    <AlertTriangle className="w-5 h-5 text-amber-500" />
+              {/* Detailed Financial & Stock Valuation Summary Metrics */}
+              {(() => {
+                const totalAvailableUnits = tenantProducts.reduce((acc, p) => acc + getProductStock(p), 0);
+                const totalPurchaseValuation = tenantProducts.reduce((acc, p) => acc + (p.purchasePrice * getProductStock(p)), 0);
+                const totalMrpValuation = tenantProducts.reduce((acc, p) => {
+                  const itemMrp = p.mrp || (p.price > 0 ? Number((p.price * 1.15).toFixed(2)) : p.price);
+                  return acc + (itemMrp * getProductStock(p));
+                }, 0);
+                const totalSellingValuation = tenantProducts.reduce((acc, p) => acc + (p.price * getProductStock(p)), 0);
+                const totalGrossMarginSpread = Math.max(0, totalSellingValuation - totalPurchaseValuation);
+                const grossMarginPct = totalSellingValuation > 0 ? ((totalGrossMarginSpread / totalSellingValuation) * 100).toFixed(1) : "0.0";
+
+                return (
+                  <div className="grid grid-cols-5 gap-4">
+                    {/* 1. Available Stock Volume */}
+                    <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+                      <div className="flex justify-between items-center text-slate-500 mb-1">
+                        <h4 className="text-[10px] font-bold uppercase tracking-wider">Available Stock Quantity</h4>
+                        <Package className="w-4 h-4 text-emerald-600" />
+                      </div>
+                      <p className="text-2xl font-black font-mono text-slate-900">
+                        {totalAvailableUnits.toLocaleString()} <span className="text-xs font-sans text-slate-500 font-semibold">Units</span>
+                      </p>
+                      <p className="text-[11px] text-slate-500 mt-1 font-mono">Tracking {tenantProducts.length} Catalogue SKUs</p>
+                    </div>
+
+                    {/* 2. Purchase Value */}
+                    <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm bg-gradient-to-br from-slate-50 to-white">
+                      <div className="flex justify-between items-center text-slate-500 mb-1">
+                        <h4 className="text-[10px] font-bold uppercase tracking-wider">Total Purchase Value (COGS)</h4>
+                        <Database className="w-4 h-4 text-blue-600" />
+                      </div>
+                      <p className="text-2xl font-black font-mono text-blue-900">
+                        {activeTenant.currency || "₹"}{totalPurchaseValuation.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </p>
+                      <p className="text-[11px] text-slate-500 mt-1">Valuation at Cost / Wholesale Rate</p>
+                    </div>
+
+                    {/* 3. MRP Valuation */}
+                    <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm bg-gradient-to-br from-amber-50/50 to-white">
+                      <div className="flex justify-between items-center text-amber-700 mb-1">
+                        <h4 className="text-[10px] font-bold uppercase tracking-wider">Total MRP Value</h4>
+                        <Tag className="w-4 h-4 text-amber-600" />
+                      </div>
+                      <p className="text-2xl font-black font-mono text-amber-900">
+                        {activeTenant.currency || "₹"}{totalMrpValuation.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </p>
+                      <p className="text-[11px] text-amber-700 mt-1">Maximum Retail Pack Printed Value</p>
+                    </div>
+
+                    {/* 4. Selling Value */}
+                    <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm bg-gradient-to-br from-emerald-50/50 to-white">
+                      <div className="flex justify-between items-center text-emerald-700 mb-1">
+                        <h4 className="text-[10px] font-bold uppercase tracking-wider">Total Selling Value</h4>
+                        <TrendingUp className="w-4 h-4 text-emerald-600" />
+                      </div>
+                      <p className="text-2xl font-black font-mono text-emerald-900">
+                        {activeTenant.currency || "₹"}{totalSellingValuation.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </p>
+                      <p className="text-[11px] text-emerald-700 mt-1">Projected Retail Revenue Valuation</p>
+                    </div>
+
+                    {/* 5. Projected Gross Margin */}
+                    <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm bg-gradient-to-br from-indigo-50/50 to-white">
+                      <div className="flex justify-between items-center text-indigo-700 mb-1">
+                        <h4 className="text-[10px] font-bold uppercase tracking-wider">Projected Gross Margin</h4>
+                        <Percent className="w-4 h-4 text-indigo-600" />
+                      </div>
+                      <p className="text-2xl font-black font-mono text-indigo-900">
+                        {activeTenant.currency || "₹"}{totalGrossMarginSpread.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </p>
+                      <p className="text-[11px] text-indigo-700 mt-1 font-bold font-mono">
+                        +{grossMarginPct}% Potential Retail Spread
+                      </p>
+                    </div>
                   </div>
-                  <p className="text-2xl font-black font-mono text-amber-900">{lowStockAlertProducts.length} SKU Alerts</p>
-                  <p className="text-xs text-amber-700 mt-2">Requires instant purchase supply restock</p>
-                </div>
-                <div className="bg-white p-6 rounded-xl border border-slate-200/80 shadow-sm bg-gradient-to-br from-rose-50 to-white">
-                  <div className="flex justify-between items-center text-rose-700">
-                    <h4 className="text-xs font-bold uppercase tracking-wider mb-1">Near Expiry Alert List</h4>
-                    <Info className="w-5 h-5 text-rose-500 font-bold" />
-                  </div>
-                  <p className="text-2xl font-black font-mono text-rose-900">{nearExpiryProductsAlert.length} Batches</p>
-                  <p className="text-xs text-rose-700 mt-2">Expires in less than 30 days time</p>
-                </div>
-              </div>
+                );
+              })()}
 
               {/* Master Inventory Tracking Table */}
               <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-                <div className="p-4 border-b border-secondary flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-slate-50">
+                <div className="p-4 border-b border-slate-200 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-slate-50">
                   <div>
-                    <h3 className="text-sm font-bold text-slate-800">Warehouse Inventory Tracking &amp; Replaces Logbook</h3>
-                    <p className="text-xs text-slate-400 font-mono">Total tracking of {tenantProducts.length} products</p>
+                    <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
+                      <Package className="w-4 h-4 text-emerald-600" />
+                      <span>Warehouse Stock Management &amp; Detailed Valuation Matrix</span>
+                    </h3>
+                    <p className="text-xs text-slate-500 font-mono mt-0.5">
+                      Inspecting Available Stock, Purchase Value, MRP, and Selling Value across {tenantProducts.length} products
+                    </p>
                   </div>
                   <div className="flex items-center gap-2 w-full sm:w-auto">
-                    <div className="relative w-full sm:w-80">
+                    <div className="relative w-full sm:w-72">
                       <input
                         type="text"
-                        placeholder="Search stock by name, SKU, barcode, supplier..."
+                        placeholder="Search stock by name, SKU, barcode..."
                         value={inventorySearchQuery}
                         onChange={(e) => setInventorySearchQuery(e.target.value)}
                         className="w-full bg-white border border-slate-200 rounded-lg py-1.5 pl-9 pr-4 text-xs focus:outline-none focus:border-slate-400 placeholder-slate-400 text-slate-800 font-sans shadow-sm"
                       />
                       <Search className="w-3.5 h-3.5 absolute left-3 top-2.5 text-slate-400" />
                     </div>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setBarcodeScanInitialCode("");
+                        setIsBarcodeScanModalOpen(true);
+                      }}
+                      className="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 shrink-0 transition-colors cursor-pointer shadow-sm"
+                      title="Scan pre-printed barcodes to restock or register products"
+                    >
+                      <Scan className="w-3.5 h-3.5 text-emerald-400" />
+                      <span>Scan Pre-Printed Barcodes</span>
+                    </button>
+
                     <button
                       type="button"
                       onClick={() => openLabelGeneratorModal(null)}
@@ -4364,14 +5165,14 @@ export default function App() {
                   <table className="w-full text-left border-collapse">
                     <thead className="sticky top-0 z-10 shadow-[0_1px_0_0_rgba(226,232,240,1)] bg-slate-50">
                       <tr className="text-[10px] font-bold text-slate-400 uppercase bg-slate-50 select-none">
-                        <th className="px-6 py-3 bg-slate-50">Product Catalog Description</th>
-                        <th className="px-6 py-3 bg-slate-50">Batch Number</th>
-                        <th className="px-6 py-3 bg-slate-50">Supplier Source</th>
-                        <th className="px-6 py-3 text-right bg-slate-50">Unit Price</th>
-                        <th className="px-6 py-3 text-right bg-slate-50">Available Stock</th>
-                        <th className="px-6 py-3 bg-slate-50">Expiration Date</th>
-                        <th className="px-6 py-3 bg-slate-50">Stock Status Alert</th>
-                        <th className="px-6 py-3 text-center bg-slate-50">Actions</th>
+                        <th className="px-5 py-3 bg-slate-50">Product Description</th>
+                        <th className="px-5 py-3 text-right bg-slate-50">Available Stock Quantity</th>
+                        <th className="px-5 py-3 text-right bg-slate-50">Purchase Value</th>
+                        <th className="px-5 py-3 text-right bg-slate-50">MRP (Max Retail)</th>
+                        <th className="px-5 py-3 text-right bg-slate-50">Selling Value</th>
+                        <th className="px-5 py-3 text-right bg-slate-50">Gross Margin</th>
+                        <th className="px-5 py-3 bg-slate-50">Batch &amp; Expiry</th>
+                        <th className="px-5 py-3 text-center bg-slate-50">Actions</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
@@ -4403,59 +5204,143 @@ export default function App() {
                         return filtered.map((p) => {
                           const localStock = getProductStock(p);
                           const isLowStock = localStock <= p.minStockAlert;
+                          const isOutOfStock = localStock <= 0;
                           
-                          // Check if expiring soon
+                          // Valuations
+                          const unitCost = p.purchasePrice;
+                          const totalPurchaseVal = unitCost * localStock;
+                          
+                          const unitMrp = p.mrp || (p.price > 0 ? Number((p.price * 1.15).toFixed(2)) : p.price);
+                          const totalMrpVal = unitMrp * localStock;
+                          
+                          const unitSelling = p.price;
+                          const totalSellingVal = unitSelling * localStock;
+
+                          const unitProfit = Math.max(0, unitSelling - unitCost);
+                          const totalProfit = Math.max(0, totalSellingVal - totalPurchaseVal);
+                          const marginPct = unitSelling > 0 ? ((unitProfit / unitSelling) * 100).toFixed(0) : "0";
+
+                          // Expiry calculation
                           const expDate = new Date(p.expiryDate);
                           const today = new Date();
                           const diffDays = Math.ceil((expDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
                           const isExpired = diffDays < 0;
                           const isExpiringSoon = diffDays >= 0 && diffDays <= 30;
-                          const displayStock = localStock;
 
                           return (
-                            <tr key={p.id} className="text-xs hover:bg-slate-50">
-                              <td className="px-6 py-3.5">
-                                <p className="font-bold text-slate-900">{p.name}</p>
-                                <div className="flex gap-2 text-[10px] text-slate-400 font-mono mt-0.5">
-                                  <span>SKU: {p.sku}</span>
+                            <tr key={p.id} className="text-xs hover:bg-slate-50 transition-colors">
+                              {/* 1. Description */}
+                              <td className="px-5 py-3.5">
+                                <p className="font-bold text-slate-900 leading-snug">{p.name}</p>
+                                <div className="flex flex-wrap items-center gap-1.5 text-[10px] text-slate-500 font-mono mt-0.5">
+                                  <span>SKU: <strong className="text-slate-700">{p.sku}</strong></span>
                                   <span>•</span>
-                                  <span>Barcode: {p.barcode}</span>
+                                  <span className="flex items-center gap-0.5">
+                                    <Barcode className="w-3 h-3 text-slate-400" />
+                                    {p.barcode}
+                                  </span>
                                   <span>•</span>
-                                  <span className="text-slate-500 font-semibold uppercase">{p.category}</span>
+                                  <span className="text-slate-600 uppercase font-semibold">{p.category}</span>
                                 </div>
-                              </td>
-                              <td className="px-6 py-3.5 font-mono text-slate-600">{p.batchNumber}</td>
-                              <td className="px-6 py-3.5 text-slate-500">{p.supplierName}</td>
-                              <td className="px-6 py-3.5 text-right font-mono text-slate-900 font-bold">
-                                ₹{p.price.toFixed(2)}
-                              </td>
-                              <td className="px-6 py-3.5 text-right font-mono font-bold">
-                                <span className={isLowStock ? "text-rose-600 bg-rose-50 px-1.5 py-0.5 rounded" : "text-slate-800"}>
-                                  {displayStock} {p.unit}s
-                                </span>
-                              </td>
-                              <td className="px-6 py-3.5 font-mono">
-                                <span className={isExpired ? "text-rose-600 font-bold" : isExpiringSoon ? "text-amber-600 font-semibold" : "text-slate-600"}>
-                                  {p.expiryDate} {isExpiringSoon && `(${diffDays} days left)`} {isExpired && "(Expired)"}
-                                </span>
-                              </td>
-                              <td className="px-6 py-3.5">
-                                {isLowStock ? (
-                                  <span className="bg-rose-50 text-rose-600 text-[9px] px-2 py-0.5 rounded font-bold uppercase tracking-wider border border-rose-100 flex items-center gap-1 w-max">
-                                    ⚠️ Critical Low Check
-                                  </span>
-                                ) : isExpiringSoon ? (
-                                  <span className="bg-amber-50 text-amber-700 text-[9px] px-2 py-0.5 rounded font-bold uppercase tracking-wider border border-amber-100 flex items-center gap-1 w-max">
-                                    ⏳ Expiry Warning
-                                  </span>
-                                ) : (
-                                  <span className="bg-emerald-50 text-emerald-700 text-[9px] px-2 py-0.5 rounded font-bold uppercase tracking-wider border border-emerald-100 flex items-center gap-1 w-max">
-                                    ✓ Stock Healthy
+                                {(p.unitQuantity || p.unitLabel) && (
+                                  <span className="inline-block mt-1 text-[9px] font-mono bg-slate-100 text-slate-700 border border-slate-200 px-1.5 py-0.2 rounded font-bold">
+                                    📦 Pack: {p.unitQuantity ? `${p.unitQuantity} ` : ""}{p.unit}
                                   </span>
                                 )}
                               </td>
-                              <td className="px-6 py-3.5 text-center">
+
+                              {/* 2. Available Stock Quantity */}
+                              <td className="px-5 py-3.5 text-right font-mono">
+                                <div className="font-black text-sm text-slate-900">
+                                  {localStock} <span className="text-[10px] font-sans font-semibold text-slate-500">{p.unit}s</span>
+                                </div>
+                                <div className="mt-1 flex justify-end">
+                                  {isOutOfStock ? (
+                                    <span className="bg-rose-100 text-rose-700 text-[9px] px-2 py-0.5 rounded font-bold uppercase tracking-wider border border-rose-200">
+                                      ❌ Out of Stock
+                                    </span>
+                                  ) : isLowStock ? (
+                                    <span className="bg-amber-100 text-amber-800 text-[9px] px-2 py-0.5 rounded font-bold uppercase tracking-wider border border-amber-200">
+                                      ⚠️ Low Alert (&lt;{p.minStockAlert})
+                                    </span>
+                                  ) : (
+                                    <span className="bg-emerald-100 text-emerald-800 text-[9px] px-2 py-0.5 rounded font-bold uppercase tracking-wider border border-emerald-200">
+                                      ✓ In Stock
+                                    </span>
+                                  )}
+                                </div>
+                              </td>
+
+                              {/* 3. Purchase Value */}
+                              <td className="px-5 py-3.5 text-right font-mono">
+                                <div className="text-[11px] text-slate-500">
+                                  {activeTenant.currency || "₹"}{unitCost.toFixed(2)} <span className="text-[9px]">/ unit</span>
+                                </div>
+                                <div className="font-bold text-slate-900 mt-0.5">
+                                  {activeTenant.currency || "₹"}{totalPurchaseVal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                </div>
+                              </td>
+
+                              {/* 4. MRP */}
+                              <td className="px-5 py-3.5 text-right font-mono">
+                                <div className="text-[11px] text-amber-800 font-semibold">
+                                  {activeTenant.currency || "₹"}{unitMrp.toFixed(2)} <span className="text-[9px]">/ pack</span>
+                                </div>
+                                <div className="font-bold text-amber-950 mt-0.5">
+                                  {activeTenant.currency || "₹"}{totalMrpVal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                </div>
+                              </td>
+
+                              {/* 5. Selling Value */}
+                              <td className="px-5 py-3.5 text-right font-mono">
+                                <div className="text-[11px] text-emerald-700 font-semibold">
+                                  {activeTenant.currency || "₹"}{unitSelling.toFixed(2)} <span className="text-[9px]">/ unit</span>
+                                </div>
+                                <div className="font-black text-emerald-900 mt-0.5">
+                                  {activeTenant.currency || "₹"}{totalSellingVal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                </div>
+                              </td>
+
+                              {/* 6. Gross Margin */}
+                              <td className="px-5 py-3.5 text-right font-mono">
+                                <div className="text-[11px] font-bold text-indigo-700">
+                                  +{activeTenant.currency || "₹"}{totalProfit.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                </div>
+                                <div className="text-[10px] text-slate-500 mt-0.5">
+                                  <span className="bg-indigo-50 text-indigo-800 font-bold px-1 py-0.2 rounded border border-indigo-200">
+                                    {marginPct}% spread
+                                  </span>
+                                </div>
+                              </td>
+
+                              {/* 7. Batch & Expiry */}
+                              <td className="px-5 py-3.5 font-mono">
+                                <div className="text-slate-700 font-semibold text-[11px]">
+                                  {p.batchNumber}
+                                </div>
+                                <div className="mt-0.5">
+                                  <span className={`text-[10px] font-semibold ${
+                                    isExpired ? "text-rose-600 font-bold" : isExpiringSoon ? "text-amber-600" : "text-slate-500"
+                                  }`}>
+                                    {p.expiryDate} {isExpiringSoon && `(${diffDays}d left)`} {isExpired && "(Expired)"}
+                                  </span>
+                                </div>
+                              </td>
+
+                              {/* 8. Actions */}
+                              <td className="px-5 py-3.5 text-center">
                                 <div className="flex items-center justify-center gap-1.5">
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setBarcodeScanInitialCode(p.barcode);
+                                      setIsBarcodeScanModalOpen(true);
+                                    }}
+                                    title="Scan Barcode to Restock"
+                                    className="p-1 px-1.5 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded transition-colors cursor-pointer flex items-center gap-1 text-[10px] font-bold border border-slate-200"
+                                  >
+                                    <Scan className="w-3 h-3 text-emerald-600" /> Restock
+                                  </button>
                                   <button
                                     type="button"
                                     onClick={() => {
@@ -4467,7 +5352,7 @@ export default function App() {
                                       }
                                     }}
                                     title="Edit Product"
-                                    className="p-1 px-1.5 text-slate-500 hover:text-amber-600 hover:bg-amber-50 rounded transition-colors cursor-pointer flex items-center gap-1 text-[10px] font-bold border border-transparent hover:border-amber-100"
+                                    className="p-1 px-1.5 text-slate-600 hover:text-amber-600 hover:bg-amber-50 rounded transition-colors cursor-pointer flex items-center gap-1 text-[10px] font-bold border border-transparent hover:border-amber-100"
                                   >
                                     <Edit2 className="w-3 h-3" /> Edit
                                   </button>
@@ -4477,7 +5362,7 @@ export default function App() {
                                     title="Delete Product"
                                     className="p-1 px-1.5 text-slate-500 hover:text-rose-600 hover:bg-rose-50 rounded transition-colors cursor-pointer flex items-center gap-1 text-[10px] font-bold border border-transparent hover:border-rose-100"
                                   >
-                                    <Trash2 className="w-3 h-3" /> Delete
+                                    <Trash2 className="w-3 h-3" />
                                   </button>
                                 </div>
                               </td>
@@ -4753,14 +5638,29 @@ export default function App() {
               {/* Product Creation Form */}
               <div className="col-span-1 space-y-6">
                 <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm space-y-4">
-                  <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
-                    {newProduct.id ? (
-                      <Edit2 className="w-5 h-5 text-amber-500" />
-                    ) : (
-                      <PlusCircle className="w-5 h-5 text-emerald-500" />
-                    )}
-                    {newProduct.id ? "Edit Catalog Product" : "Define New Retail Product Catalogue"}
-                  </h3>
+                  <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+                    <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
+                      {newProduct.id ? (
+                        <Edit2 className="w-5 h-5 text-amber-500" />
+                      ) : (
+                        <PlusCircle className="w-5 h-5 text-emerald-500" />
+                      )}
+                      {newProduct.id ? "Edit Catalog Product" : "Define New Retail Product Catalogue"}
+                    </h3>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setBarcodeScanInitialCode("");
+                        setIsBarcodeScanModalOpen(true);
+                      }}
+                      className="px-2.5 py-1 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-[10px] font-bold flex items-center gap-1.5 cursor-pointer shadow-xs transition-colors"
+                      title="Scan pre-printed barcodes with hardware barcode gun"
+                    >
+                      <Scan className="w-3 h-3 text-emerald-400" />
+                      <span>Scan Barcode Gun</span>
+                    </button>
+                  </div>
                 
                 <form onSubmit={handleCreateProductSubmit} className="space-y-3.5 text-xs text-slate-700">
                   <div>
@@ -4788,12 +5688,45 @@ export default function App() {
                       />
                     </div>
                     <div>
-                      <label className="block text-slate-500 font-mono font-semibold mb-1">UPC Barcode *</label>
+                      <label className="block text-slate-500 font-mono font-semibold mb-1 flex items-center justify-between">
+                        <span>UPC Barcode *</span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setBarcodeScanInitialCode(newProduct.barcode || "");
+                            setIsBarcodeScanModalOpen(true);
+                          }}
+                          className="text-[9px] text-emerald-600 hover:text-emerald-700 font-bold uppercase flex items-center gap-0.5 cursor-pointer"
+                        >
+                          <Scan className="w-2.5 h-2.5" /> Scan Gun
+                        </button>
+                      </label>
                       <input
                         type="text"
                         placeholder="e.g. 8901262020213"
                         value={newProduct.barcode}
-                        onChange={(e) => setNewProduct({ ...newProduct, barcode: e.target.value })}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          const trimmed = val.trim();
+                          const match = trimmed ? products.find(p => p.barcode && p.barcode.toLowerCase() === trimmed.toLowerCase()) : null;
+                          if (match) {
+                            setNewProduct(match);
+                            triggerNotification(`✓ Barcode matched! Product "${match.name}" details loaded automatically. View & modify before saving.`, "success");
+                          } else {
+                            setNewProduct({ ...newProduct, barcode: val });
+                          }
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            const trimmed = (newProduct.barcode || "").trim();
+                            const match = trimmed ? products.find(p => p.barcode && p.barcode.toLowerCase() === trimmed.toLowerCase()) : null;
+                            if (match) {
+                              setNewProduct(match);
+                              triggerNotification(`✓ Barcode matched! Product "${match.name}" details loaded automatically. View & modify before saving.`, "success");
+                            }
+                          }
+                        }}
                         className="w-full border border-slate-200 rounded p-2 font-mono"
                         required
                       />
@@ -4818,8 +5751,22 @@ export default function App() {
                       <label className="block text-slate-500 font-mono font-semibold mb-1">Measurement Unit</label>
                       <select
                         value={newProduct.unit}
-                        onChange={(e) => setNewProduct({ ...newProduct, unit: e.target.value as MeasurementUnit })}
-                        className="w-full border border-slate-200 rounded p-2"
+                        onChange={(e) => {
+                          const u = e.target.value as MeasurementUnit;
+                          let defaultQty = newProduct.unitQuantity || 1;
+                          if (u === MeasurementUnit.GRAM) defaultQty = 500;
+                          else if (u === MeasurementUnit.KG) defaultQty = 1;
+                          else if (u === MeasurementUnit.LITER) defaultQty = 1;
+                          else if (u === MeasurementUnit.PIECE) defaultQty = 1;
+                          else if (u === MeasurementUnit.PACK) defaultQty = 1;
+                          setNewProduct({
+                            ...newProduct,
+                            unit: u,
+                            unitQuantity: defaultQty,
+                            unitLabel: `${defaultQty} ${u}`
+                          });
+                        }}
+                        className="w-full border border-slate-200 rounded p-2 font-semibold text-slate-800"
                       >
                         <option value={MeasurementUnit.KG}>Kilogram (Kg)</option>
                         <option value={MeasurementUnit.LITER}>Liters (Liters)</option>
@@ -4830,7 +5777,135 @@ export default function App() {
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-3 gap-2">
+                  {/* Number of Units / Pack Size Specification based on Selected Measurement Unit */}
+                  <div className="bg-emerald-50/50 p-3 rounded-lg border border-emerald-200/80 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <label className="text-slate-800 font-bold text-[11px] flex items-center gap-1">
+                        <Package className="w-3.5 h-3.5 text-emerald-600" />
+                        <span>Number of Units based on {newProduct.unit || "Unit"} (Pack Size) *</span>
+                      </label>
+                      <span className="text-[10px] font-mono bg-emerald-100 text-emerald-800 border border-emerald-200 px-2 py-0.5 rounded font-bold">
+                        Pack: {newProduct.unitQuantity || 1} {newProduct.unit}
+                      </span>
+                    </div>
+
+                    <div className="flex gap-2 items-center">
+                      <input
+                        type="number"
+                        min="0.01"
+                        step="any"
+                        placeholder="e.g. 500 for 500g, 1 for 1kg, 6 for 6pcs"
+                        value={newProduct.unitQuantity || 1}
+                        onChange={(e) => {
+                          const val = Number(e.target.value);
+                          setNewProduct({
+                            ...newProduct,
+                            unitQuantity: val,
+                            unitLabel: `${val} ${newProduct.unit || MeasurementUnit.PIECE}`
+                          });
+                        }}
+                        className="w-28 bg-white border border-slate-200 rounded p-1.5 font-mono text-xs font-bold text-slate-900"
+                        required
+                      />
+                      <span className="text-xs text-slate-600 font-medium">{newProduct.unit}</span>
+
+                      {/* Context-aware quick preset chips */}
+                      <div className="flex gap-1 ml-auto flex-wrap">
+                        {newProduct.unit === MeasurementUnit.GRAM && (
+                          [100, 200, 250, 500, 1000].map(val => (
+                            <button
+                              key={val}
+                              type="button"
+                              onClick={() => setNewProduct({
+                                ...newProduct,
+                                unitQuantity: val,
+                                unitLabel: `${val} Grams`
+                              })}
+                              className={`text-[9px] px-1.5 py-0.5 rounded font-mono font-bold cursor-pointer transition-colors ${
+                                newProduct.unitQuantity === val ? "bg-emerald-700 text-white" : "bg-white hover:bg-slate-100 text-slate-700 border border-slate-200"
+                              }`}
+                            >
+                              {val}g
+                            </button>
+                          ))
+                        )}
+                        {newProduct.unit === MeasurementUnit.KG && (
+                          [0.5, 1, 2, 5, 10, 25].map(val => (
+                            <button
+                              key={val}
+                              type="button"
+                              onClick={() => setNewProduct({
+                                ...newProduct,
+                                unitQuantity: val,
+                                unitLabel: `${val} Kg`
+                              })}
+                              className={`text-[9px] px-1.5 py-0.5 rounded font-mono font-bold cursor-pointer transition-colors ${
+                                newProduct.unitQuantity === val ? "bg-emerald-700 text-white" : "bg-white hover:bg-slate-100 text-slate-700 border border-slate-200"
+                              }`}
+                            >
+                              {val}kg
+                            </button>
+                          ))
+                        )}
+                        {newProduct.unit === MeasurementUnit.LITER && (
+                          [0.25, 0.5, 1, 2, 5].map(val => (
+                            <button
+                              key={val}
+                              type="button"
+                              onClick={() => setNewProduct({
+                                ...newProduct,
+                                unitQuantity: val,
+                                unitLabel: `${val} Liters`
+                              })}
+                              className={`text-[9px] px-1.5 py-0.5 rounded font-mono font-bold cursor-pointer transition-colors ${
+                                newProduct.unitQuantity === val ? "bg-emerald-700 text-white" : "bg-white hover:bg-slate-100 text-slate-700 border border-slate-200"
+                              }`}
+                            >
+                              {val}L
+                            </button>
+                          ))
+                        )}
+                        {newProduct.unit === MeasurementUnit.PIECE && (
+                          [1, 2, 4, 6, 12].map(val => (
+                            <button
+                              key={val}
+                              type="button"
+                              onClick={() => setNewProduct({
+                                ...newProduct,
+                                unitQuantity: val,
+                                unitLabel: `${val} Pieces`
+                              })}
+                              className={`text-[9px] px-1.5 py-0.5 rounded font-mono font-bold cursor-pointer transition-colors ${
+                                newProduct.unitQuantity === val ? "bg-emerald-700 text-white" : "bg-white hover:bg-slate-100 text-slate-700 border border-slate-200"
+                              }`}
+                            >
+                              {val === 12 ? "12 (Dozen)" : `${val} pcs`}
+                            </button>
+                          ))
+                        )}
+                        {newProduct.unit === MeasurementUnit.PACK && (
+                          [1, 5, 10, 24].map(val => (
+                            <button
+                              key={val}
+                              type="button"
+                              onClick={() => setNewProduct({
+                                ...newProduct,
+                                unitQuantity: val,
+                                unitLabel: `${val} Packs`
+                              })}
+                              className={`text-[9px] px-1.5 py-0.5 rounded font-mono font-bold cursor-pointer transition-colors ${
+                                newProduct.unitQuantity === val ? "bg-emerald-700 text-white" : "bg-white hover:bg-slate-100 text-slate-700 border border-slate-200"
+                              }`}
+                            >
+                              {val} pk
+                            </button>
+                          ))
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-4 gap-2">
                     <div>
                       <label className="block text-slate-500 font-mono font-semibold mb-1">COGS Purchase (₹)</label>
                       <input
@@ -4841,12 +5916,23 @@ export default function App() {
                       />
                     </div>
                     <div>
-                      <label className="block text-slate-500 font-mono font-semibold mb-1">MRP Price (₹)</label>
+                      <label className="block text-slate-500 font-mono font-semibold mb-1">MRP Price (₹) *</label>
+                      <input
+                        type="number"
+                        value={newProduct.mrp ?? (newProduct.price ? Math.round(newProduct.price * 1.15) : 0)}
+                        onChange={(e) => setNewProduct({ ...newProduct, mrp: Number(e.target.value) })}
+                        className="w-full border border-slate-200 rounded p-1.5 font-mono font-bold"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-slate-500 font-mono font-semibold mb-1">Selling Price (₹) *</label>
                       <input
                         type="number"
                         value={newProduct.price}
                         onChange={(e) => setNewProduct({ ...newProduct, price: Number(e.target.value) })}
-                        className="w-full border border-slate-200 rounded p-1.5 font-mono"
+                        className="w-full border border-slate-200 rounded p-1.5 font-mono font-bold text-emerald-700"
+                        required
                       />
                     </div>
                     <div>
@@ -5630,6 +6716,16 @@ export default function App() {
                                 <p className="text-[8.5px] text-slate-400 font-mono">
                                   Phone: {branches.find(b => b.id === selectedInv.storeBranchId)?.phone || activeTenant.phone || "811-23456789"}
                                 </p>
+                                {(normalizeUserRole(currentRole) === UserRole.ADMIN || isSuperAdmin) && (
+                                  <button
+                                    type="button"
+                                    onClick={() => setIsEditReceiptAddressModalOpen(true)}
+                                    className="mt-1 px-2 py-0.5 bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 rounded text-[9px] font-bold flex items-center gap-1 mx-auto cursor-pointer transition-colors shadow-xs"
+                                    title="Edit store address and contact details"
+                                  >
+                                    <Edit2 className="w-2.5 h-2.5 text-amber-700" /> Edit Receipt Address
+                                  </button>
+                                )}
                               </div>
 
                               <div className="border-t border-dashed border-slate-300 py-2 space-y-0.5 text-[9.5px]">
@@ -6109,116 +7205,736 @@ Payment Mode:   ${selectedInv.paymentMode}
             </div>
           )}
 
-          {/* TAB 6: ANALYTICS & SALES REPORT */}
+          {/* TAB 6: CUSTOM REPORTS & AUDIT ANALYTICS STUDIO */}
           {activeTab === "analytics" && (
             <div className="space-y-6" id="analytics-module-layout">
-              {/* Gross stats grid */}
-              <div className="grid grid-cols-4 gap-6">
-                <div className="bg-white p-6 rounded-xl border border-emerald-500/20 bg-emerald-50/10 shadow-sm relative overflow-hidden">
-                  <div className="absolute right-0 top-0 p-6 opacity-10">
-                    <TrendingUp className="w-20 h-20 text-emerald-600" />
+              {/* Studio Header & Top Action Bar */}
+              <div className="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="p-2 bg-purple-50 text-purple-700 rounded-xl">
+                      <BarChart3 className="w-5 h-5" />
+                    </span>
+                    <div>
+                      <h2 className="text-lg font-black text-slate-900 tracking-tight font-sans">
+                        Custom Reports & Financial Intelligence Studio
+                      </h2>
+                      <p className="text-xs text-slate-500 font-sans mt-0.5">
+                        Generate official audit statements, inventory valuations, and tender breakdowns on daily, weekly, monthly, and custom date ranges.
+                      </p>
+                    </div>
                   </div>
-                  <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Gross Sales Revenue</h4>
-                  <p className="text-3xl font-black font-mono text-slate-900">₹{totalInvoicedRevenue.toFixed(2)}</p>
-                  <p className="text-xs text-slate-500 mt-2">Simulated overall POS turnovers</p>
                 </div>
 
-                <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm relative overflow-hidden">
-                  <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Suppliers Cost of Goods (COGS)</h4>
-                  <p className="text-3xl font-black font-mono text-slate-900">₹{totalWarehouseCOGS.toFixed(2)}</p>
-                  <p className="text-xs text-slate-500 mt-2">Valued purchase cost ledger</p>
-                </div>
+                <div className="flex flex-wrap items-center gap-2.5">
+                  <button
+                    type="button"
+                    onClick={handleExportExcel}
+                    className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-bold text-xs rounded-xl shadow-sm flex items-center gap-2 transition-all cursor-pointer"
+                    title="Export formatted Excel CSV with metadata and totals"
+                  >
+                    <FileSpreadsheet className="w-4 h-4" />
+                    <span>Download Excel</span>
+                  </button>
 
-                <div className="bg-white p-6 rounded-xl border border-rose-500/10 bg-rose-50/5 shadow-sm relative overflow-hidden">
-                  <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Filed Store Expenses</h4>
-                  <p className="text-3xl font-black font-mono text-rose-600">₹{totalStoreExpenses.toFixed(2)}</p>
-                  <p className="text-xs text-slate-500 mt-2">Utility costs & Logistics paid</p>
-                </div>
+                  <button
+                    type="button"
+                    onClick={handleExportPDF}
+                    disabled={isExportingPDF}
+                    className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white font-bold text-xs rounded-xl shadow-sm flex items-center gap-2 transition-all cursor-pointer"
+                    title="Export A4 PDF document with corporate headers"
+                  >
+                    <FileText className="w-4 h-4" />
+                    <span>{isExportingPDF ? "Generating PDF..." : "Download PDF"}</span>
+                  </button>
 
-                <div className="bg-white p-6 rounded-xl border border-slate-250 bg-gradient-to-br from-emerald-950 to-slate-950 text-white shadow-xl relative overflow-hidden">
-                  <h4 className="text-xs font-bold text-emerald-400 uppercase tracking-wider font-mono mb-1">Calculated Net Profit</h4>
-                  <p className="text-3xl font-black font-mono text-emerald-400">₹{calculatedOperationalNetProfit.toFixed(2)}</p>
-                  <p className="text-xs text-slate-300 mt-2">Revenue minus COGS & Expenses</p>
+                  <button
+                    type="button"
+                    onClick={handlePrintReport}
+                    className="px-3.5 py-2.5 bg-slate-100 hover:bg-slate-200 active:scale-95 text-slate-700 font-bold text-xs rounded-xl shadow-sm flex items-center gap-1.5 transition-all cursor-pointer"
+                    title="Send report directly to thermal or A4 printer"
+                  >
+                    <Printer className="w-4 h-4 text-slate-500" />
+                    <span>Print</span>
+                  </button>
                 </div>
               </div>
 
-              {/* Dynamic SVG Visual Charts */}
-              <div className="grid grid-cols-2 gap-6">
-                <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm space-y-4">
-                  <div className="flex justify-between items-center text-slate-800">
-                    <h3 className="text-sm font-bold">Category Distribution (Stock Items Volume)</h3>
-                    <span className="text-xs text-slate-500 font-mono">Dynamic Bar visualization</span>
+              {/* 4 Report Types Selector Navigation */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                {[
+                  {
+                    id: "collection" as const,
+                    title: "Collection Report",
+                    desc: "Gross sales, taxes, cash, UPI, card tender ledgers",
+                    icon: DollarSign,
+                    color: "emerald",
+                    metric: `₹${collectionMetrics.totalGross.toFixed(2)}`,
+                    countLabel: `${collectionMetrics.count} Invoices`
+                  },
+                  {
+                    id: "stock" as const,
+                    title: "Stock Report",
+                    desc: "SKU quantities, low stock alerts, batches, expiry",
+                    icon: Layers,
+                    color: "blue",
+                    metric: `${stockReportMetrics.totalUnits} Units`,
+                    countLabel: `${stockReportMetrics.totalSkus} SKUs`
+                  },
+                  {
+                    id: "stock-cost" as const,
+                    title: "Stock Cost Report",
+                    desc: "COGS valuation, retail valuation & profit margins",
+                    icon: TrendingUp,
+                    color: "amber",
+                    metric: `₹${stockReportMetrics.totalPurchaseVal.toFixed(2)}`,
+                    countLabel: `Margin ${stockReportMetrics.profitMarginPercent.toFixed(1)}%`
+                  },
+                  {
+                    id: "expenditure" as const,
+                    title: "Expenditure Report",
+                    desc: "Store overheads, utility bills, vendor payouts",
+                    icon: Receipt,
+                    color: "rose",
+                    metric: `₹${expenditureMetrics.totalExpenses.toFixed(2)}`,
+                    countLabel: `${expenditureMetrics.count} Vouchers`
+                  }
+                ].map((rep) => {
+                  const isSelected = activeReportType === rep.id;
+                  const Icon = rep.icon;
+                  return (
+                    <button
+                      key={rep.id}
+                      type="button"
+                      onClick={() => setActiveReportType(rep.id)}
+                      className={`p-4 rounded-2xl border text-left transition-all cursor-pointer relative overflow-hidden flex flex-col justify-between ${
+                        isSelected
+                          ? "bg-white border-purple-500 ring-2 ring-purple-500/20 shadow-md"
+                          : "bg-white border-slate-200/80 hover:border-slate-300 hover:shadow-xs"
+                      }`}
+                    >
+                      <div className="flex items-start justify-between w-full">
+                        <div className={`p-2.5 rounded-xl ${
+                          rep.color === "emerald" ? "bg-emerald-50 text-emerald-600" :
+                          rep.color === "blue" ? "bg-blue-50 text-blue-600" :
+                          rep.color === "amber" ? "bg-amber-50 text-amber-600" :
+                          "bg-rose-50 text-rose-600"
+                        }`}>
+                          <Icon className="w-5 h-5" />
+                        </div>
+                        {isSelected && (
+                          <span className="px-2 py-0.5 bg-purple-100 text-purple-700 text-[9px] font-extrabold uppercase rounded-full tracking-wide">
+                            Active
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="mt-3">
+                        <h3 className="text-sm font-extrabold text-slate-900 font-sans">
+                          {rep.title}
+                        </h3>
+                        <p className="text-[11px] text-slate-500 line-clamp-1 mt-0.5">
+                          {rep.desc}
+                        </p>
+                      </div>
+
+                      <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-xs font-mono">
+                        <span className="font-bold text-slate-800">{rep.metric}</span>
+                        <span className="text-[10px] text-slate-400 font-sans">{rep.countLabel}</span>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Flexible Date & Filter Toolbar */}
+              <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm space-y-4">
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 pb-3 border-b border-slate-100">
+                  <div className="flex items-center gap-2">
+                    <Calendar className="w-4 h-4 text-purple-600" />
+                    <span className="text-xs font-black uppercase tracking-wider text-slate-800 font-sans">
+                      Date Range & Reporting Frequency
+                    </span>
                   </div>
 
-                  {/* Built responsive HTML/CSS bar visualization for complete stability */}
-                  <div className="space-y-3 pt-4">
-                    {Array.from(new Set(tenantProducts.map(p => p.category))).map((cat) => {
-                      const categoryVolume = tenantProducts.filter(p => p.category === cat).reduce((acc, currentItem) => acc + getProductStock(currentItem), 0);
-                      const totalStockAll = tenantProducts.reduce((acc, p) => acc + getProductStock(p), 1);
-                      const percentage = Math.round((categoryVolume / totalStockAll) * 100);
-
-                      return (
-                        <div key={cat} className="space-y-1">
-                          <div className="flex justify-between text-xs">
-                            <span className="font-bold text-slate-700">{cat}</span>
-                            <span className="font-mono font-medium text-slate-500">{categoryVolume} items ({percentage}%)</span>
-                          </div>
-                          <div className="w-full bg-slate-100 h-2.5 rounded-full overflow-hidden">
-                            <div
-                              style={{ width: `${Math.max(4, percentage)}%` }}
-                              className="h-full bg-emerald-600 rounded-full transition-all"
-                            />
-                          </div>
-                        </div>
-                      );
-                    })}
+                  <div className="text-xs text-slate-500 font-medium flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+                    <span>Period: <strong className="text-slate-800">{reportDateRange.label}</strong></span>
                   </div>
                 </div>
 
-                {/* Tax Ledger Liability breakdown list */}
-                <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm space-y-4">
-                  <h3 className="text-sm font-bold text-slate-800">GST / VAT Liability Ledgers</h3>
-                  <p className="text-xs text-slate-400">Total legal taxable values registered across tax brackets</p>
-                  
-                  <div className="space-y-3.5 pt-2 text-xs font-mono">
-                    <div className="p-3 bg-slate-50 border border-slate-200/60 rounded-lg flex justify-between">
+                {/* Preset Chips */}
+                <div className="flex flex-wrap items-center gap-2">
+                  {[
+                    { id: "today" as const, label: "Today" },
+                    { id: "yesterday" as const, label: "Yesterday" },
+                    { id: "this-week" as const, label: "This Week" },
+                    { id: "last-7-days" as const, label: "Last 7 Days" },
+                    { id: "this-month" as const, label: "This Month" },
+                    { id: "last-month" as const, label: "Last Month" },
+                    { id: "last-30-days" as const, label: "Last 30 Days" },
+                    { id: "custom" as const, label: "Custom Date Range" }
+                  ].map((preset) => (
+                    <button
+                      key={preset.id}
+                      type="button"
+                      onClick={() => setReportDatePreset(preset.id)}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                        reportDatePreset === preset.id
+                          ? "bg-slate-900 text-white shadow-sm"
+                          : "bg-slate-100 hover:bg-slate-200 text-slate-600"
+                      }`}
+                    >
+                      {preset.label}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Custom Date Pickers & Search Query Bar */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 pt-1">
+                  {reportDatePreset === "custom" && (
+                    <>
                       <div>
-                        <p className="font-bold text-slate-800">Standard Luxury Tax bracket (18% GST)</p>
-                        <p className="text-[10px] text-slate-400">Applies to beverages and snack items</p>
+                        <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">
+                          From Date (Start)
+                        </label>
+                        <input
+                          type="date"
+                          value={reportCustomStartDate}
+                          onChange={(e) => setReportCustomStartDate(e.target.value)}
+                          className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-mono font-bold text-slate-800 focus:bg-white focus:border-purple-500 focus:outline-none"
+                        />
                       </div>
-                      <div className="text-right">
-                        <p className="text-sm font-black text-slate-900">
-                          ₹{(totalTaxGSTLiability * 0.45).toFixed(2)}
-                        </p>
-                        <p className="text-[10px] text-slate-400 mt-0.5">Filed</p>
+
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">
+                          To Date (End)
+                        </label>
+                        <input
+                          type="date"
+                          value={reportCustomEndDate}
+                          onChange={(e) => setReportCustomEndDate(e.target.value)}
+                          className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-mono font-bold text-slate-800 focus:bg-white focus:border-purple-500 focus:outline-none"
+                        />
+                      </div>
+                    </>
+                  )}
+
+                  <div className={reportDatePreset === "custom" ? "lg:col-span-1" : "sm:col-span-2 lg:col-span-3"}>
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">
+                      Search Within Records
+                    </label>
+                    <div className="relative">
+                      <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-3 pointer-events-none" />
+                      <input
+                        type="text"
+                        value={reportSearchQuery}
+                        onChange={(e) => setReportSearchQuery(e.target.value)}
+                        placeholder="Search SKU, customer, cashier, invoice, or category..."
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-9 pr-3 py-2 text-xs text-slate-800 placeholder-slate-400 focus:bg-white focus:border-purple-500 focus:outline-none font-medium"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">
+                      {activeReportType === "collection" ? "Payment Mode" : "Category Filter"}
+                    </label>
+                    {activeReportType === "collection" ? (
+                      <select
+                        value={reportPaymentFilter}
+                        onChange={(e) => setReportPaymentFilter(e.target.value)}
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 focus:bg-white focus:border-purple-500 focus:outline-none cursor-pointer"
+                      >
+                        <option value="ALL">All Payment Modes</option>
+                        <option value="CASH">Cash</option>
+                        <option value="UPI">UPI / QR Code</option>
+                        <option value="CARD">Credit / Debit Card</option>
+                        <option value="STORE_CREDIT">Store Credit</option>
+                      </select>
+                    ) : (
+                      <select
+                        value={reportCategoryFilter}
+                        onChange={(e) => setReportCategoryFilter(e.target.value)}
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 focus:bg-white focus:border-purple-500 focus:outline-none cursor-pointer"
+                      >
+                        <option value="ALL">All Categories</option>
+                        {Array.from(new Set(
+                          activeReportType === "expenditure"
+                            ? tenantAndBranchExpenses.map(e => e.category)
+                            : tenantProducts.map(p => p.category)
+                        )).filter(Boolean).map(cat => (
+                          <option key={cat} value={cat}>{cat}</option>
+                        ))}
+                      </select>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Dynamic KPI Summary Cards */}
+              {activeReportType === "collection" && (
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-2xs">
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Gross Collections</p>
+                    <p className="text-2xl font-black font-mono text-emerald-600 mt-1">₹{collectionMetrics.totalGross.toFixed(2)}</p>
+                    <p className="text-[10px] text-slate-400 mt-1">Across {collectionMetrics.count} transactions</p>
+                  </div>
+                  <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-2xs">
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">GST Tax Collected</p>
+                    <p className="text-2xl font-black font-mono text-slate-800 mt-1">₹{collectionMetrics.totalTax.toFixed(2)}</p>
+                    <p className="text-[10px] text-slate-400 mt-1">Subtotal ₹{collectionMetrics.totalSubtotal.toFixed(2)}</p>
+                  </div>
+                  <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-2xs">
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Discounts Given</p>
+                    <p className="text-2xl font-black font-mono text-amber-600 mt-1">₹{collectionMetrics.totalDiscounts.toFixed(2)}</p>
+                    <p className="text-[10px] text-slate-400 mt-1">Promotional savings</p>
+                  </div>
+                  <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-2xs">
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Average Order Value (AOV)</p>
+                    <p className="text-2xl font-black font-mono text-indigo-600 mt-1">₹{collectionMetrics.aov.toFixed(2)}</p>
+                    <p className="text-[10px] text-slate-400 mt-1">Per completed sale ticket</p>
+                  </div>
+                </div>
+              )}
+
+              {activeReportType === "stock" && (
+                <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+                  <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-2xs">
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Total SKUs</p>
+                    <p className="text-2xl font-black font-mono text-slate-800 mt-1">{stockReportMetrics.totalSkus}</p>
+                    <p className="text-[10px] text-slate-400 mt-1">Catalog items</p>
+                  </div>
+                  <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-2xs">
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Total Stock Units</p>
+                    <p className="text-2xl font-black font-mono text-blue-600 mt-1">{stockReportMetrics.totalUnits}</p>
+                    <p className="text-[10px] text-slate-400 mt-1">Physical on-hand volume</p>
+                  </div>
+                  <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-2xs">
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">In-Stock</p>
+                    <p className="text-2xl font-black font-mono text-emerald-600 mt-1">{stockReportMetrics.inStockCount}</p>
+                    <p className="text-[10px] text-slate-400 mt-1">Optimal availability</p>
+                  </div>
+                  <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-2xs">
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Low Stock Alert</p>
+                    <p className="text-2xl font-black font-mono text-amber-600 mt-1">{stockReportMetrics.lowStockCount}</p>
+                    <p className="text-[10px] text-slate-400 mt-1">Reorder threshold breached</p>
+                  </div>
+                  <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-2xs">
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Out of Stock</p>
+                    <p className="text-2xl font-black font-mono text-rose-600 mt-1">{stockReportMetrics.outOfStockCount}</p>
+                    <p className="text-[10px] text-slate-400 mt-1">Immediate restock required</p>
+                  </div>
+                </div>
+              )}
+
+              {activeReportType === "stock-cost" && (
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-2xs">
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Purchase Cost (COGS)</p>
+                    <p className="text-2xl font-black font-mono text-slate-800 mt-1">₹{stockReportMetrics.totalPurchaseVal.toFixed(2)}</p>
+                    <p className="text-[10px] text-slate-400 mt-1">Warehouse procurement value</p>
+                  </div>
+                  <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-2xs">
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Retail Selling Value</p>
+                    <p className="text-2xl font-black font-mono text-indigo-600 mt-1">₹{stockReportMetrics.totalSellingVal.toFixed(2)}</p>
+                    <p className="text-[10px] text-slate-400 mt-1">Valuation at shelf price</p>
+                  </div>
+                  <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-2xs">
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Projected Gross Profit</p>
+                    <p className="text-2xl font-black font-mono text-emerald-600 mt-1">₹{stockReportMetrics.potentialProfit.toFixed(2)}</p>
+                    <p className="text-[10px] text-slate-400 mt-1">Selling minus Purchase cost</p>
+                  </div>
+                  <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-2xs">
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Overall Margin (%)</p>
+                    <p className="text-2xl font-black font-mono text-purple-600 mt-1">{stockReportMetrics.profitMarginPercent.toFixed(1)}%</p>
+                    <p className="text-[10px] text-slate-400 mt-1">Average profitability return</p>
+                  </div>
+                </div>
+              )}
+
+              {activeReportType === "expenditure" && (
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-2xs">
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Total Expenditures</p>
+                    <p className="text-2xl font-black font-mono text-rose-600 mt-1">₹{expenditureMetrics.totalExpenses.toFixed(2)}</p>
+                    <p className="text-[10px] text-slate-400 mt-1">{expenditureMetrics.count} vouchers registered</p>
+                  </div>
+                  <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-2xs">
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Period Collections</p>
+                    <p className="text-2xl font-black font-mono text-emerald-600 mt-1">₹{expenditureMetrics.totalPeriodCollections.toFixed(2)}</p>
+                    <p className="text-[10px] text-slate-400 mt-1">Total cash/digital intake</p>
+                  </div>
+                  <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-2xs">
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Net Operating Cash Flow</p>
+                    <p className={`text-2xl font-black font-mono mt-1 ${expenditureMetrics.netCashFlow >= 0 ? "text-emerald-700" : "text-rose-700"}`}>
+                      ₹{expenditureMetrics.netCashFlow.toFixed(2)}
+                    </p>
+                    <p className="text-[10px] text-slate-400 mt-1">Collections minus overhead</p>
+                  </div>
+                  <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-2xs">
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Expense Ratio</p>
+                    <p className="text-2xl font-black font-mono text-purple-600 mt-1">{expenditureMetrics.expenseRatio.toFixed(1)}%</p>
+                    <p className="text-[10px] text-slate-400 mt-1">Top: {expenditureMetrics.topCategory}</p>
+                  </div>
+                </div>
+              )}
+
+              {/* Printable & PDF-Ready Document Container */}
+              <div 
+                id="custom-report-printable-sheet"
+                className="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden"
+              >
+                {/* Official Corporate Header */}
+                <div className="p-6 border-b border-slate-200 bg-slate-50/70">
+                  <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2.5">
+                        {activeTenant.companyLogo ? (
+                          <img
+                            src={activeTenant.companyLogo}
+                            alt="Logo"
+                            className="h-9 max-w-[130px] object-contain"
+                          />
+                        ) : (
+                          <span className="w-8 h-8 rounded-lg bg-slate-900 text-white font-extrabold flex items-center justify-center text-xs">
+                            {activeTenant.name.slice(0, 2).toUpperCase()}
+                          </span>
+                        )}
+                        <div>
+                          <h1 className="text-base font-black text-slate-900 font-sans tracking-tight">
+                            {activeTenant.name}
+                          </h1>
+                          <p className="text-xs font-bold text-slate-600 font-mono">
+                            {activeTenant.businessLocation || "Main Commercial Outlet"}
+                          </p>
+                        </div>
+                      </div>
+
+                      <p className="text-[11px] text-slate-500 font-sans pt-1">
+                        {[activeTenant.address, activeTenant.city, activeTenant.state].filter(Boolean).join(", ")}
+                        {activeTenant.pincode ? ` - ${activeTenant.pincode}` : ""}
+                        {activeTenant.country ? `, ${activeTenant.country}` : ""}
+                      </p>
+                      <div className="flex flex-wrap items-center gap-3 text-[10px] font-mono text-slate-500">
+                        {activeTenant.gstinRegNumber && <span>GSTIN: <strong className="text-slate-700">{activeTenant.gstinRegNumber}</strong></span>}
+                        {activeTenant.phone && <span>Tel: <strong className="text-slate-700">{activeTenant.phone}</strong></span>}
                       </div>
                     </div>
 
-                    <div className="p-3 bg-slate-50 border border-slate-200/60 rounded-lg flex justify-between">
-                      <div>
-                        <p className="font-bold text-slate-800">Intermediate Groceries slab (12% GST)</p>
-                        <p className="text-[10px] text-slate-400 font-sans font-normal">Dairy, spreads & butter commodities</p>
-                      </div>
-                      <div className="text-right">
-                        <p className="text-sm font-black text-slate-900">
-                          ₹{(totalTaxGSTLiability * 0.35).toFixed(2)}
-                        </p>
-                        <p className="text-[10px] text-slate-400 mt-0.5">Filed</p>
-                      </div>
+                    <div className="text-left md:text-right space-y-1">
+                      <span className="inline-block px-3 py-1 bg-purple-100 text-purple-900 text-[10px] font-extrabold uppercase rounded-lg tracking-wider font-mono">
+                        {activeReportType === "collection" && "Official Collection Statement"}
+                        {activeReportType === "stock" && "Stock Position & Inventory Audit"}
+                        {activeReportType === "stock-cost" && "Stock Cost & Retail Margin Valuation"}
+                        {activeReportType === "expenditure" && "Operational Expenditure & Overhead Ledger"}
+                      </span>
+                      <p className="text-xs font-bold text-slate-800 font-sans">
+                        Reporting Filter: {reportDateRange.label}
+                      </p>
+                      <p className="text-[10px] text-slate-400 font-mono">
+                        Generated: {new Date().toLocaleString()}
+                      </p>
                     </div>
+                  </div>
+                </div>
 
-                    <div className="p-3 bg-slate-50 border border-slate-200/60 rounded-lg flex justify-between">
-                      <div>
-                        <p className="font-bold text-slate-800">Essential Produce slab (5% GST)</p>
-                        <p className="text-[10px] text-slate-400">Fresh imports, apples, premium milk</p>
-                      </div>
-                      <div className="text-right">
-                        <p className="text-sm font-black text-slate-900">
-                          ₹{(totalTaxGSTLiability * 0.20).toFixed(2)}
-                        </p>
-                        <p className="text-[10px] text-slate-400 mt-0.5">Filed</p>
-                      </div>
-                    </div>
+                {/* Report Data Table */}
+                <div className="overflow-x-auto">
+                  {/* 1. Collection Report Table */}
+                  {activeReportType === "collection" && (
+                    <table className="w-full text-left text-xs">
+                      <thead className="bg-slate-100/80 border-b border-slate-200 text-slate-600 uppercase font-mono text-[10px]">
+                        <tr>
+                          <th className="py-3 px-4 font-bold">Invoice ID</th>
+                          <th className="py-3 px-3 font-bold">Date & Time</th>
+                          <th className="py-3 px-3 font-bold">Customer</th>
+                          <th className="py-3 px-3 font-bold">Tender Mode</th>
+                          <th className="py-3 px-3 font-bold text-right">Items</th>
+                          <th className="py-3 px-3 font-bold text-right">Subtotal</th>
+                          <th className="py-3 px-3 font-bold text-right">Tax (GST)</th>
+                          <th className="py-3 px-3 font-bold text-right">Discount</th>
+                          <th className="py-3 px-4 font-bold text-right">Net Total</th>
+                          <th className="py-3 px-3 font-bold">Cashier</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {filteredReportInvoices.length === 0 ? (
+                          <tr>
+                            <td colSpan={10} className="py-12 text-center text-slate-400 italic">
+                              No invoices found matching the selected period and filters.
+                            </td>
+                          </tr>
+                        ) : (
+                          filteredReportInvoices.map((inv, idx) => (
+                            <tr key={inv.id} className={idx % 2 === 0 ? "bg-white" : "bg-slate-50/40"}>
+                              <td className="py-2.5 px-4 font-mono font-bold text-slate-900">{inv.id}</td>
+                              <td className="py-2.5 px-3 font-mono text-[11px] text-slate-600">
+                                {inv.date} {inv.time && <span className="text-slate-400">{inv.time}</span>}
+                              </td>
+                              <td className="py-2.5 px-3 font-medium text-slate-800">
+                                {inv.customerName || "Walk-in Guest"}
+                              </td>
+                              <td className="py-2.5 px-3">
+                                <span className="px-2 py-0.5 rounded text-[10px] font-bold font-mono uppercase bg-slate-100 text-slate-700">
+                                  {inv.paymentMode}
+                                </span>
+                              </td>
+                              <td className="py-2.5 px-3 font-mono text-right text-slate-600">
+                                {inv.items.reduce((s, i) => s + i.quantity, 0)}
+                              </td>
+                              <td className="py-2.5 px-3 font-mono text-right text-slate-600">
+                                ₹{(inv.subtotal || (inv.grandTotal - (inv.taxAmount || 0))).toFixed(2)}
+                              </td>
+                              <td className="py-2.5 px-3 font-mono text-right text-slate-600">
+                                ₹{(inv.taxAmount || 0).toFixed(2)}
+                              </td>
+                              <td className="py-2.5 px-3 font-mono text-right text-amber-600">
+                                ₹{(inv.discountAmount || 0).toFixed(2)}
+                              </td>
+                              <td className="py-2.5 px-4 font-mono font-bold text-right text-emerald-600">
+                                ₹{inv.grandTotal.toFixed(2)}
+                              </td>
+                              <td className="py-2.5 px-3 text-[11px] text-slate-500">
+                                {inv.cashierName}
+                              </td>
+                            </tr>
+                          ))
+                        )}
+                      </tbody>
+                      {filteredReportInvoices.length > 0 && (
+                        <tfoot className="bg-slate-100/90 border-t-2 border-slate-300 font-mono font-bold text-slate-900 text-xs">
+                          <tr>
+                            <td colSpan={4} className="py-3 px-4 font-sans uppercase tracking-wider text-[11px]">
+                              Total Collections ({filteredReportInvoices.length} Invoices)
+                            </td>
+                            <td className="py-3 px-3 text-right">
+                              {filteredReportInvoices.reduce((s, inv) => s + inv.items.reduce((is, item) => is + item.quantity, 0), 0)}
+                            </td>
+                            <td className="py-3 px-3 text-right">₹{collectionMetrics.totalSubtotal.toFixed(2)}</td>
+                            <td className="py-3 px-3 text-right">₹{collectionMetrics.totalTax.toFixed(2)}</td>
+                            <td className="py-3 px-3 text-right text-amber-700">₹{collectionMetrics.totalDiscounts.toFixed(2)}</td>
+                            <td className="py-3 px-4 text-right text-emerald-700 text-sm">₹{collectionMetrics.totalGross.toFixed(2)}</td>
+                            <td></td>
+                          </tr>
+                        </tfoot>
+                      )}
+                    </table>
+                  )}
+
+                  {/* 2. Stock Report Table */}
+                  {activeReportType === "stock" && (
+                    <table className="w-full text-left text-xs">
+                      <thead className="bg-slate-100/80 border-b border-slate-200 text-slate-600 uppercase font-mono text-[10px]">
+                        <tr>
+                          <th className="py-3 px-4 font-bold">SKU Code</th>
+                          <th className="py-3 px-3 font-bold">Product Name</th>
+                          <th className="py-3 px-3 font-bold">Category</th>
+                          <th className="py-3 px-3 font-bold text-right">Stock Qty</th>
+                          <th className="py-3 px-3 font-bold">Unit</th>
+                          <th className="py-3 px-3 font-bold text-right">Min Alert</th>
+                          <th className="py-3 px-3 font-bold">Stock Status</th>
+                          <th className="py-3 px-3 font-bold">Batch No</th>
+                          <th className="py-3 px-3 font-bold">Expiry Date</th>
+                          <th className="py-3 px-4 font-bold">Supplier</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {filteredReportStock.length === 0 ? (
+                          <tr>
+                            <td colSpan={10} className="py-12 text-center text-slate-400 italic">
+                              No stock items found matching criteria.
+                            </td>
+                          </tr>
+                        ) : (
+                          filteredReportStock.map((prod, idx) => {
+                            const qty = getProductStock(prod);
+                            const isOut = qty <= 0;
+                            const isLow = !isOut && qty <= prod.minStockAlert;
+                            return (
+                              <tr key={prod.id} className={idx % 2 === 0 ? "bg-white" : "bg-slate-50/40"}>
+                                <td className="py-2.5 px-4 font-mono font-bold text-slate-900">{prod.sku}</td>
+                                <td className="py-2.5 px-3 font-bold text-slate-800">{prod.name}</td>
+                                <td className="py-2.5 px-3 text-slate-600">{prod.category}</td>
+                                <td className={`py-2.5 px-3 font-mono font-bold text-right ${isOut ? "text-rose-600" : isLow ? "text-amber-600" : "text-slate-900"}`}>
+                                  {qty}
+                                </td>
+                                <td className="py-2.5 px-3 text-slate-500 font-mono">{prod.unit}</td>
+                                <td className="py-2.5 px-3 font-mono text-right text-slate-400">{prod.minStockAlert}</td>
+                                <td className="py-2.5 px-3">
+                                  {isOut ? (
+                                    <span className="px-2 py-0.5 rounded text-[9.5px] font-bold font-mono uppercase bg-rose-100 text-rose-700">
+                                      Out of Stock
+                                    </span>
+                                  ) : isLow ? (
+                                    <span className="px-2 py-0.5 rounded text-[9.5px] font-bold font-mono uppercase bg-amber-100 text-amber-700">
+                                      Low Stock
+                                    </span>
+                                  ) : (
+                                    <span className="px-2 py-0.5 rounded text-[9.5px] font-bold font-mono uppercase bg-emerald-100 text-emerald-700">
+                                      In Stock
+                                    </span>
+                                  )}
+                                </td>
+                                <td className="py-2.5 px-3 font-mono text-[11px] text-slate-500">{prod.batchNumber || "—"}</td>
+                                <td className="py-2.5 px-3 font-mono text-[11px] text-slate-500">{prod.expiryDate || "—"}</td>
+                                <td className="py-2.5 px-4 text-slate-600 truncate max-w-[150px]">{prod.supplierName || "—"}</td>
+                              </tr>
+                            );
+                          })
+                        )}
+                      </tbody>
+                      {filteredReportStock.length > 0 && (
+                        <tfoot className="bg-slate-100/90 border-t-2 border-slate-300 font-mono font-bold text-slate-900 text-xs">
+                          <tr>
+                            <td colSpan={3} className="py-3 px-4 font-sans uppercase tracking-wider text-[11px]">
+                              Total Stock Position ({filteredReportStock.length} SKUs)
+                            </td>
+                            <td className="py-3 px-3 text-right text-blue-700 font-bold">{stockReportMetrics.totalUnits}</td>
+                            <td colSpan={6}></td>
+                          </tr>
+                        </tfoot>
+                      )}
+                    </table>
+                  )}
+
+                  {/* 3. Stock Cost Report Table */}
+                  {activeReportType === "stock-cost" && (
+                    <table className="w-full text-left text-xs">
+                      <thead className="bg-slate-100/80 border-b border-slate-200 text-slate-600 uppercase font-mono text-[10px]">
+                        <tr>
+                          <th className="py-3 px-4 font-bold">SKU Code</th>
+                          <th className="py-3 px-3 font-bold">Product Name</th>
+                          <th className="py-3 px-3 font-bold">Category</th>
+                          <th className="py-3 px-3 font-bold text-right">Stock Qty</th>
+                          <th className="py-3 px-3 font-bold text-right">Cost Price</th>
+                          <th className="py-3 px-3 font-bold text-right">Selling Price</th>
+                          <th className="py-3 px-3 font-bold text-right">MRP</th>
+                          <th className="py-3 px-3 font-bold text-right">Total Cost (COGS)</th>
+                          <th className="py-3 px-3 font-bold text-right">Retail Valuation</th>
+                          <th className="py-3 px-4 font-bold text-right">Projected Profit</th>
+                          <th className="py-3 px-3 font-bold text-right">Margin %</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {filteredReportStock.length === 0 ? (
+                          <tr>
+                            <td colSpan={11} className="py-12 text-center text-slate-400 italic">
+                              No catalog products found.
+                            </td>
+                          </tr>
+                        ) : (
+                          filteredReportStock.map((prod, idx) => {
+                            const qty = getProductStock(prod);
+                            const cost = prod.purchasePrice || (prod.price * 0.7);
+                            const selling = prod.price;
+                            const mrp = prod.mrp || prod.price;
+                            const totalCost = qty * cost;
+                            const totalRetail = qty * selling;
+                            const profit = totalRetail - totalCost;
+                            const marginPct = totalRetail > 0 ? (profit / totalRetail) * 100 : 0;
+                            return (
+                              <tr key={prod.id} className={idx % 2 === 0 ? "bg-white" : "bg-slate-50/40"}>
+                                <td className="py-2.5 px-4 font-mono font-bold text-slate-900">{prod.sku}</td>
+                                <td className="py-2.5 px-3 font-bold text-slate-800">{prod.name}</td>
+                                <td className="py-2.5 px-3 text-slate-600">{prod.category}</td>
+                                <td className="py-2.5 px-3 font-mono font-bold text-right text-slate-800">{qty}</td>
+                                <td className="py-2.5 px-3 font-mono text-right text-slate-500">₹{cost.toFixed(2)}</td>
+                                <td className="py-2.5 px-3 font-mono text-right text-slate-700 font-semibold">₹{selling.toFixed(2)}</td>
+                                <td className="py-2.5 px-3 font-mono text-right text-slate-400">₹{mrp.toFixed(2)}</td>
+                                <td className="py-2.5 px-3 font-mono text-right text-slate-800 font-medium">₹{totalCost.toFixed(2)}</td>
+                                <td className="py-2.5 px-3 font-mono text-right text-indigo-600 font-bold">₹{totalRetail.toFixed(2)}</td>
+                                <td className="py-2.5 px-4 font-mono text-right text-emerald-600 font-bold">₹{profit.toFixed(2)}</td>
+                                <td className="py-2.5 px-3 font-mono text-right text-purple-600 font-bold">{marginPct.toFixed(1)}%</td>
+                              </tr>
+                            );
+                          })
+                        )}
+                      </tbody>
+                      {filteredReportStock.length > 0 && (
+                        <tfoot className="bg-slate-100/90 border-t-2 border-slate-300 font-mono font-bold text-slate-900 text-xs">
+                          <tr>
+                            <td colSpan={3} className="py-3 px-4 font-sans uppercase tracking-wider text-[11px]">
+                              Total Valuations
+                            </td>
+                            <td className="py-3 px-3 text-right">{stockReportMetrics.totalUnits}</td>
+                            <td colSpan={3}></td>
+                            <td className="py-3 px-3 text-right text-slate-800">₹{stockReportMetrics.totalPurchaseVal.toFixed(2)}</td>
+                            <td className="py-3 px-3 text-right text-indigo-700">₹{stockReportMetrics.totalSellingVal.toFixed(2)}</td>
+                            <td className="py-3 px-4 text-right text-emerald-700">₹{stockReportMetrics.potentialProfit.toFixed(2)}</td>
+                            <td className="py-3 px-3 text-right text-purple-700">{stockReportMetrics.profitMarginPercent.toFixed(1)}%</td>
+                          </tr>
+                        </tfoot>
+                      )}
+                    </table>
+                  )}
+
+                  {/* 4. Expenditure Report Table */}
+                  {activeReportType === "expenditure" && (
+                    <table className="w-full text-left text-xs">
+                      <thead className="bg-slate-100/80 border-b border-slate-200 text-slate-600 uppercase font-mono text-[10px]">
+                        <tr>
+                          <th className="py-3 px-4 font-bold">Voucher ID</th>
+                          <th className="py-3 px-3 font-bold">Expense Date</th>
+                          <th className="py-3 px-3 font-bold">Expense Category</th>
+                          <th className="py-3 px-3 font-bold">Description / Purpose</th>
+                          <th className="py-3 px-3 font-bold">Approving Authority</th>
+                          <th className="py-3 px-3 font-bold">Branch ID</th>
+                          <th className="py-3 px-4 font-bold text-right">Amount (₹)</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {filteredReportExpenses.length === 0 ? (
+                          <tr>
+                            <td colSpan={7} className="py-12 text-center text-slate-400 italic">
+                              No store expenses recorded for this time period.
+                            </td>
+                          </tr>
+                        ) : (
+                          filteredReportExpenses.map((exp, idx) => (
+                            <tr key={exp.id} className={idx % 2 === 0 ? "bg-white" : "bg-slate-50/40"}>
+                              <td className="py-2.5 px-4 font-mono font-bold text-slate-900">{exp.id}</td>
+                              <td className="py-2.5 px-3 font-mono text-[11px] text-slate-600">{exp.date}</td>
+                              <td className="py-2.5 px-3">
+                                <span className="px-2 py-0.5 rounded text-[10px] font-bold font-mono uppercase bg-rose-50 text-rose-700 border border-rose-200/50">
+                                  {exp.category}
+                                </span>
+                              </td>
+                              <td className="py-2.5 px-3 text-slate-700 font-medium">{exp.description}</td>
+                              <td className="py-2.5 px-3 text-slate-600 font-sans">{exp.approvedBy}</td>
+                              <td className="py-2.5 px-3 font-mono text-slate-500">{exp.storeBranchId || "Main"}</td>
+                              <td className="py-2.5 px-4 font-mono font-extrabold text-right text-rose-600">
+                                ₹{exp.amount.toFixed(2)}
+                              </td>
+                            </tr>
+                          ))
+                        )}
+                      </tbody>
+                      {filteredReportExpenses.length > 0 && (
+                        <tfoot className="bg-slate-100/90 border-t-2 border-slate-300 font-mono font-bold text-slate-900 text-xs">
+                          <tr>
+                            <td colSpan={6} className="py-3 px-4 font-sans uppercase tracking-wider text-[11px]">
+                              Total Operational Expenditures ({filteredReportExpenses.length} Vouchers)
+                            </td>
+                            <td className="py-3 px-4 text-right text-rose-700 text-sm">
+                              ₹{expenditureMetrics.totalExpenses.toFixed(2)}
+                            </td>
+                          </tr>
+                        </tfoot>
+                      )}
+                    </table>
+                  )}
+                </div>
+
+                {/* Official Sign-off & Audit Signature Footer */}
+                <div className="p-5 border-t border-slate-200 bg-slate-50/50 flex flex-col sm:flex-row items-center justify-between text-xs text-slate-500 gap-3">
+                  <div className="flex items-center gap-2">
+                    <CheckCircle className="w-4 h-4 text-emerald-600 shrink-0" />
+                    <span>System Certified Audit Report • Isolated Multi-Tenant POS Node</span>
+                  </div>
+                  <div className="flex items-center gap-6 font-mono text-[11px]">
+                    <span>Branch: <strong className="text-slate-700">{currentBranch?.name || activeTenant.businessLocation || "Central"}</strong></span>
+                    <span>Auditor Signature: __________________</span>
                   </div>
                 </div>
               </div>
@@ -6418,15 +8134,28 @@ Payment Mode:   ${selectedInv.paymentMode}
                 <p className="text-[9.5px] font-bold text-slate-600 uppercase tracking-wide">
                   {opsSettings.receiptHeader || "OFFICIAL RETAIL CASH INVOICE"}
                 </p>
-                <p className="text-[10px] text-slate-500 font-mono">
-                  {currentBranch?.name || activeTenant.name}
+                <p className="text-[10px] text-slate-600 font-mono font-bold">
+                  {currentBranch?.name || activeTenant.businessLocation || activeTenant.name}
                 </p>
-                <p className="text-[10px] text-slate-500 font-mono leading-none">
-                  {currentBranch?.address ? `${currentBranch.address}, ${currentBranch.city}` : "Central Hub, Main Commercial Area"}
+                <p className="text-[10px] text-slate-500 font-mono leading-tight">
+                  {currentBranch?.address 
+                    ? `${currentBranch.address}, ${currentBranch.city}` 
+                    : ([activeTenant.address, activeTenant.city, activeTenant.state].filter(Boolean).join(", ") + (activeTenant.pincode ? ` - ${activeTenant.pincode}` : "")) || "Central Hub, Main Commercial Area"}
                 </p>
                 <p className="text-[9px] text-slate-400 font-mono">
                   Contact: {currentBranch?.phone || activeTenant.phone || "011-23456789"}
                 </p>
+                {(normalizeUserRole(currentRole) === UserRole.ADMIN || isSuperAdmin) && (
+                  <button
+                    type="button"
+                    onClick={() => setIsEditReceiptAddressModalOpen(true)}
+                    className="mt-1.5 px-2.5 py-1 bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 rounded-lg text-[10px] font-bold flex items-center gap-1 mx-auto cursor-pointer transition-colors shadow-xs"
+                    title="Edit receipt store name, address line, phone, and GSTIN (Admin / Super Admin)"
+                  >
+                    <Edit2 className="w-2.5 h-2.5 text-amber-700" />
+                    <span>Edit Receipt Address &amp; Store Details</span>
+                  </button>
+                )}
               </div>
 
               <div className="border-t border-dashed border-slate-300 pt-2 space-y-1">
@@ -6664,6 +8393,31 @@ Payment Mode:   ${selectedInv.paymentMode}
         initialSelectedProduct={labelModalProduct}
         storeName={activeTenant.name}
         currencySymbol={activeTenant.currency || "₹"}
+      />
+
+      {/* PRE-PRINTED BARCODE SCANNER & RAPID INGESTION MODAL */}
+      <BarcodeScannerModal
+        isOpen={isBarcodeScanModalOpen}
+        onClose={() => setIsBarcodeScanModalOpen(false)}
+        products={tenantProducts}
+        activeTenantId={activeTenantId}
+        productCategories={productCategories}
+        suppliers={suppliers}
+        onSaveProduct={handleSaveProductFromScanner}
+        onBulkUploadProducts={handleBulkUploadFromScanner}
+        triggerNotification={triggerNotification}
+        initialScannedBarcode={barcodeScanInitialCode}
+      />
+
+      {/* EDIT RECEIPT ADDRESS & STORE DETAILS MODAL */}
+      <EditReceiptAddressModal
+        isOpen={isEditReceiptAddressModalOpen}
+        onClose={() => setIsEditReceiptAddressModalOpen(false)}
+        activeTenant={activeTenant}
+        currentBranch={currentBranch}
+        receiptHeader={opsSettings.receiptHeader || "OFFICIAL RETAIL CASH INVOICE"}
+        receiptFooter={opsSettings.receiptFooter || ""}
+        onSave={handleSaveReceiptAddress}
       />
 
       {/* PRODUCT DELETION CONFIRMATION DIALOG (IFRAME SECURE MODAL) */}

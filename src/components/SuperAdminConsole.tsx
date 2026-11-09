@@ -729,6 +729,12 @@ export default function SuperAdminConsole({
   const [editTenantBusinessSector, setEditTenantBusinessSector] = useState<BusinessSector>("SUPERMARKET");
   const [editTenantFontFamily, setEditTenantFontFamily] = useState<TenantFontFamily>("Inter");
   const [editTenantFontSizeScale, setEditTenantFontSizeScale] = useState<TenantFontSizeScale>("standard");
+  const [editTenantBusinessLocation, setEditTenantBusinessLocation] = useState<string>("");
+  const [editTenantAddress, setEditTenantAddress] = useState<string>("");
+  const [editTenantCity, setEditTenantCity] = useState<string>("");
+  const [editTenantState, setEditTenantState] = useState<string>("");
+  const [editTenantPincode, setEditTenantPincode] = useState<string>("");
+  const [editTenantCountry, setEditTenantCountry] = useState<string>("India");
 
   // Client Typography Customization Studio States
   const [typographyTenantId, setTypographyTenantId] = useState<string>(activeTenantId || "TENANT-001");
@@ -1431,7 +1437,13 @@ export default function SuperAdminConsole({
           contractDurationMonths: editTenantContractDuration,
           gstinRegNumber: editTenantGstin || t.gstinRegNumber,
           onboardingNotes: editTenantNotes,
-          companyLogo: editTenantLogo || t.companyLogo
+          companyLogo: editTenantLogo || t.companyLogo,
+          businessLocation: editTenantBusinessLocation.trim() || t.businessLocation,
+          address: editTenantAddress.trim() || t.address,
+          city: editTenantCity.trim() || t.city,
+          state: editTenantState.trim() || t.state,
+          pincode: editTenantPincode.trim() || t.pincode,
+          country: editTenantCountry.trim() || t.country || "India"
         };
       }
       return t;
@@ -2474,6 +2486,12 @@ export default function SuperAdminConsole({
                                   setEditTenantBusinessSector(t.businessSector || "SUPERMARKET");
                                   setEditTenantFontFamily(t.typography?.fontFamily || "Inter");
                                   setEditTenantFontSizeScale(t.typography?.fontSizeScale || "standard");
+                                  setEditTenantBusinessLocation(t.businessLocation || "");
+                                  setEditTenantAddress(t.address || "");
+                                  setEditTenantCity(t.city || "");
+                                  setEditTenantState(t.state || "");
+                                  setEditTenantPincode(t.pincode || "");
+                                  setEditTenantCountry(t.country || "India");
                                 }}
                                 className="p-1.5 hover:bg-slate-100 text-slate-400 hover:text-amber-600 rounded-lg transition-all"
                                 title="Edit specs"
@@ -4207,6 +4225,12 @@ export default function SuperAdminConsole({
                               setEditTenantBusinessSector(t.businessSector || "SUPERMARKET");
                               setEditTenantFontFamily(t.typography?.fontFamily || "Inter");
                               setEditTenantFontSizeScale(t.typography?.fontSizeScale || "standard");
+                              setEditTenantBusinessLocation(t.businessLocation || "");
+                              setEditTenantAddress(t.address || "");
+                              setEditTenantCity(t.city || "");
+                              setEditTenantState(t.state || "");
+                              setEditTenantPincode(t.pincode || "");
+                              setEditTenantCountry(t.country || "India");
                             }}
                             className="px-2.5 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-700 font-bold text-[10px] uppercase tracking-wider rounded-lg flex items-center gap-1 transition-all cursor-pointer border border-amber-200/40 shadow-sm"
                             title="Edit Spec Details"
@@ -7916,6 +7940,76 @@ export default function SuperAdminConsole({
                         </option>
                       ))}
                     </select>
+                  </div>
+                </div>
+              </div>
+
+              {/* Business Location & Physical Address */}
+              <div className="p-3.5 bg-emerald-50/60 rounded-xl border border-emerald-200/70 space-y-3">
+                <div className="flex items-center gap-1.5 text-emerald-950 font-extrabold text-[11px]">
+                  <MapPin className="w-3.5 h-3.5 text-emerald-600" />
+                  <span>Business Location & Physical Address</span>
+                </div>
+                <div>
+                  <label className="block text-[9.5px] font-bold text-slate-600 uppercase mb-1">Outlet / Location Name</label>
+                  <input
+                    type="text"
+                    value={editTenantBusinessLocation}
+                    onChange={(e) => setEditTenantBusinessLocation(e.target.value)}
+                    placeholder="e.g. Flagship Retail Center #01"
+                    className="w-full bg-white border border-emerald-200 rounded-lg p-2 font-medium text-slate-800 focus:outline-none text-xs"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[9.5px] font-bold text-slate-600 uppercase mb-1">Street Address</label>
+                  <input
+                    type="text"
+                    value={editTenantAddress}
+                    onChange={(e) => setEditTenantAddress(e.target.value)}
+                    placeholder="e.g. Plot 42, Commercial Avenue, Sector 18"
+                    className="w-full bg-white border border-emerald-200 rounded-lg p-2 font-medium text-slate-800 focus:outline-none text-xs"
+                  />
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                  <div>
+                    <label className="block text-[9px] font-bold text-slate-500 uppercase mb-1">City</label>
+                    <input
+                      type="text"
+                      value={editTenantCity}
+                      onChange={(e) => setEditTenantCity(e.target.value)}
+                      placeholder="City"
+                      className="w-full bg-white border border-emerald-200 rounded-lg p-1.5 text-slate-800 text-xs"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[9px] font-bold text-slate-500 uppercase mb-1">State</label>
+                    <input
+                      type="text"
+                      value={editTenantState}
+                      onChange={(e) => setEditTenantState(e.target.value)}
+                      placeholder="State"
+                      className="w-full bg-white border border-emerald-200 rounded-lg p-1.5 text-slate-800 text-xs"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[9px] font-bold text-slate-500 uppercase mb-1">Pincode</label>
+                    <input
+                      type="text"
+                      value={editTenantPincode}
+                      onChange={(e) => setEditTenantPincode(e.target.value)}
+                      placeholder="Pincode"
+                      className="w-full bg-white border border-emerald-200 rounded-lg p-1.5 font-mono text-slate-800 text-xs"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[9px] font-bold text-slate-500 uppercase mb-1">Country</label>
+                    <input
+                      type="text"
+                      value={editTenantCountry}
+                      onChange={(e) => setEditTenantCountry(e.target.value)}
+                      placeholder="Country"
+                      className="w-full bg-white border border-emerald-200 rounded-lg p-1.5 text-slate-800 text-xs"
+                    />
                   </div>
                 </div>
               </div>

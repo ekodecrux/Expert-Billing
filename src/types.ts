@@ -54,6 +54,8 @@ export interface Product {
   mrp?: number; // Maximum Retail Price (Printed on packaging)
   gstRate: number; // e.g. 5, 12, 18 for GST percentage
   unit: MeasurementUnit;
+  unitQuantity?: number; // e.g. 500 for 500g, 1 for 1kg, 6 for 6 pcs
+  unitLabel?: string; // e.g. "500 Grams", "1 Kg", "6 Pieces"
   stock: number;
   minStockAlert: number;
   batchNumber: string;
@@ -97,6 +99,8 @@ export interface InvoiceItem {
   price: number; // pricing after item discount
   quantity: number;
   unit: MeasurementUnit;
+  unitQuantity?: number;
+  unitLabel?: string;
   gstRate: number;
   gstAmount: number;
   subtotal: number; // quantity * price including GST
@@ -271,6 +275,14 @@ export interface Tenant {
   // Client Security/Verification Status details
   clientVerificationStatus: "VERIFIED" | "PENDING_KYC" | "REJECTED" | "UNDER_REVIEW";
   gstinRegNumber?: string;
+
+  // Business Location & Physical Address Specifications
+  businessLocation?: string; // e.g. "Main Flagship Outlet / Store #01"
+  address?: string;          // e.g. "Plot 42, Commercial Avenue, Sector 18"
+  city?: string;             // e.g. "Gurugram"
+  state?: string;            // e.g. "Haryana"
+  pincode?: string;          // e.g. "122002"
+  country?: string;          // e.g. "India"
 }
 
 export const BUSINESS_SECTORS_CATALOG: Record<BusinessSector, {
@@ -1342,5 +1354,87 @@ function generateVectorPDFFallback(
     console.error("Vector PDF fallback generator also failed:", err);
     return false;
   }
+}
+
+/**
+ * Universal Excel / CSV Exporter with UTF-8 BOM, report metadata, executive KPI metrics, and itemized rows.
+ */
+export function exportToExcelCSV(options: {
+  filename: string;
+  title: string;
+  subtitle?: string;
+  tenantInfo?: {
+    name?: string;
+    location?: string;
+    address?: string;
+    phone?: string;
+    gstin?: string;
+  };
+  filterPeriod?: string;
+  summaryMetrics?: { label: string; value: string | number }[];
+  columns: string[];
+  rows: (string | number | undefined | null)[][];
+}): boolean {
+  const { filename, title, subtitle, tenantInfo, filterPeriod, summaryMetrics, columns, rows } = options;
+
+  const escapeCSV = (val: string | number | undefined | null): string => {
+    if (val === undefined || val === null) return '""';
+    const str = String(val).replace(/"/g, '""');
+    return `"${str}"`;
+  };
+
+  const lines: string[] = [];
+
+  // Report Header Block
+  lines.push([escapeCSV(title.toUpperCase()), escapeCSV("")].join(","));
+  if (subtitle) {
+    lines.push([escapeCSV(subtitle), escapeCSV("")].join(","));
+  }
+  lines.push([escapeCSV("Report Filter Period:"), escapeCSV(filterPeriod || "All Records")].join(","));
+  lines.push([escapeCSV("Generated Timestamp:"), escapeCSV(new Date().toLocaleString())].join(","));
+  
+  if (tenantInfo) {
+    if (tenantInfo.name) lines.push([escapeCSV("Enterprise / Store Name:"), escapeCSV(tenantInfo.name)].join(","));
+    if (tenantInfo.location) lines.push([escapeCSV("Business Location / Outlet:"), escapeCSV(tenantInfo.location)].join(","));
+    if (tenantInfo.address) lines.push([escapeCSV("Store Address:"), escapeCSV(tenantInfo.address)].join(","));
+    if (tenantInfo.phone) lines.push([escapeCSV("Contact Phone:"), escapeCSV(tenantInfo.phone)].join(","));
+    if (tenantInfo.gstin) lines.push([escapeCSV("GSTIN / Tax ID:"), escapeCSV(tenantInfo.gstin)].join(","));
+  }
+
+  lines.push(""); // empty separator
+
+  // Summary Metrics Block
+  if (summaryMetrics && summaryMetrics.length > 0) {
+    lines.push([escapeCSV("=== EXECUTIVE SUMMARY / KEY METRICS ==="), escapeCSV("")].join(","));
+    summaryMetrics.forEach(m => {
+      lines.push([escapeCSV(m.label), escapeCSV(m.value)].join(","));
+    });
+    lines.push(""); // separator
+  }
+
+  // Data Table Column Headers
+  lines.push(columns.map(c => escapeCSV(c)).join(","));
+
+  // Rows
+  rows.forEach(r => {
+    lines.push(r.map(cell => escapeCSV(cell)).join(","));
+  });
+
+  // UTF-8 BOM so Excel opens with proper encoding
+  const csvContent = "\uFEFF" + lines.join("\r\n");
+  const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  const cleanName = filename.toLowerCase().endsWith(".csv") ? filename : `${filename}.csv`;
+  link.setAttribute("download", cleanName);
+  document.body.appendChild(link);
+  link.click();
+  setTimeout(() => {
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  }, 1000);
+
+  return true;
 }
 

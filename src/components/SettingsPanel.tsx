@@ -5,7 +5,7 @@ import {
   Settings, CheckCircle, Smartphone, Globe, Plus, Trash, Users,
   Eye, Edit, X, Check, Mail, Lock, Unlock, ShieldAlert,
   Sliders, Briefcase, Package, Clock, Plug, Layout, Zap, Percent, Cpu, Laptop, ChevronRight, Receipt, DollarSign,
-  Upload, Image as ImageIcon, Building, RotateCcw, Camera, Sparkles, Tag, HardDrive, FileCode
+  Upload, Image as ImageIcon, Building, RotateCcw, Camera, Sparkles, Tag, HardDrive, FileCode, MapPin, Building2
 } from "lucide-react";
 import { UserRole, normalizeUserRole, Tenant, Product, Customer, Invoice, Expense, Supplier, StoreBranch } from "../types";
 import { LABEL_SIZE_PRESETS, printThermalLabelsDirect } from "../utils/labelPrinterEngine";
@@ -398,6 +398,14 @@ export default function SettingsPanel({
   const [isDraggingLogo, setIsDraggingLogo] = useState(false);
   const [isSavingTenant, setIsSavingTenant] = useState(false);
 
+  // Tenant Business Location & Physical Address states
+  const [tenantBusinessLocation, setTenantBusinessLocation] = useState(activeTenant.businessLocation || "");
+  const [tenantAddress, setTenantAddress] = useState(activeTenant.address || "");
+  const [tenantCity, setTenantCity] = useState(activeTenant.city || "");
+  const [tenantState, setTenantState] = useState(activeTenant.state || "");
+  const [tenantPincode, setTenantPincode] = useState(activeTenant.pincode || "");
+  const [tenantCountry, setTenantCountry] = useState(activeTenant.country || "India");
+
   const logoFileInputRef = React.useRef<HTMLInputElement | null>(null);
   const lastLoadedTenantIdRef = React.useRef<string>(activeTenant?.id);
 
@@ -485,6 +493,12 @@ export default function SettingsPanel({
       setTenantCurrency(activeTenant.currency);
       setTenantTheme(activeTenant.colorTheme);
       setTenantLogo(activeTenant.companyLogo || "");
+      setTenantBusinessLocation(activeTenant.businessLocation || "");
+      setTenantAddress(activeTenant.address || "");
+      setTenantCity(activeTenant.city || "");
+      setTenantState(activeTenant.state || "");
+      setTenantPincode(activeTenant.pincode || "");
+      setTenantCountry(activeTenant.country || "India");
     }
   }, [
     activeTenant?.id,
@@ -494,7 +508,13 @@ export default function SettingsPanel({
     activeTenant?.gstinRegNumber,
     activeTenant?.companyLogo,
     activeTenant?.colorTheme,
-    activeTenant?.currency
+    activeTenant?.currency,
+    activeTenant?.businessLocation,
+    activeTenant?.address,
+    activeTenant?.city,
+    activeTenant?.state,
+    activeTenant?.pincode,
+    activeTenant?.country
   ]);
 
   const handleSaveProfile = (e: React.FormEvent) => {
@@ -557,11 +577,17 @@ export default function SettingsPanel({
       subdomain: tenantSubdomain.trim().toLowerCase().replace(/[^a-z0-9-]/g, ""),
       currency: tenantCurrency,
       colorTheme: tenantTheme,
-      companyLogo: tenantLogo.trim()
+      companyLogo: tenantLogo.trim(),
+      businessLocation: tenantBusinessLocation.trim(),
+      address: tenantAddress.trim(),
+      city: tenantCity.trim(),
+      state: tenantState.trim(),
+      pincode: tenantPincode.trim(),
+      country: tenantCountry.trim() || "India"
     };
 
     onUpdateTenant(updatedTenant);
-    triggerNotification("Company details, settings, and branding logo saved successfully!", "success");
+    triggerNotification("Company details, location address, and branding settings saved successfully!", "success");
     setTimeout(() => setIsSavingTenant(false), 600);
   };
 
@@ -1196,6 +1222,128 @@ export default function SettingsPanel({
                   <option value="SAR">SAR - Saudi Riyal</option>
                   <option value="৳">৳ - Bangladeshi Taka (BDT)</option>
                 </select>
+              </div>
+            </div>
+          </div>
+
+          {/* Business Location & Physical Address Section */}
+          <div className="bg-slate-50 p-5 rounded-2xl border border-slate-200 space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-200 pb-3">
+              <div>
+                <h3 className="text-xs font-black text-slate-900 uppercase tracking-widest flex items-center gap-2 font-mono">
+                  <MapPin className="w-4 h-4 text-emerald-600" />
+                  Business Location & Physical Address Details
+                </h3>
+                <p className="text-[10px] text-slate-500 mt-0.5">
+                  Specify your registered outlet name and physical address for print receipts, billing invoices, GST reports, and store logistics.
+                </p>
+              </div>
+              <span className="px-2.5 py-1 bg-emerald-100 text-emerald-800 text-[10px] font-bold rounded-lg font-mono">
+                Active Tenant Node
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="md:col-span-2">
+                <label className="block text-[11px] text-slate-700 font-bold uppercase tracking-wider mb-1.5 font-sans">
+                  Business Location / Outlet Name
+                </label>
+                <input
+                  type="text"
+                  disabled={!isAdmin}
+                  value={tenantBusinessLocation}
+                  onChange={(e) => setTenantBusinessLocation(e.target.value)}
+                  placeholder="e.g. Downtown Smart Hypermarket / Flagship Branch #01"
+                  className={`w-full bg-white border border-slate-300 text-slate-900 rounded-xl py-2.5 px-3 text-xs focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-600 placeholder-slate-400 font-sans shadow-2xs ${!isAdmin ? "cursor-not-allowed text-slate-500 bg-slate-100" : ""}`}
+                />
+              </div>
+
+              <div className="md:col-span-2">
+                <label className="block text-[11px] text-slate-700 font-bold uppercase tracking-wider mb-1.5 font-sans">
+                  Physical Street Address / Premises
+                </label>
+                <input
+                  type="text"
+                  disabled={!isAdmin}
+                  value={tenantAddress}
+                  onChange={(e) => setTenantAddress(e.target.value)}
+                  placeholder="e.g. Shop 102-105, Ground Floor, Central Commercial Avenue, Sector 18"
+                  className={`w-full bg-white border border-slate-300 text-slate-900 rounded-xl py-2.5 px-3 text-xs focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-600 placeholder-slate-400 font-sans shadow-2xs ${!isAdmin ? "cursor-not-allowed text-slate-500 bg-slate-100" : ""}`}
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] text-slate-700 font-bold uppercase tracking-wider mb-1.5 font-sans">
+                  City / Town
+                </label>
+                <input
+                  type="text"
+                  disabled={!isAdmin}
+                  value={tenantCity}
+                  onChange={(e) => setTenantCity(e.target.value)}
+                  placeholder="e.g. Gurugram / Mumbai / Bangalore"
+                  className={`w-full bg-white border border-slate-300 text-slate-900 rounded-xl py-2.5 px-3 text-xs focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-600 placeholder-slate-400 font-sans shadow-2xs ${!isAdmin ? "cursor-not-allowed text-slate-500 bg-slate-100" : ""}`}
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] text-slate-700 font-bold uppercase tracking-wider mb-1.5 font-sans">
+                  State / Province
+                </label>
+                <input
+                  type="text"
+                  disabled={!isAdmin}
+                  value={tenantState}
+                  onChange={(e) => setTenantState(e.target.value)}
+                  placeholder="e.g. Haryana / Maharashtra / Karnataka"
+                  className={`w-full bg-white border border-slate-300 text-slate-900 rounded-xl py-2.5 px-3 text-xs focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-600 placeholder-slate-400 font-sans shadow-2xs ${!isAdmin ? "cursor-not-allowed text-slate-500 bg-slate-100" : ""}`}
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] text-slate-700 font-bold uppercase tracking-wider mb-1.5 font-sans">
+                  Postal Code / Pincode
+                </label>
+                <input
+                  type="text"
+                  disabled={!isAdmin}
+                  value={tenantPincode}
+                  onChange={(e) => setTenantPincode(e.target.value)}
+                  placeholder="e.g. 122002"
+                  className={`w-full bg-white border border-slate-300 text-slate-900 rounded-xl py-2.5 px-3 text-xs focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-600 placeholder-slate-400 font-mono shadow-2xs ${!isAdmin ? "cursor-not-allowed text-slate-500 bg-slate-100" : ""}`}
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] text-slate-700 font-bold uppercase tracking-wider mb-1.5 font-sans">
+                  Country
+                </label>
+                <input
+                  type="text"
+                  disabled={!isAdmin}
+                  value={tenantCountry}
+                  onChange={(e) => setTenantCountry(e.target.value)}
+                  placeholder="e.g. India"
+                  className={`w-full bg-white border border-slate-300 text-slate-900 rounded-xl py-2.5 px-3 text-xs focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-600 placeholder-slate-400 font-sans shadow-2xs ${!isAdmin ? "cursor-not-allowed text-slate-500 bg-slate-100" : ""}`}
+                />
+              </div>
+            </div>
+
+            {/* Live address display pill */}
+            <div className="p-3.5 bg-white rounded-xl border border-slate-200 text-xs flex items-start gap-3">
+              <Building2 className="w-4 h-4 text-slate-500 shrink-0 mt-0.5" />
+              <div>
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                  Live Receipt & Report Address Header Preview:
+                </p>
+                <p className="text-xs font-bold text-slate-800 mt-0.5">
+                  {tenantBusinessLocation || tenantName || "Primary Store Location"}
+                </p>
+                <p className="text-[11px] text-slate-600">
+                  {[tenantAddress, tenantCity, tenantState].filter(Boolean).join(", ")}
+                  {tenantPincode ? ` - ${tenantPincode}` : ""}
+                  {tenantCountry ? `, ${tenantCountry}` : ""}
+                </p>
               </div>
             </div>
           </div>
