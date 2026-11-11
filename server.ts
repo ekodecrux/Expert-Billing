@@ -10,7 +10,7 @@ const MeasurementUnit = {
   GRAM: "Gram" as TMeasurementUnit,
   LITRE: "Litre" as TMeasurementUnit,
   LITER: "Liters" as TMeasurementUnit,
-  ML: "ml" as TMeasurementUnit,
+  ML: "Milliliter (mL)" as TMeasurementUnit,
   PIECE: "Pieces" as TMeasurementUnit,
   PACKET: "Packets" as TMeasurementUnit,
   PACK: "Packs" as TMeasurementUnit,
@@ -71,7 +71,7 @@ const DEFAULT_SUPPLIERS: Supplier[] = [
 ];
 
 const DEFAULT_BRANCHES: StoreBranch[] = [
-  { id: "B1", name: "Downtown Smart Hypermarket", address: "G-10, Central Plaza, Main Avenue", city: "New Delhi", phone: "011-23456789" }
+  { id: "B1", name: "Flagship Retail Store", address: "Plot 14, Barakhamba Road, Connaught Place", city: "New Delhi", phone: "+91 9988776655" }
 ];
 
 const DEFAULT_PRODUCTS: Product[] = [

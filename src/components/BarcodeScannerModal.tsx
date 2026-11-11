@@ -22,6 +22,10 @@ import {
   Building2,
   Barcode
 } from "lucide-react";
+import { 
+  resolveAutoScannedProduct, 
+  QUICK_FILL_PRESET_TEMPLATES 
+} from "../utils/productCatalogResolver";
 
 interface BarcodeScannerModalProps {
   isOpen: boolean;
@@ -142,6 +146,8 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
     setUnit(newUnit);
     if (newUnit === MeasurementUnit.GRAM) {
       setUnitQuantity(500);
+    } else if (newUnit === MeasurementUnit.ML) {
+      setUnitQuantity(250);
     } else if (newUnit === MeasurementUnit.KG) {
       setUnitQuantity(1);
     } else if (newUnit === MeasurementUnit.LITER) {
@@ -160,56 +166,53 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
 
     setActiveBarcode(trimmed);
 
-    // Look for exact match in existing products
-    const existing = products.find(
-      (p) => (p.barcode && p.barcode.toLowerCase() === trimmed.toLowerCase()) || 
-             (p.sku && p.sku.toLowerCase() === trimmed.toLowerCase())
-    );
+    // Automatically resolve all product details from active inventory, master retail catalog, or smart generator
+    const resolved = resolveAutoScannedProduct(trimmed, products, productCategories, suppliers as any);
 
-    if (existing) {
-      // Existing product match: automatically load ALL details into editable form
-      setIsExistingProduct(true);
-      setMatchedProductId(existing.id);
-      setName(existing.name);
-      setSku(existing.sku);
-      setCategory(existing.category || productCategories[0] || "General");
-      setUnit(existing.unit || MeasurementUnit.PIECE);
-      setUnitQuantity(existing.unitQuantity || 1);
-      setPurchasePrice(existing.purchasePrice || 0);
-      setMrp(existing.mrp || Math.round((existing.price || 0) * 1.15));
-      setPrice(existing.price || 0);
-      setStock(existing.stock ?? 0);
-      setMinStockAlert(existing.minStockAlert ?? 10);
-      setGstRate(existing.gstRate ?? 5);
-      setBatchNumber(existing.batchNumber || `B-${new Date().getFullYear()}-A`);
-      setExpiryDate(existing.expiryDate || "2027-12-31");
-      setSupplierName(existing.supplierName || suppliers[0]?.name || "Apex Retail Supplies");
+    setIsExistingProduct(resolved.isExisting);
+    setMatchedProductId(resolved.id || null);
+    setName(resolved.name);
+    setSku(resolved.sku);
+    setCategory(resolved.category);
+    setUnit(resolved.unit);
+    setUnitQuantity(resolved.unitQuantity);
+    setPurchasePrice(resolved.purchasePrice);
+    setMrp(resolved.mrp);
+    setPrice(resolved.price);
+    setStock(resolved.stock);
+    setMinStockAlert(resolved.minStockAlert);
+    setGstRate(resolved.gstRate);
+    setBatchNumber(resolved.batchNumber);
+    setExpiryDate(resolved.expiryDate);
+    setSupplierName(resolved.supplierName);
 
-      playScanBeep(true);
-      triggerNotification(`✓ Product "${existing.name}" details loaded automatically. You can view & modify any details before saving.`, "success");
+    playScanBeep(true);
+
+    if (resolved.isExisting) {
+      triggerNotification(
+        `✓ Product "${resolved.name}" details loaded automatically. You can view & modify any details before saving.`,
+        "success"
+      );
     } else {
-      // New barcode: automatically prepare form with clean SKU and smart defaults
-      setIsExistingProduct(false);
-      setMatchedProductId(null);
-      setName("");
-      const generatedSku = `SKU-${trimmed.slice(-6) || Math.floor(1000 + Math.random() * 9000)}`;
-      setSku(generatedSku);
-      setCategory(productCategories[0] || "Grains & Grocery");
-      setUnit(MeasurementUnit.PIECE);
-      setUnitQuantity(1);
-      setPurchasePrice(50);
-      setMrp(85);
-      setPrice(75);
-      setStock(25);
-      setMinStockAlert(5);
-      setGstRate(5);
-      setBatchNumber(`B-${new Date().getFullYear()}-N`);
-      setExpiryDate("2027-12-31");
-      setSupplierName(suppliers[0]?.name || "Supreme Agro Foods Ltd.");
-
-      playScanBeep(true);
-      triggerNotification(`✨ New pre-printed barcode [${trimmed}] detected. Enter product description and modify details before saving.`, "info");
+      triggerNotification(
+        `✓ Scanned [${trimmed}]: Product details ("${resolved.name}") displayed automatically. View & modify before saving.`,
+        "success"
+      );
     }
+  };
+
+  // Quick preset template application
+  const applyPresetTemplate = (tmpl: typeof QUICK_FILL_PRESET_TEMPLATES[0]) => {
+    setName(tmpl.name);
+    setSku(tmpl.sku || `SKU-${activeBarcode.slice(-6) || Math.floor(1000 + Math.random() * 9000)}`);
+    setCategory(tmpl.category);
+    setUnit(tmpl.unit);
+    setUnitQuantity(tmpl.unitQuantity);
+    setPurchasePrice(tmpl.cost);
+    setMrp(tmpl.mrp);
+    setPrice(tmpl.price);
+    setGstRate(tmpl.gst);
+    triggerNotification(`✓ Applied template "${tmpl.name}". You can view and edit any details before saving.`, "info");
   };
 
   const handleScanInputSubmit = (e: React.FormEvent) => {
@@ -332,6 +335,7 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
           let unitVal: MeasurementUnit = MeasurementUnit.PIECE;
           const uLower = unitRaw.toLowerCase();
           if (uLower.includes("kg") || uLower.includes("kilo")) unitVal = MeasurementUnit.KG;
+          else if (uLower.includes("ml") || uLower.includes("milli")) unitVal = MeasurementUnit.ML;
           else if (uLower.includes("gram") || uLower === "g") unitVal = MeasurementUnit.GRAM;
           else if (uLower.includes("liter") || uLower === "l") unitVal = MeasurementUnit.LITER;
           else if (uLower.includes("pack") || uLower === "pk") unitVal = MeasurementUnit.PACK;
@@ -521,6 +525,13 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
                 <div className="flex gap-1.5 flex-wrap">
                   <button
                     type="button"
+                    onClick={() => processBarcode("89099846033")}
+                    className="px-2 py-0.5 bg-amber-950/80 hover:bg-amber-900 text-amber-300 rounded font-mono text-[10px] border border-amber-700 cursor-pointer font-bold"
+                  >
+                    89099846033 (Pre-Printed Pack)
+                  </button>
+                  <button
+                    type="button"
                     onClick={() => processBarcode("8901031200051")}
                     className="px-2 py-0.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded font-mono text-[10px] border border-slate-700 cursor-pointer"
                   >
@@ -579,16 +590,14 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
                         <span className={`text-[10px] font-bold px-2 py-0.5 rounded uppercase font-mono tracking-wider ${
                           isExistingProduct ? "bg-emerald-200 text-emerald-900" : "bg-amber-200 text-amber-900"
                         }`}>
-                          {isExistingProduct ? "✓ Existing Product Found" : "🆕 New Barcode Ingestion"}
+                          {isExistingProduct ? "✓ Existing Product Found" : "🆕 Pre-Printed Barcode Scanned"}
                         </span>
                         <span className="font-mono text-xs font-bold text-slate-800">
                           Barcode: {activeBarcode}
                         </span>
                       </div>
                       <p className="text-xs text-slate-600 mt-0.5 font-medium">
-                        {isExistingProduct 
-                          ? "All product details displayed automatically below. You can view and modify any details before saving."
-                          : "New pre-printed barcode. Product form prepared with smart defaults—modify and save."}
+                        ✓ All product details (Description Name, SKU, Category, Measurement Unit, Pack Size, Cost, MRP, Price, Stock) are displayed automatically. You can view and modify any details before saving.
                       </p>
                     </div>
                   </div>
@@ -609,10 +618,38 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
 
                 {/* Section 1: Product Identification */}
                 <div className="space-y-3">
-                  <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 border-b border-slate-100 pb-1 flex items-center gap-1.5">
-                    <Package className="w-3.5 h-3.5 text-slate-400" />
-                    <span>Product Identification &amp; Barcode Coordinates</span>
-                  </h4>
+                  <div className="flex items-center justify-between border-b border-slate-100 pb-1">
+                    <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
+                      <Package className="w-3.5 h-3.5 text-slate-400" />
+                      <span>Product Identification &amp; Barcode Coordinates</span>
+                    </h4>
+                    <span className="text-[10px] text-emerald-700 font-semibold bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                      Auto-Populated • Fully Modifiable
+                    </span>
+                  </div>
+
+                  {/* Quick-Fill Preset Template Chips */}
+                  <div className="bg-slate-50 border border-slate-200 rounded-lg p-2.5 space-y-1.5">
+                    <div className="flex items-center justify-between text-[11px]">
+                      <span className="font-semibold text-slate-700 flex items-center gap-1">
+                        <Sparkles className="w-3 h-3 text-amber-500" />
+                        Quick-Fill Product Description Presets:
+                      </span>
+                      <span className="text-[10px] text-slate-400">Click any preset to auto-fill or modify freely</span>
+                    </div>
+                    <div className="flex gap-1.5 flex-wrap">
+                      {QUICK_FILL_PRESET_TEMPLATES.map((tmpl) => (
+                        <button
+                          key={tmpl.label}
+                          type="button"
+                          onClick={() => applyPresetTemplate(tmpl)}
+                          className="px-2 py-1 bg-white hover:bg-emerald-50 text-slate-700 hover:text-emerald-800 border border-slate-200 hover:border-emerald-300 rounded text-[11px] font-medium transition-colors cursor-pointer shadow-2xs"
+                        >
+                          {tmpl.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                     <div className="md:col-span-2">
@@ -677,6 +714,7 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
                         <option value={MeasurementUnit.GRAM}>Grams (g)</option>
                         <option value={MeasurementUnit.KG}>Kilogram (Kg)</option>
                         <option value={MeasurementUnit.LITER}>Liters (Liters)</option>
+                        <option value={MeasurementUnit.ML}>Milliliter (mL)</option>
                         <option value={MeasurementUnit.PACK}>Packs (pk)</option>
                       </select>
                     </div>
@@ -699,7 +737,7 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
                         type="number"
                         min="0.01"
                         step="any"
-                        placeholder="e.g. 500 for 500g, 1 for 1kg, 6 for 6pcs"
+                        placeholder="e.g. 500 for 500g, 1 for 1kg, 250 for 250mL"
                         value={unitQuantity}
                         onChange={(e) => setUnitQuantity(Number(e.target.value))}
                         className="w-28 bg-white border border-slate-300 rounded-lg p-1.5 font-mono text-xs font-bold text-slate-900"
@@ -720,6 +758,20 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
                               }`}
                             >
                               {val}g
+                            </button>
+                          ))
+                        )}
+                        {unit === MeasurementUnit.ML && (
+                          [50, 100, 200, 250, 500, 750].map(val => (
+                            <button
+                              key={val}
+                              type="button"
+                              onClick={() => setUnitQuantity(val)}
+                              className={`text-[10px] px-2 py-1 rounded font-mono font-bold transition-colors cursor-pointer ${
+                                unitQuantity === val ? "bg-emerald-700 text-white" : "bg-white hover:bg-slate-100 text-slate-700 border border-slate-200"
+                              }`}
+                            >
+                              {val}mL
                             </button>
                           ))
                         )}

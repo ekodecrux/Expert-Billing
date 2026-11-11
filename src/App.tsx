@@ -111,6 +111,10 @@ import { ExpertAidLogo } from "./components/ExpertAidLogo";
 import { ProductLabelGeneratorModal } from "./components/ProductLabelGeneratorModal";
 import { BarcodeScannerModal } from "./components/BarcodeScannerModal";
 import { EditReceiptAddressModal } from "./components/EditReceiptAddressModal";
+import { 
+  resolveAutoScannedProduct, 
+  QUICK_FILL_PRESET_TEMPLATES 
+} from "./utils/productCatalogResolver";
 
 const PRESET_TENANTS: Tenant[] = [
   {
@@ -156,7 +160,7 @@ const PRESET_TENANTS: Tenant[] = [
     onboardingNotes: "Initial sandbox isolation slice provisioned and physical hardware package dispatched.",
     clientVerificationStatus: "VERIFIED",
     gstinRegNumber: "07AAAAA1111A1Z1",
-    businessLocation: "Downtown Smart Hypermarket (New Delhi)",
+    businessLocation: "Main Flagship Store (Connaught Place)",
     address: "Plot 14, Barakhamba Road, Connaught Place",
     city: "New Delhi",
     state: "Delhi",
@@ -754,7 +758,17 @@ export default function App() {
                          .replace(/Expertaid/g, "Expert POS")
                          .replace(/Expert-Aid/g, "Expert POS");
             }
-            return { ...t, name };
+            let businessLocation = t.businessLocation || "";
+            if (businessLocation.includes("Downtown Smart Hypermarket")) {
+              migrated = true;
+              businessLocation = "Main Flagship Store (Connaught Place)";
+            }
+            let address = t.address || "";
+            if (address.includes("Central Plaza")) {
+              migrated = true;
+              address = "Plot 14, Barakhamba Road, Connaught Place";
+            }
+            return { ...t, name, businessLocation, address };
           });
           if (migrated) {
             localStorage.setItem("expert_aid_tenants", JSON.stringify(updated));
@@ -5663,6 +5677,44 @@ export default function App() {
                   </div>
                 
                 <form onSubmit={handleCreateProductSubmit} className="space-y-3.5 text-xs text-slate-700">
+                  {/* Quick-Fill Product Presets */}
+                  <div className="bg-slate-50 border border-slate-200 rounded p-2 space-y-1">
+                    <div className="flex items-center justify-between text-[10px]">
+                      <span className="font-semibold text-slate-600 flex items-center gap-1">
+                        <Sparkles className="w-3 h-3 text-amber-500" />
+                        Quick-Fill Product Presets:
+                      </span>
+                      <span className="text-slate-400">Click to auto-populate &amp; customize</span>
+                    </div>
+                    <div className="flex gap-1 flex-wrap">
+                      {QUICK_FILL_PRESET_TEMPLATES.map((tmpl) => (
+                        <button
+                          key={tmpl.label}
+                          type="button"
+                          onClick={() => {
+                            setNewProduct(prev => ({
+                              ...prev,
+                              name: tmpl.name,
+                              sku: tmpl.sku || `SKU-${(prev.barcode || "").slice(-6) || "AUTO"}`,
+                              category: tmpl.category,
+                              unit: tmpl.unit,
+                              unitQuantity: tmpl.unitQuantity,
+                              unitLabel: `${tmpl.unitQuantity} ${tmpl.unit}`,
+                              purchasePrice: tmpl.cost,
+                              mrp: tmpl.mrp,
+                              price: tmpl.price,
+                              gstRate: tmpl.gst
+                            }));
+                            triggerNotification(`Applied preset "${tmpl.name}". View and edit details before saving.`, "success");
+                          }}
+                          className="px-1.5 py-0.5 bg-white hover:bg-emerald-50 text-slate-700 hover:text-emerald-700 border border-slate-200 rounded text-[10px] font-medium transition-colors cursor-pointer"
+                        >
+                          {tmpl.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
                   <div>
                     <label className="block text-slate-500 font-mono font-semibold mb-1">Product Description Name *</label>
                     <input
@@ -5703,15 +5755,36 @@ export default function App() {
                       </label>
                       <input
                         type="text"
-                        placeholder="e.g. 8901262020213"
+                        placeholder="e.g. 8901262020213 or 89099846033"
                         value={newProduct.barcode}
                         onChange={(e) => {
                           const val = e.target.value;
                           const trimmed = val.trim();
-                          const match = trimmed ? products.find(p => p.barcode && p.barcode.toLowerCase() === trimmed.toLowerCase()) : null;
-                          if (match) {
-                            setNewProduct(match);
-                            triggerNotification(`✓ Barcode matched! Product "${match.name}" details loaded automatically. View & modify before saving.`, "success");
+                          if (trimmed.length >= 8) {
+                            // Automatically resolve product details for full barcode
+                            const resolved = resolveAutoScannedProduct(trimmed, products, productCategories, suppliers);
+                            setNewProduct(prev => ({
+                              ...prev,
+                              id: resolved.id || prev.id || `PROD-${Date.now()}`,
+                              name: resolved.name,
+                              barcode: trimmed,
+                              sku: resolved.sku,
+                              category: resolved.category,
+                              unit: resolved.unit,
+                              unitQuantity: resolved.unitQuantity,
+                              unitLabel: resolved.unitLabel || `${resolved.unitQuantity} ${resolved.unit}`,
+                              purchasePrice: resolved.purchasePrice,
+                              mrp: resolved.mrp,
+                              price: resolved.price,
+                              stock: resolved.stock,
+                              minStockAlert: resolved.minStockAlert,
+                              gstRate: resolved.gstRate,
+                              batchNumber: resolved.batchNumber,
+                              expiryDate: resolved.expiryDate,
+                              supplierName: resolved.supplierName,
+                              tenantId: activeTenantId
+                            }));
+                            triggerNotification(`✓ Barcode [${trimmed}] scanned! All product details ("${resolved.name}") loaded automatically. View & modify before saving.`, "success");
                           } else {
                             setNewProduct({ ...newProduct, barcode: val });
                           }
@@ -5720,10 +5793,30 @@ export default function App() {
                           if (e.key === "Enter") {
                             e.preventDefault();
                             const trimmed = (newProduct.barcode || "").trim();
-                            const match = trimmed ? products.find(p => p.barcode && p.barcode.toLowerCase() === trimmed.toLowerCase()) : null;
-                            if (match) {
-                              setNewProduct(match);
-                              triggerNotification(`✓ Barcode matched! Product "${match.name}" details loaded automatically. View & modify before saving.`, "success");
+                            if (trimmed) {
+                              const resolved = resolveAutoScannedProduct(trimmed, products, productCategories, suppliers);
+                              setNewProduct(prev => ({
+                                ...prev,
+                                id: resolved.id || prev.id || `PROD-${Date.now()}`,
+                                name: resolved.name,
+                                barcode: trimmed,
+                                sku: resolved.sku,
+                                category: resolved.category,
+                                unit: resolved.unit,
+                                unitQuantity: resolved.unitQuantity,
+                                unitLabel: resolved.unitLabel || `${resolved.unitQuantity} ${resolved.unit}`,
+                                purchasePrice: resolved.purchasePrice,
+                                mrp: resolved.mrp,
+                                price: resolved.price,
+                                stock: resolved.stock,
+                                minStockAlert: resolved.minStockAlert,
+                                gstRate: resolved.gstRate,
+                                batchNumber: resolved.batchNumber,
+                                expiryDate: resolved.expiryDate,
+                                supplierName: resolved.supplierName,
+                                tenantId: activeTenantId
+                              }));
+                              triggerNotification(`✓ Barcode [${trimmed}] scanned! All product details ("${resolved.name}") loaded automatically. View & modify before saving.`, "success");
                             }
                           }
                         }}
@@ -5755,6 +5848,7 @@ export default function App() {
                           const u = e.target.value as MeasurementUnit;
                           let defaultQty = newProduct.unitQuantity || 1;
                           if (u === MeasurementUnit.GRAM) defaultQty = 500;
+                          else if (u === MeasurementUnit.ML) defaultQty = 250;
                           else if (u === MeasurementUnit.KG) defaultQty = 1;
                           else if (u === MeasurementUnit.LITER) defaultQty = 1;
                           else if (u === MeasurementUnit.PIECE) defaultQty = 1;
@@ -5770,6 +5864,7 @@ export default function App() {
                       >
                         <option value={MeasurementUnit.KG}>Kilogram (Kg)</option>
                         <option value={MeasurementUnit.LITER}>Liters (Liters)</option>
+                        <option value={MeasurementUnit.ML}>Milliliter (mL)</option>
                         <option value={MeasurementUnit.PIECE}>Pieces (pcs)</option>
                         <option value={MeasurementUnit.PACK}>Packs (pk)</option>
                         <option value={MeasurementUnit.GRAM}>Grams (g)</option>
@@ -5794,7 +5889,7 @@ export default function App() {
                         type="number"
                         min="0.01"
                         step="any"
-                        placeholder="e.g. 500 for 500g, 1 for 1kg, 6 for 6pcs"
+                        placeholder="e.g. 500 for 500g, 1 for 1kg, 250 for 250mL"
                         value={newProduct.unitQuantity || 1}
                         onChange={(e) => {
                           const val = Number(e.target.value);
@@ -5826,6 +5921,24 @@ export default function App() {
                               }`}
                             >
                               {val}g
+                            </button>
+                          ))
+                        )}
+                        {newProduct.unit === MeasurementUnit.ML && (
+                          [50, 100, 200, 250, 500, 750].map(val => (
+                            <button
+                              key={val}
+                              type="button"
+                              onClick={() => setNewProduct({
+                                ...newProduct,
+                                unitQuantity: val,
+                                unitLabel: `${val} mL`
+                              })}
+                              className={`text-[9px] px-1.5 py-0.5 rounded font-mono font-bold cursor-pointer transition-colors ${
+                                newProduct.unitQuantity === val ? "bg-emerald-700 text-white" : "bg-white hover:bg-slate-100 text-slate-700 border border-slate-200"
+                              }`}
+                            >
+                              {val}mL
                             </button>
                           ))
                         )}
@@ -6707,14 +6820,24 @@ export default function App() {
                                 <p className="text-[9px] text-slate-600 font-mono font-bold">
                                   {opsSettings.receiptHeader || "OFFICIAL RETAIL CASH INVOICE"}
                                 </p>
-                                <p className="text-[9px] text-slate-500 font-mono font-semibold">
-                                  {branches.find(b => b.id === selectedInv.storeBranchId)?.name || currentBranch?.name || activeTenant.name}
+                                <p className="text-[9px] text-slate-600 font-mono font-bold">
+                                  {activeTenant.businessLocation || activeTenant.name}
                                 </p>
                                 <p className="text-[9.5px] text-slate-500 font-mono leading-tight">
-                                  {branches.find(b => b.id === selectedInv.storeBranchId)?.address || currentBranch?.address || "Central Plaza, Main Avenue, New Delhi"}
+                                  {(() => {
+                                    const parts = [activeTenant.address, activeTenant.city, activeTenant.state].filter(Boolean);
+                                    if (parts.length > 0) {
+                                      return parts.join(", ") + (activeTenant.pincode ? ` - ${activeTenant.pincode}` : "");
+                                    }
+                                    const branch = branches.find(b => b.id === selectedInv.storeBranchId) || currentBranch;
+                                    if (branch?.address) {
+                                      return `${branch.address}, ${branch.city || ""}`.trim().replace(/,\s*$/, "");
+                                    }
+                                    return "Registered Store Location";
+                                  })()}
                                 </p>
                                 <p className="text-[8.5px] text-slate-400 font-mono">
-                                  Phone: {branches.find(b => b.id === selectedInv.storeBranchId)?.phone || activeTenant.phone || "811-23456789"}
+                                  Phone: {activeTenant.phone || branches.find(b => b.id === selectedInv.storeBranchId)?.phone || currentBranch?.phone || "N/A"}
                                 </p>
                                 {(normalizeUserRole(currentRole) === UserRole.ADMIN || isSuperAdmin) && (
                                   <button
@@ -7989,6 +8112,8 @@ Payment Mode:   ${selectedInv.paymentMode}
                 currentRole={currentRole}
                 currentBranch={currentBranch}
                 currentTheme={currentTheme}
+                currentUserEmail={currentUserEmail}
+                isSuperAdmin={isSuperAdmin}
               />
             </div>
           )}
@@ -8005,6 +8130,7 @@ Payment Mode:   ${selectedInv.paymentMode}
                   setCredentialsList(newList);
                   localStorage.setItem("expert_aid_credentials", JSON.stringify(newList));
                 }}
+                isSuperAdmin={isSuperAdmin}
                 activeTenant={activeTenant}
                 onUpdateTenant={(updatedTenant) => {
                   const exists = tenantsList.some(t => t.id === updatedTenant.id);
@@ -8135,15 +8261,22 @@ Payment Mode:   ${selectedInv.paymentMode}
                   {opsSettings.receiptHeader || "OFFICIAL RETAIL CASH INVOICE"}
                 </p>
                 <p className="text-[10px] text-slate-600 font-mono font-bold">
-                  {currentBranch?.name || activeTenant.businessLocation || activeTenant.name}
+                  {activeTenant.businessLocation || activeTenant.name}
                 </p>
                 <p className="text-[10px] text-slate-500 font-mono leading-tight">
-                  {currentBranch?.address 
-                    ? `${currentBranch.address}, ${currentBranch.city}` 
-                    : ([activeTenant.address, activeTenant.city, activeTenant.state].filter(Boolean).join(", ") + (activeTenant.pincode ? ` - ${activeTenant.pincode}` : "")) || "Central Hub, Main Commercial Area"}
+                  {(() => {
+                    const parts = [activeTenant.address, activeTenant.city, activeTenant.state].filter(Boolean);
+                    if (parts.length > 0) {
+                      return parts.join(", ") + (activeTenant.pincode ? ` - ${activeTenant.pincode}` : "");
+                    }
+                    if (currentBranch?.address) {
+                      return `${currentBranch.address}, ${currentBranch.city || ""}`.trim().replace(/,\s*$/, "");
+                    }
+                    return "Registered Store Location";
+                  })()}
                 </p>
                 <p className="text-[9px] text-slate-400 font-mono">
-                  Contact: {currentBranch?.phone || activeTenant.phone || "011-23456789"}
+                  Contact: {activeTenant.phone || currentBranch?.phone || "N/A"}
                 </p>
                 {(normalizeUserRole(currentRole) === UserRole.ADMIN || isSuperAdmin) && (
                   <button

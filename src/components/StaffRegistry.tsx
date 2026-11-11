@@ -60,6 +60,8 @@ interface StaffRegistryProps {
   currentRole: UserRole;
   currentBranch: StoreBranch | null;
   currentTheme?: any;
+  currentUserEmail?: string;
+  isSuperAdmin?: boolean;
 }
 
 export default function StaffRegistry({
@@ -70,7 +72,9 @@ export default function StaffRegistry({
   branches,
   currentRole,
   currentBranch,
-  currentTheme
+  currentTheme,
+  currentUserEmail = "",
+  isSuperAdmin = false
 }: StaffRegistryProps) {
   const theme = currentTheme || {
     bg: "bg-[#1E4D3E]",
@@ -225,6 +229,13 @@ export default function StaffRegistry({
   // Helper matching to filter credentials belonging specifically to this active tenant, plus branch control if MANAGER
   const filteredStaff = credentialsList.filter((cred) => {
     if (cred.email === "superadmin@expertbilling.in" || cred.email === "superadmin@expertpos.com") return false;
+    
+    // When an admin logs in, the system should not display the details of other admins
+    if (!isSuperAdmin && currentUserEmail) {
+      const isOtherAdmin = (cred.role === UserRole.ADMIN || String(cred.role).toUpperCase().includes("ADMIN")) &&
+                           cred.email.toLowerCase() !== currentUserEmail.toLowerCase();
+      if (isOtherAdmin) return false;
+    }
     
     let isTenantMatch = false;
     

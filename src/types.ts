@@ -40,7 +40,8 @@ export enum MeasurementUnit {
   LITER = "Liters",
   PIECE = "Pieces",
   PACK = "Packs",
-  GRAM = "Grams"
+  GRAM = "Grams",
+  ML = "Milliliter (mL)"
 }
 
 export interface Product {
@@ -370,7 +371,7 @@ export const BUSINESS_SECTORS_CATALOG: Record<BusinessSector, {
     description: "Built for ultra high-speed barcode checkout, weighing scale integration, bulk FMCG packs, and automated MRP savings calculation.",
     recommendedHardware: ["High-Speed Laser Scanner", "Electronic Weighing Scale RS-232", "80mm Thermal Receipt Printer", "Heavy Duty Cash Drawer"],
     defaultCategories: ["Dairy & Eggs", "Beverages & Juices", "Snacks & Confectionery", "Fresh Produce & Fruits", "Personal Care & Hygiene", "Household Cleaning"],
-    unitPresets: [MeasurementUnit.KG, MeasurementUnit.GRAM, MeasurementUnit.LITER, MeasurementUnit.PIECE, MeasurementUnit.PACK],
+    unitPresets: [MeasurementUnit.KG, MeasurementUnit.GRAM, MeasurementUnit.LITER, MeasurementUnit.ML, MeasurementUnit.PIECE, MeasurementUnit.PACK],
     defaultModules: {
       kdsTableManagement: false,
       weighingScaleScanning: true,

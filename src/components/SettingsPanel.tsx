@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { 
   User, Store, Printer, Database, Save, HelpCircle, 
   Volume2, VolumeX, RefreshCw, Trash2, Key, List, 
@@ -40,6 +40,7 @@ interface SettingsPanelProps {
   onDeleteBranch: (id: string) => Promise<void>;
   currentBranch?: StoreBranch | null;
   onSwitchBranch?: (branchId: string) => void;
+  isSuperAdmin?: boolean;
 }
 
 export default function SettingsPanel({
@@ -63,7 +64,8 @@ export default function SettingsPanel({
   onAddBranch,
   onDeleteBranch,
   currentBranch,
-  onSwitchBranch
+  onSwitchBranch,
+  isSuperAdmin
  }: SettingsPanelProps) {
   const [activeSubTab, setActiveSubTab] = useState<"profile" | "tenant" | "categories" | "suppliers" | "branches" | "pos" | "system" | "enterprise">("profile");
 
@@ -169,7 +171,57 @@ export default function SettingsPanel({
   const [profEmailUnlocked, setProfEmailUnlocked] = useState(false);
   const [selectedProfileEmail, setSelectedProfileEmail] = useState(currentUserEmail);
 
+  const isUserSuperAdmin = Boolean(
+    isSuperAdmin || 
+    currentUserEmail.toLowerCase() === "superadmin@expertbilling.in" ||
+    currentUserEmail.toLowerCase() === "superadmin@expertpos.com"
+  );
+
+  // When an admin logs in, the system should NOT display the details of other admins!
+  const visibleProfiles = useMemo(() => {
+    if (!credentialsList || credentialsList.length === 0) return [];
+    
+    // Only Super Admin can view all admin profiles across the system
+    if (isUserSuperAdmin) {
+      return credentialsList;
+    }
+
+    // For any tenant admin or store staff user:
+    // 1. NEVER display details of other admins!
+    // 2. Only display their own profile and non-admin staff belonging to their active tenant
+    return credentialsList.filter((cred) => {
+      // Exclude superadmin
+      if (cred.email.toLowerCase() === "superadmin@expertbilling.in" || cred.email.toLowerCase() === "superadmin@expertpos.com") {
+        return false;
+      }
+
+      const isOtherAdmin = 
+        (cred.role === UserRole.ADMIN || String(cred.role).toUpperCase().includes("ADMIN")) && 
+        cred.email.toLowerCase() !== currentUserEmail.toLowerCase();
+      
+      // CRITICAL: Block any other administrator from appearing!
+      if (isOtherAdmin) {
+        return false;
+      }
+
+      // Check tenant isolation: do not show staff from other tenants
+      if (cred.tenantId && activeTenant?.id && cred.tenantId !== activeTenant.id) {
+        return false;
+      }
+
+      return true;
+    });
+  }, [credentialsList, isUserSuperAdmin, currentUserEmail, activeTenant?.id]);
+
   const handleSelectProfileToEdit = (email: string) => {
+    // If not super admin, block access to any other admin profile
+    if (!isUserSuperAdmin) {
+      const targetCred = credentialsList.find(c => c.email.toLowerCase() === email.toLowerCase());
+      if (targetCred && (targetCred.role === UserRole.ADMIN || String(targetCred.role).toUpperCase().includes("ADMIN")) && targetCred.email.toLowerCase() !== currentUserEmail.toLowerCase()) {
+        triggerNotification("Access restricted: You cannot inspect or modify other administrator profiles.", "warning");
+        return;
+      }
+    }
     setSelectedProfileEmail(email);
     const target = credentialsList.find(c => c.email.toLowerCase() === email.toLowerCase());
     if (target) {
@@ -777,26 +829,30 @@ export default function SettingsPanel({
         /* ================= SUB-TAB: USER PROFILE SETTINGS ================= */
         <div className="space-y-6 max-w-2xl">
           {/* Option to change profile / select account */}
-          {credentialsList && credentialsList.length > 0 && (
+          {visibleProfiles && visibleProfiles.length > 0 && (
             <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 sm:p-5 space-y-3">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-200/80 pb-3">
                 <div>
                   <h3 className="text-xs font-black uppercase text-slate-900 tracking-wider flex items-center gap-2 font-mono">
                     <Users className="w-4 h-4 text-purple-600" />
-                    Option to Change Profile / Switch Account
+                    {isUserSuperAdmin 
+                      ? "Option to Change Profile / Switch Account" 
+                      : visibleProfiles.length > 1 ? "Option to Change Profile / Store Staff" : "Active Administrator Profile"}
                   </h3>
                   <p className="text-[11px] text-slate-500 mt-0.5">
-                    Select any profile below to inspect credentials, adjust access keys, or update security signatures.
+                    {isUserSuperAdmin
+                      ? "Select any profile below to inspect credentials, adjust access keys, or update security signatures."
+                      : "Manage your administrator account credentials. Details of other system administrators are securely restricted."}
                   </p>
                 </div>
                 <span className="text-[10px] font-mono bg-purple-100 text-purple-800 px-2.5 py-0.5 rounded-full font-bold self-start sm:self-auto">
-                  {credentialsList.length} Profiles
+                  {visibleProfiles.length} {visibleProfiles.length === 1 ? "Profile" : "Profiles"}
                 </span>
               </div>
 
               {/* Profiles Grid */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
-                {credentialsList.map((cred, idx) => {
+                {visibleProfiles.map((cred, idx) => {
                   const isSelected = cred.email.toLowerCase() === selectedProfileEmail.toLowerCase();
                   return (
                     <button

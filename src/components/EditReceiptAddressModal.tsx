@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { StoreBranch, Tenant } from "../types";
 import { MapPin, Phone, Building2, FileText, CheckCircle2, X } from "lucide-react";
 
@@ -32,32 +32,47 @@ export const EditReceiptAddressModal: React.FC<EditReceiptAddressModalProps> = (
   onSave
 }) => {
   const [storeName, setStoreName] = useState<string>(
-    currentBranch?.name || activeTenant.name || "Downtown Smart Hypermarket"
+    activeTenant.businessLocation || activeTenant.name || currentBranch?.name || ""
   );
   const [headerTitle, setHeaderTitle] = useState<string>(
     receiptHeader || "OFFICIAL RETAIL CASH INVOICE"
   );
   const [address, setAddress] = useState<string>(
-    currentBranch?.address || activeTenant.address || "G-10, Central Plaza, Main Avenue"
+    activeTenant.address || currentBranch?.address || ""
   );
   const [city, setCity] = useState<string>(
-    currentBranch?.city || activeTenant.city || "New Delhi"
+    activeTenant.city || currentBranch?.city || ""
   );
   const [state, setState] = useState<string>(
-    activeTenant.state || "Delhi"
+    activeTenant.state || ""
   );
   const [pincode, setPincode] = useState<string>(
-    activeTenant.pincode || "110001"
+    activeTenant.pincode || ""
   );
   const [phone, setPhone] = useState<string>(
-    currentBranch?.phone || activeTenant.phone || "811-23456789"
+    activeTenant.phone || currentBranch?.phone || ""
   );
   const [gstin, setGstin] = useState<string>(
-    currentBranch?.gstin || activeTenant.gstinRegNumber || "07EXPAID5058A1Z1"
+    activeTenant.gstinRegNumber || currentBranch?.gstin || ""
   );
   const [footerText, setFooterText] = useState<string>(
     receiptFooter || ""
   );
+
+  // Sync state whenever modal opens or tenant changes
+  useEffect(() => {
+    if (isOpen) {
+      setStoreName(activeTenant.businessLocation || activeTenant.name || currentBranch?.name || "");
+      setHeaderTitle(receiptHeader || "OFFICIAL RETAIL CASH INVOICE");
+      setAddress(activeTenant.address || currentBranch?.address || "");
+      setCity(activeTenant.city || currentBranch?.city || "");
+      setState(activeTenant.state || "");
+      setPincode(activeTenant.pincode || "");
+      setPhone(activeTenant.phone || currentBranch?.phone || "");
+      setGstin(activeTenant.gstinRegNumber || currentBranch?.gstin || "");
+      setFooterText(receiptFooter || "");
+    }
+  }, [isOpen, activeTenant, currentBranch, receiptHeader, receiptFooter]);
 
   if (!isOpen) return null;
 
@@ -122,13 +137,13 @@ export const EditReceiptAddressModal: React.FC<EditReceiptAddressModalProps> = (
                 {storeName || activeTenant.name}
               </p>
               <p className="text-[9.5px] text-slate-600 leading-tight">
-                {formattedAddressPreview || "G-10, Central Plaza, Main Avenue, New Delhi"}
+                {formattedAddressPreview || "Registered Store Address"}
               </p>
               <p className="text-[9px] text-slate-500 mt-0.5">
-                Contact: {phone || "811-23456789"}
+                Contact: {phone || activeTenant.phone || "N/A"}
               </p>
               <p className="text-[8.5px] text-slate-500 border-t border-dashed border-slate-200 pt-1 mt-1 font-bold">
-                GSTIN: {gstin || "07EXPAID5058A1Z1"}
+                GSTIN: {gstin || activeTenant.gstinRegNumber || "N/A"}
               </p>
             </div>
           </div>
@@ -144,7 +159,7 @@ export const EditReceiptAddressModal: React.FC<EditReceiptAddressModalProps> = (
                   type="text"
                   value={storeName}
                   onChange={(e) => setStoreName(e.target.value)}
-                  placeholder="e.g. Downtown Smart Hypermarket"
+                  placeholder="e.g. Main Flagship Outlet / Store #01"
                   className="w-full border border-slate-200 rounded-lg px-3 py-2 text-xs focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none"
                   required
                 />
@@ -174,7 +189,7 @@ export const EditReceiptAddressModal: React.FC<EditReceiptAddressModalProps> = (
                 type="text"
                 value={address}
                 onChange={(e) => setAddress(e.target.value)}
-                placeholder="e.g. G-10, Central Plaza, Main Avenue"
+                placeholder="e.g. Plot 14, Commercial Avenue, Sector 18"
                 className="w-full border border-slate-200 rounded-lg px-3 py-2 text-xs focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none font-mono"
                 required
               />
