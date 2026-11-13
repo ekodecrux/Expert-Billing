@@ -10,7 +10,7 @@ This directory contains the production database schema and configuration for **e
 |---|---|
 | **Database Name** | `u559264694_expertbilling` |
 | **Database Username** | `u559264694_expertbilling` |
-| **Password** | `Pos@2026` |
+| **Password** | `Billing2026` |
 | **Server IP / Host** | `145.79.209.120` *(or `localhost` when app is hosted on same server)* |
 | **MySQL Port** | `3306` |
 | **SSH Port** | `65002` |
@@ -41,12 +41,12 @@ ssh -p 65002 u559264694@145.79.209.120
 
 # 2. Upload or paste schema.sql, then run:
 mysql -u u559264694_expertbilling -p u559264694_expertbilling < schema.sql
-# Enter password when prompted: Pos@2026
+# Enter password when prompted: Billing2026
 ```
 
 Or from your local machine using one command (piping file over SSH):
 ```bash
-ssh -p 65002 u559264694@145.79.209.120 "mysql -u u559264694_expertbilling -p'Pos@2026' u559264694_expertbilling" < database/schema.sql
+ssh -p 65002 u559264694@145.79.209.120 "mysql -u u559264694_expertbilling -p'Billing2026' u559264694_expertbilling" < database/schema.sql
 ```
 
 ---
@@ -56,7 +56,7 @@ ssh -p 65002 u559264694@145.79.209.120 "mysql -u u559264694_expertbilling -p'Pos
 - **Port**: `3306` *(Note: If Hostinger blocks external port 3306 by default, enable Remote MySQL in hPanel > Databases > Remote MySQL, OR use SSH Tunneling in your client: SSH Host `145.79.209.120`, Port `65002`, User `u559264694`, DB Host `localhost`, DB Port `3306`)*.
 - **Database**: `u559264694_expertbilling`
 - **User**: `u559264694_expertbilling`
-- **Password**: `Pos@2026`
+- **Password**: `Billing2026`
 
 ---
 
@@ -82,3 +82,22 @@ ssh -p 65002 u559264694@145.79.209.120 "mysql -u u559264694_expertbilling -p'Pos
 | 16 | `coupons` | Promotional vouchers (`WELCOME5`, `FESTIVE10`, `SAVE50`) |
 | 17 | `app_settings` | Hardware configuration, thermal receipt printer layout, and company headers |
 | 18 | `audit_logs` | Immutable audit trail for compliance, deletions, and supervisor overrides |
+
+---
+
+## 🌐 Deploying on Hostinger Node.js Hosting
+1. Build the application (`npm run build` generates `dist/` and `server.js`) and upload to your Hostinger Node.js app root.
+2. Set environment variables in Hostinger hPanel > Node.js / Environment:
+   - `NODE_ENV=production`
+   - `DB_HOST=localhost` *(or `145.79.209.120`)*
+   - `DB_PORT=3306`
+   - `DB_NAME=u559264694_expertbilling`
+   - `DB_USER=u559264694_expertbilling`
+   - `DB_PASS=Billing2026`
+3. Start command: `npm start` (`NODE_ENV=production node server.js`).
+   - **Studio Preview vs. Production Isolation**: Live MySQL connection and syncing run **only when `NODE_ENV=production`**. In AI Studio Preview (`NODE_ENV !== "production"`), the server runs strictly in isolated preview memory and never connects to or modifies the live Hostinger database.
+   - **Clean Database (Super Admin Only)**: Both `database/schema.sql` and `database/expertbilling_production.sql` start completely clean with **only** the Super Admin account (`superadmin@expertbilling.in`, username `superadmin`, password `123456`) and zero demo tenants, branches, products, or invoices.
+   - **Automatic Live Migration**: On production startup, if the live `users` table still contains the legacy `superadmin` default password, the server automatically cleans out old demo rows across operational tables and updates the Super Admin password to `123456`. You can also import `database/schema.sql` or `database/expertbilling_production.sql` directly via Hostinger phpMyAdmin.
+4. Zero browser `localStorage` or local JSON files are used for data persistence—all production reads/writes go straight to `u559264694_expertbilling`.
+
+

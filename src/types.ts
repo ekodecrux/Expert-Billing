@@ -136,6 +136,20 @@ export interface StoreBranch {
   address: string;
   city: string;
   phone: string;
+  gstin?: string;
+}
+
+export interface LabelPrinterConfig {
+  printerModel: string;
+  printerName: string;
+  presetId: string;
+  connectionType: string;
+  networkIp: string;
+  networkPort: string;
+  dpi: number;
+  darkness: number;
+  gapMm: number;
+  sensorType: string;
 }
 
 export interface Expense {

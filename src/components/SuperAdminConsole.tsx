@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import { 
   Key, 
   User, 
@@ -103,7 +103,7 @@ import {
 } from "../types";
 import { ExpertAidLogo } from "./ExpertAidLogo";
 
-interface AccessProfile {
+export interface AccessProfile {
   role: UserRole;
   title: string;
   email: string;
@@ -119,6 +119,9 @@ interface AccessProfile {
   privileges: string[];
   storeBranchId?: string;
   phone?: string;
+  tenantId?: string;
+  username?: string;
+  pin?: string;
 }
 
 export interface MultiBranchNode {
@@ -213,7 +216,7 @@ export default function SuperAdminConsole({
   const [superProfSelectedEmail, setSuperProfSelectedEmail] = useState<string>("superadmin@expertbilling.in");
   const [superProfName, setSuperProfName] = useState<string>("System Sovereign (Super Admin)");
   const [superProfEmail, setSuperProfEmail] = useState<string>("superadmin@expertbilling.in");
-  const [superProfPassword, setSuperProfPassword] = useState<string>("SuperAdminMasterKey2026");
+  const [superProfPassword, setSuperProfPassword] = useState<string>("123456");
   const [superProfRole, setSuperProfRole] = useState<UserRole>(UserRole.ADMIN);
   const [superProfPhone, setSuperProfPhone] = useState<string>("+91 9900112233");
   const [superProfPin, setSuperProfPin] = useState<string>("9999");
@@ -262,7 +265,6 @@ export default function SuperAdminConsole({
     });
 
     onUpdateCredentials(updatedList);
-    localStorage.setItem("expert_aid_credentials", JSON.stringify(updatedList));
     setSuperProfSelectedEmail(superProfEmail.trim());
     setSuperProfEmailUnlocked(false);
     triggerNotification(`Profile credentials for "${superProfName}" (${superProfEmail}) updated successfully!`, "success");
@@ -350,6 +352,54 @@ export default function SuperAdminConsole({
   });
   const [seedSampleProducts, setSeedSampleProducts] = useState<boolean>(true);
 
+  // MySQL Database Configuration & Sync States
+  const [isDbSyncing, setIsDbSyncing] = useState<boolean>(false);
+  const [isDbTesting, setIsDbTesting] = useState<boolean>(false);
+  const [isDbResetting, setIsDbResetting] = useState<boolean>(false);
+  const [showDbPassword, setShowDbPassword] = useState<boolean>(false);
+  const [dbMode, setDbMode] = useState<string>("PREVIEW_ISOLATED");
+  const [dbTestMessage, setDbTestMessage] = useState<string | null>(null);
+  const [dbTestSuccess, setDbTestSuccess] = useState<boolean | null>(null);
+  const [dbErrorDetail, setDbErrorDetail] = useState<string | null>(null);
+  const [dbRecommendation, setDbRecommendation] = useState<string | null>(null);
+  const [dbHostLabel, setDbHostLabel] = useState<string>("preview-isolated");
+  const [lastSyncTimestamp, setLastSyncTimestamp] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    fetch("/api/database/config")
+      .then((res) => res.json())
+      .then((data) => {
+        if (!active || !data) return;
+        const isLive = Boolean(data.connected);
+        const mode = data.mode || (isLive ? "MYSQL_LIVE" : "PREVIEW_ISOLATED");
+        setDbMode(mode);
+        setDbTestSuccess(isLive);
+        if (data.host) {
+          setDbHostLabel(`${data.host}:${data.port || 3306}`);
+        }
+        if (mode === "PREVIEW_ISOLATED") {
+          setDbErrorDetail(null);
+          setDbRecommendation(data.recommendation || "Deploy with NODE_ENV=production to activate live Hostinger MySQL sync.");
+          setDbTestMessage(
+            data.message || "Studio Preview Mode: Live Hostinger database sync is disabled in preview. Production deployments connect automatically via NODE_ENV=production."
+          );
+        } else if (!isLive && data.errorDetail) {
+          setDbErrorDetail(data.errorDetail);
+          setDbTestMessage(
+            data.message || `Configured for MySQL user '${data.user}'. Direct connection could not be established.`
+          );
+        } else if (isLive) {
+          setDbErrorDetail(null);
+          setDbTestMessage(`Connected LIVE to MySQL database '${data.database}' at ${data.host}:${data.port}.`);
+        }
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, []);
+
   // Modals & Popups for Client Onboarding
   const [showOnboardingSuccessModal, setShowOnboardingSuccessModal] = useState<Tenant | null>(null);
   const [showBulkImportModal, setShowBulkImportModal] = useState<boolean>(false);
@@ -367,96 +417,7 @@ export default function SuperAdminConsole({
   const [mbActiveBranchFilter, setMbActiveBranchFilter] = useState<string>("ALL");
   const [mbSubTab, setMbSubTab] = useState<"overview" | "branches" | "financials" | "attendance" | "users" | "standardization" | "announcements" | "audit">("overview");
 
-  const [branchNodes, setBranchNodes] = useState<MultiBranchNode[]>([
-    {
-      id: "B1-HYD",
-      name: "Branch 1 – Hyderabad (Head Office Regional Hub)",
-      code: "HYD-HQ-01",
-      zone: "Telangana Central",
-      city: "Hyderabad",
-      address: "Hitech City, Madhapur, Hyderabad - 500081",
-      type: "Regional Head Office",
-      managerName: "Dr. Ramesh Varma (HQ Director)",
-      contactEmail: "hyderabad.hq@apexgroup.com",
-      phone: "+91 98490 11223",
-      status: "ACTIVE",
-      staffCount: 45,
-      studentsCustomersCount: 1250,
-      todayCollection: 285000,
-      monthlyTarget: 40000000,
-      monthlyAchieved: 32500000,
-      attendanceRate: 98.2,
-      terminalsOnline: "12 / 12",
-      establishedYear: 2018,
-      notes: "Main regional hub with central server node."
-    },
-    {
-      id: "B2-VIJ",
-      name: "Branch 2 – Vijayawada (Coastal Commercial Hub)",
-      code: "VIJ-02",
-      zone: "Andhra Pradesh Central",
-      city: "Vijayawada",
-      address: "MG Road, Benz Circle, Vijayawada - 520010",
-      type: "Commercial Branch",
-      managerName: "Suresh Babu (Branch Director)",
-      contactEmail: "vijayawada@apexgroup.com",
-      phone: "+91 98481 22334",
-      status: "ACTIVE",
-      staffCount: 28,
-      studentsCustomersCount: 820,
-      todayCollection: 175000,
-      monthlyTarget: 25000000,
-      monthlyAchieved: 21200000,
-      attendanceRate: 96.5,
-      terminalsOnline: "8 / 8",
-      establishedYear: 2020,
-      notes: "Prime commercial outlet."
-    },
-    {
-      id: "B3-VSKP",
-      name: "Branch 3 – Visakhapatnam (Coastal Campus)",
-      code: "VSKP-03",
-      zone: "Andhra Pradesh North",
-      city: "Visakhapatnam",
-      address: "Dwaraka Nagar, Visakhapatnam - 530016",
-      type: "Coastal Campus",
-      managerName: "Priya Sundaram (Principal)",
-      contactEmail: "vizag@apexgroup.com",
-      phone: "+91 98472 33445",
-      status: "ACTIVE",
-      staffCount: 32,
-      studentsCustomersCount: 940,
-      todayCollection: 210000,
-      monthlyTarget: 30000000,
-      monthlyAchieved: 26800000,
-      attendanceRate: 97.1,
-      terminalsOnline: "9 / 10",
-      establishedYear: 2021,
-      notes: "Academic & retail branch."
-    },
-    {
-      id: "B4-WGL",
-      name: "Branch 4 – Warangal (North Zone Branch)",
-      code: "WGL-04",
-      zone: "Telangana North",
-      city: "Warangal",
-      address: "Kazipet Main Road, Warangal - 506002",
-      type: "North Zone Branch",
-      managerName: "K. Rajeshwar Rao (Branch Admin)",
-      contactEmail: "warangal@apexgroup.com",
-      phone: "+91 98463 44556",
-      status: "ACTIVE",
-      staffCount: 22,
-      studentsCustomersCount: 610,
-      todayCollection: 120000,
-      monthlyTarget: 18000000,
-      monthlyAchieved: 15400000,
-      attendanceRate: 95.8,
-      terminalsOnline: "6 / 6",
-      establishedYear: 2022,
-      notes: "North Telangana zone expansion node."
-    }
-  ]);
+  const [branchNodes, setBranchNodes] = useState<MultiBranchNode[]>([]);
 
   // Modals for Multi-Branch HQ
   const [showAddBranchModal, setShowAddBranchModal] = useState<boolean>(false);
@@ -479,30 +440,7 @@ export default function SuperAdminConsole({
   const [mbBranchStaffCap, setMbBranchStaffCap] = useState<number>(25);
 
   // Central Broadcast Notices
-  const [centralBroadcasts, setCentralBroadcasts] = useState<CentralBroadcastNotice[]>([
-    {
-      id: "BC-101",
-      title: "Standardized Quarterly Financial & Academic Audit Schedule",
-      category: "Financial Audit",
-      content: "All regional branch managers are requested to reconcile Q3 fee ledgers and inventory counts prior to Head Office inspection.",
-      issuedAt: "2026-08-04 10:30 AM",
-      issuedBy: "Head Office Super Admin",
-      targetBranches: ["ALL"],
-      priority: "HIGH",
-      deliveryStats: "Delivered to 4 / 4 Branches (100% Ack)"
-    },
-    {
-      id: "BC-102",
-      title: "GST Rate & Fee Collection Directive Update",
-      category: "Policy Directive",
-      content: "Revised 18% GST tax breakdown will auto-apply across all branch billing terminals starting 1st of next month.",
-      issuedAt: "2026-08-02 04:15 PM",
-      issuedBy: "Chief Financial Controller",
-      targetBranches: ["B1-HYD", "B2-VIJ", "B3-VSKP", "B4-WGL"],
-      priority: "URGENT",
-      deliveryStats: "Delivered to 4 / 4 Branches (4/4 Ack)"
-    }
-  ]);
+  const [centralBroadcasts, setCentralBroadcasts] = useState<CentralBroadcastNotice[]>([]);
 
   const [bFormTitle, setBFormTitle] = useState<string>("");
   const [bFormCategory, setBFormCategory] = useState<CentralBroadcastNotice["category"]>("Policy Directive");
@@ -511,20 +449,10 @@ export default function SuperAdminConsole({
   const [bFormPriority, setBFormPriority] = useState<"HIGH" | "URGENT" | "NORMAL">("HIGH");
 
   // Standardized Fee & Catalog Courses
-  const [stdCourses, setStdCourses] = useState<StandardizedFeeCourse[]>([
-    { id: "SC-01", courseOrCategory: "Computer Science & IT (Full-Stack Engineering)", code: "CS-101", standardFee: 65000, taxGstRate: 18, billingFrequency: "Per Term", syncedBranchesCount: 4, lastSyncedAt: "2026-08-01" },
-    { id: "SC-02", courseOrCategory: "Management Studies (Retail & Sales Operations)", code: "MGMT-202", standardFee: 45000, taxGstRate: 18, billingFrequency: "Annual", syncedBranchesCount: 4, lastSyncedAt: "2026-08-01" },
-    { id: "SC-03", courseOrCategory: "Healthcare & Pharmacy Administration", code: "PHARM-301", standardFee: 55000, taxGstRate: 18, billingFrequency: "Annual", syncedBranchesCount: 4, lastSyncedAt: "2026-08-01" }
-  ]);
+  const [stdCourses, setStdCourses] = useState<StandardizedFeeCourse[]>([]);
 
   // Branch Users List
-  const [branchUsers, setBranchUsers] = useState<BranchUserRole[]>([
-    { id: "BU-01", name: "Dr. Ramesh Varma", email: "ramesh.v@apexgroup.com", loginUid: "ramesh_hq", assignedBranchId: "ALL", role: "Head Office Super Admin", status: "ACTIVE", lastActive: "Just Now" },
-    { id: "BU-02", name: "Suresh Babu", email: "suresh.b@apexgroup.com", loginUid: "suresh_vij", assignedBranchId: "B2-VIJ", role: "Branch Admin", status: "ACTIVE", lastActive: "12 mins ago" },
-    { id: "BU-03", name: "Priya Sundaram", email: "priya.s@apexgroup.com", loginUid: "priya_vskp", assignedBranchId: "B3-VSKP", role: "Principal / Director", status: "ACTIVE", lastActive: "1 hour ago" },
-    { id: "BU-04", name: "K. Rajeshwar Rao", email: "rajeshwar.k@apexgroup.com", loginUid: "rajeshwar_wgl", assignedBranchId: "B4-WGL", role: "Branch Admin", status: "ACTIVE", lastActive: "25 mins ago" },
-    { id: "BU-05", name: "Ananya Reddy", email: "ananya.r@apexgroup.com", loginUid: "ananya_auditor", assignedBranchId: "ALL", role: "Financial Auditor", status: "ACTIVE", lastActive: "2 hours ago" }
-  ]);
+  const [branchUsers, setBranchUsers] = useState<BranchUserRole[]>([]);
 
   const [buName, setBuName] = useState<string>("");
   const [buEmail, setBuEmail] = useState<string>("");
@@ -533,12 +461,7 @@ export default function SuperAdminConsole({
   const [buRole, setBuRole] = useState<BranchUserRole["role"]>("Branch Admin");
 
   // Multi-Branch Audit Logs
-  const [mbAuditLogs, setMbAuditLogs] = useState([
-    { id: "LOG-MB1", timestamp: "2026-08-05 08:30 AM", branchName: "Branch 1 – Hyderabad (HQ)", user: "Dr. Ramesh Varma", action: "Pushed global fee standardization package to all 4 branches", status: "SUCCESS" },
-    { id: "LOG-MB2", timestamp: "2026-08-05 07:15 AM", branchName: "Branch 2 – Vijayawada", user: "Suresh Babu", action: "Opened terminal cash session #4021 and synchronized inventory", status: "SUCCESS" },
-    { id: "LOG-MB3", timestamp: "2026-08-04 06:45 PM", branchName: "Branch 3 – Visakhapatnam", user: "Priya Sundaram", action: "Submitted daily fee collection summary (₹ 2,10,000)", status: "SUCCESS" },
-    { id: "LOG-MB4", timestamp: "2026-08-04 03:20 PM", branchName: "Branch 4 – Warangal", user: "K. Rajeshwar Rao", action: "Verified staff attendance log (95.8% rate)", status: "SUCCESS" }
-  ]);
+  const [mbAuditLogs, setMbAuditLogs] = useState<Array<{ id: string; timestamp: string; branchName: string; user: string; action: string; status: string }>>([]);
 
   // Computed Consolidated Statistics
   const mbConsolidatedStats = useMemo(() => {
@@ -737,7 +660,7 @@ export default function SuperAdminConsole({
   const [editTenantCountry, setEditTenantCountry] = useState<string>("India");
 
   // Client Typography Customization Studio States
-  const [typographyTenantId, setTypographyTenantId] = useState<string>(activeTenantId || "TENANT-001");
+  const [typographyTenantId, setTypographyTenantId] = useState<string>(activeTenantId || tenantsList[0]?.id || "");
   const [typographyFontFamily, setTypographyFontFamily] = useState<TenantFontFamily>("Inter");
   const [typographyFontSizeScale, setTypographyFontSizeScale] = useState<TenantFontSizeScale>("standard");
   const [showTypographyModal, setShowTypographyModal] = useState<boolean>(false);
@@ -798,88 +721,9 @@ export default function SuperAdminConsole({
     timestamp: string;
   }
 
-  const [invoicesList, setInvoicesList] = useState<Invoice[]>(() => [
-    {
-      id: "INV-2026-001",
-      tenantId: "TENANT-01",
-      tenantName: "Tech Solutions",
-      amount: 45000,
-      gst: 8100,
-      totalAmount: 53100,
-      issueDate: "2026-06-01",
-      dueDate: "2026-06-15",
-      status: "PAID",
-      paymentMethod: "Razorpay",
-      items: [
-        { description: "SaaS Enterprise Monthly Subscription Fee", amount: 35000 },
-        { description: "Isolated Sandbox Setup & Provisioning", amount: 10000 }
-      ]
-    },
-    {
-      id: "INV-2026-002",
-      tenantId: "TENANT-02",
-      tenantName: "ABC Retailers",
-      amount: 75000,
-      gst: 13500,
-      totalAmount: 88500,
-      issueDate: "2026-06-10",
-      dueDate: "2026-06-25",
-      status: "UNPAID",
-      items: [
-        { description: "Growth Tier Subscription - Annual License", amount: 75000 }
-      ]
-    },
-    {
-      id: "INV-2026-003",
-      tenantId: "TENANT-03",
-      tenantName: "Global Enterprises",
-      amount: 12000,
-      gst: 2160,
-      totalAmount: 14160,
-      issueDate: "2026-05-15",
-      dueDate: "2026-05-30",
-      status: "OVERDUE",
-      items: [
-        { description: "Standard Tier Monthly Subscription License", amount: 12000 }
-      ]
-    }
-  ]);
+  const [invoicesList, setInvoicesList] = useState<Invoice[]>([]);
 
-  const [paymentsList, setPaymentsList] = useState<Payment[]>(() => [
-    {
-      id: "TXN-741291",
-      tenantId: "TENANT-01",
-      tenantName: "Tech Solutions",
-      amount: 53100,
-      paymentMethod: "Razorpay",
-      status: "SUCCESS",
-      referenceId: "pay_Rzp9412a8f",
-      auditStatus: "VERIFIED",
-      timestamp: "2026-06-01 10:14:32"
-    },
-    {
-      id: "TXN-854192",
-      tenantId: "TENANT-03",
-      tenantName: "Global Enterprises",
-      amount: 14160,
-      paymentMethod: "Bank Transfer",
-      status: "PENDING",
-      referenceId: "TXN-REF-IMPS-029",
-      auditStatus: "UNVERIFIED",
-      timestamp: "2026-06-15 14:02:11"
-    },
-    {
-      id: "TXN-592184",
-      tenantId: "TENANT-02",
-      tenantName: "ABC Retailers",
-      amount: 88500,
-      paymentMethod: "Stripe",
-      status: "FAILED",
-      referenceId: "ch_StripeFail99",
-      auditStatus: "FLAGGED",
-      timestamp: "2026-06-10 18:22:45"
-    }
-  ]);
+  const [paymentsList, setPaymentsList] = useState<Payment[]>([]);
 
   // Billing filter states
   const [billingSearch, setBillingSearch] = useState<string>("");
@@ -1021,33 +865,28 @@ export default function SuperAdminConsole({
 
   const [activeSettingsItem, setActiveSettingsItem] = useState<{catId: string, itemId: string, itemLabel: string} | null>(null);
 
-  const [backupRestoreFiles, setBackupRestoreFiles] = useState<Array<{name: string, date: string, size: string, status: string}>>([
-    { name: "expert_aid_prod_ledger_2026-06-20.json", date: "2026-06-20 04:00 UTC", size: "142 KB", status: "Verified" },
-    { name: "expert_aid_prod_ledger_2026-06-15.json", date: "2026-06-15 04:00 UTC", size: "139 KB", status: "Archived" },
-    { name: "expert_aid_prod_ledger_2026-06-10.json", date: "2026-06-10 04:00 UTC", size: "135 KB", status: "Archived" }
-  ]);
+  const [backupRestoreFiles, setBackupRestoreFiles] = useState<Array<{name: string, date: string, size: string, status: string}>>([]);
 
   // Chart Data
   const chartData = [
     { date: "01", revenue: 14200, expenses: 7200 },
     { date: "05", revenue: 19800, expenses: 9400 },
     { date: "10", revenue: 16400, expenses: 8100 },
-    { date: "15", revenue: 18750, expenses: 10500 }, // Exactly matching screenshot tooltips
+    { date: "15", revenue: 18750, expenses: 10500 },
     { date: "20", revenue: 23100, expenses: 11400 },
     { date: "25", revenue: 21500, expenses: 9800 },
     { date: "30", revenue: 29400, expenses: 12900 }
   ];
 
-  // Dynamic calculations based on seeded data
+  // Dynamic calculations based strictly on stored database records
   const totalOnboardingFeeSourced = useMemo(() => {
     return tenantsList.reduce((acc, t) => acc + (t.onboardingFeePaid || 0), 0);
   }, [tenantsList]);
 
-  // KPI calculations designed to match the exact numbers of the screenshot
-  const kpiTotalClients = 119 + tenantsList.length; // Flawlessly resolves to 128 clients
-  const kpiActiveClients = 90 + tenantsList.filter(t => t.status === "ACTIVE").length; // Flawlessly resolves to 98
-  const kpiTotalRevenue = 1860000 + totalOnboardingFeeSourced; // Flawlessly resolves to ₹ 24,75,000
-  const kpiInvoicesCount = 1237 + tenantsList.length; // Flawlessly resolves to 1,246
+  const kpiTotalClients = tenantsList.length;
+  const kpiActiveClients = tenantsList.filter(t => t.status === "ACTIVE").length;
+  const kpiTotalRevenue = totalOnboardingFeeSourced;
+  const kpiInvoicesCount = invoicesList.length;
 
   // Copy to clipboard helper
   const handleCopyTextDetail = (text: string, key: string) => {
@@ -1064,7 +903,9 @@ export default function SuperAdminConsole({
 
     // 1. Check or update credentialsList
     const existingIndex = credentialsList.findIndex(
-      c => c.email.toLowerCase() === loginEmail.toLowerCase() ||
+      c => c.tenantId === tenant.id ||
+           c.email.toLowerCase() === loginEmail.toLowerCase() ||
+           (c.username && c.username.toLowerCase() === loginEmail.toLowerCase()) ||
            c.title.toLowerCase().includes(tenant.name.toLowerCase()) ||
            c.name.toLowerCase().includes(tenant.name.toLowerCase())
     );
@@ -1074,14 +915,17 @@ export default function SuperAdminConsole({
       nextCredentials = [...credentialsList];
       nextCredentials[existingIndex] = {
         ...nextCredentials[existingIndex],
-        email: loginEmail,
+        email: tenant.adminEmail || loginEmail,
+        username: loginEmail,
+        tenantId: tenant.id,
         password: generatedPass
       };
     } else {
       const newProfile: AccessProfile = {
         role: UserRole.ADMIN,
         title: `${tenant.name} Admin`,
-        email: loginEmail,
+        email: tenant.adminEmail || loginEmail,
+        username: loginEmail,
         password: generatedPass,
         name: `${tenant.name} Administrator`,
         color: "bg-blue-600",
@@ -1097,6 +941,7 @@ export default function SuperAdminConsole({
           "Financial Audits & Daily Reconciliation",
           "Staff Registry & RBAC Permission Grants"
         ],
+        tenantId: tenant.id,
         phone: tenant.phone
       };
       nextCredentials = [...credentialsList, newProfile];
@@ -1153,16 +998,17 @@ export default function SuperAdminConsole({
       return;
     }
 
-    if (credentialsList.some(c => c.email.toLowerCase() === loginId)) {
-      triggerNotification(`Conflict: Admin Login ID (UID) '${loginId}' is already taken.`, "warning");
+    if (credentialsList.some(c => c.email.toLowerCase() === loginId || c.email.toLowerCase() === email || (c.username && c.username.toLowerCase() === loginId))) {
+      triggerNotification(`Conflict: Admin Login ID '${loginId}' or email '${email}' is already taken.`, "warning");
       return;
     }
 
     const sectorConfig = BUSINESS_SECTORS_CATALOG[tenantBusinessSector] || BUSINESS_SECTORS_CATALOG.SUPERMARKET;
     const generatedDomainUrl = `https://${subdomain}.expertbilling.in`;
+    const newTenantId = `TENANT-${Date.now().toString().slice(-6)}`;
 
     const newTenant: Tenant = {
-      id: `TENANT-0${tenantsList.length + 10}`,
+      id: newTenantId,
       name,
       subdomain,
       domainUrl: generatedDomainUrl,
@@ -1179,7 +1025,7 @@ export default function SuperAdminConsole({
       adminLoginId: loginId,
       adminPassword: password,
       phone,
-      currency: "₹",
+      currency: tenantCurrencySymbol || "₹",
       tier: tenantTier,
       status: tenantStatus,
       createdAt: new Date().toISOString(),
@@ -1198,16 +1044,21 @@ export default function SuperAdminConsole({
       onboardingNotes: tenantNotes,
       clientVerificationStatus: "VERIFIED",
       gstinRegNumber: tenantGstin || "07EXPAID" + Math.floor(1000 + Math.random() * 9000) + "A1Z1",
+      businessLocation: `${name} (${tenantCity.trim() || "Main Branch"})`,
+      address: tenantAddress.trim() || "Main Commercial Street",
+      city: tenantCity.trim() || "New Delhi",
+      country: "India",
       companyLogo: tenantLogo
     };
 
-    // Auto-create an Admin Access Profile using the provided UID & password
+    // Auto-create an Admin Access Profile bound to newTenant.id and supporting both email & UID login
     const newProfile: AccessProfile = {
       role: UserRole.ADMIN,
       title: `${name} (Admin)`,
-      email: loginId,
+      email: loginId.includes("@") ? loginId : email,
+      username: loginId,
       password: password,
-      name: `${name} Administrator`,
+      name: tenantAdminFullName.trim() || `${name} Administrator`,
       color: "emerald",
       gradient: "from-emerald-500 to-teal-600",
       bgHover: "hover:bg-emerald-500/5",
@@ -1215,7 +1066,9 @@ export default function SuperAdminConsole({
       border: "border-emerald-500/20",
       glow: "shadow-emerald-500/10",
       description: `Administrator for newly onboarded client: ${name}.`,
-      privileges: ["POS Sandbox access", "Audit profit & tax ledgers", "Modify products/suppliers", "Administer loyalty points", "Direct DB sync states"]
+      privileges: ["POS Sandbox access", "Audit profit & tax ledgers", "Modify products/suppliers", "Administer loyalty points", "Direct DB sync states"],
+      tenantId: newTenantId,
+      phone
     };
 
     onUpdateTenants([...tenantsList, newTenant]);
@@ -1253,12 +1106,13 @@ export default function SuperAdminConsole({
     setPaymentsList(prev => [...prev, newOnboardingPayment]);
     
     setShowOnboardingSuccessModal(newTenant);
-    triggerNotification(`SaaS Slice for '${name}' provisioned successfully with Admin ID: ${loginId}!`, "success");
+    triggerNotification(`SaaS Slice for '${name}' saved to database with Admin Login ID: ${loginId}!`, "success");
 
     // Reset Form
     setTenantName("");
     setTenantSubdomain("");
     setTenantAdminEmail("");
+    setTenantAdminFullName("");
     setTenantPhone("");
     setTenantAdminLoginId("");
     setTenantAdminPassword("");
@@ -1291,7 +1145,7 @@ export default function SuperAdminConsole({
         const cMonthlyFee = Number(parts[6]) || 3500;
 
         if (!tenantsList.some(t => t.subdomain === cSubdomain || t.adminEmail === cEmail)) {
-          const tId = `TENANT-0${tenantsList.length + importedCount + 10}`;
+          const tId = `TENANT-${Date.now().toString().slice(-6)}-${idx}`;
           const adminUid = cEmail.split("@")[0] || `admin_${cSubdomain}`;
           
           const tObj: Tenant = {
@@ -1299,6 +1153,8 @@ export default function SuperAdminConsole({
             name: cName,
             subdomain: cSubdomain,
             adminEmail: cEmail,
+            adminLoginId: adminUid,
+            adminPassword: "Password@123",
             phone: cPhone,
             currency: "₹",
             tier: cTier,
@@ -1324,7 +1180,8 @@ export default function SuperAdminConsole({
           const pObj: AccessProfile = {
             role: UserRole.ADMIN,
             title: `${cName} (Admin)`,
-            email: adminUid,
+            email: cEmail,
+            username: adminUid,
             password: "Password@123",
             name: `${cName} Admin`,
             color: "emerald",
@@ -1334,7 +1191,9 @@ export default function SuperAdminConsole({
             border: "border-emerald-500/20",
             glow: "shadow-emerald-500/10",
             description: `Administrator for bulk onboarded client: ${cName}.`,
-            privileges: ["POS Sandbox access", "Audit profit & tax ledgers", "Modify products/suppliers", "Administer loyalty points"]
+            privileges: ["POS Sandbox access", "Audit profit & tax ledgers", "Modify products/suppliers", "Administer loyalty points"],
+            tenantId: tId,
+            phone: cPhone
           };
 
           newTenants.push(tObj);
@@ -1368,11 +1227,15 @@ export default function SuperAdminConsole({
     }
 
     const updatedCreds = credentialsList.map(c => {
-      if (c.email.toLowerCase() === resetCredTenant.adminEmail.toLowerCase() ||
+      if (c.tenantId === resetCredTenant.id ||
+          c.email.toLowerCase() === resetCredTenant.adminEmail.toLowerCase() ||
+          (c.username && resetCredTenant.adminLoginId && c.username.toLowerCase() === resetCredTenant.adminLoginId.toLowerCase()) ||
           c.title.toLowerCase().includes(resetCredTenant.name.toLowerCase())) {
         return {
           ...c,
-          email: uid,
+          email: uid.includes("@") ? uid : c.email,
+          username: uid,
+          tenantId: resetCredTenant.id,
           password: password
         };
       }
@@ -1383,7 +1246,9 @@ export default function SuperAdminConsole({
       if (t.id === resetCredTenant.id) {
         return {
           ...t,
-          adminEmail: uid.includes("@") ? uid : t.adminEmail
+          adminEmail: uid.includes("@") ? uid : t.adminEmail,
+          adminLoginId: uid,
+          adminPassword: password
         };
       }
       return t;
@@ -1706,6 +1571,130 @@ export default function SuperAdminConsole({
     downloadAnchor.click();
     downloadAnchor.remove();
     triggerNotification("Database backup file (.json) exported successfully.", "success");
+  };
+
+  // Test MySQL Database Connection
+  const handleTestDatabase = async () => {
+    setIsDbTesting(true);
+    setDbTestMessage(null);
+    setDbErrorDetail(null);
+    setDbRecommendation(null);
+    try {
+      const res = await fetch("/api/database/test", { method: "POST" });
+      const data = await res.json();
+      const isLive = Boolean(data.connected ?? data.success);
+      const mode = data.mode || (isLive ? "MYSQL_LIVE" : "PREVIEW_ISOLATED");
+      setDbMode(mode);
+      setDbTestSuccess(isLive);
+      setDbTestMessage(data.message || "Database connection check completed.");
+      setDbErrorDetail(data.errorDetail || null);
+      setDbRecommendation(data.recommendation || null);
+      if (data.host) {
+        setDbHostLabel(`${data.host}:${data.port || 3306}`);
+      }
+      if (isLive) {
+        triggerNotification(`✓ Live MySQL Connected! Verified '${data.database}' as ${data.user}.`, "success");
+      } else if (mode === "PREVIEW_ISOLATED") {
+        triggerNotification("Studio Preview is isolated from the live database. Live MySQL connects in Production only.", "warning");
+      } else {
+        triggerNotification(data.message || "MySQL connection check returned offline.", "warning");
+      }
+    } catch (e: any) {
+      setDbTestSuccess(false);
+      setDbTestMessage("Failed to reach backend /api/database/test endpoint.");
+      setDbErrorDetail(e?.message || "Network error");
+      triggerNotification("Failed to reach backend MySQL diagnostic endpoint.", "warning");
+    } finally {
+      setIsDbTesting(false);
+    }
+  };
+
+  // Synchronize Every Detail to Database
+  const handleSyncEveryDetailToDatabase = async () => {
+    setIsDbSyncing(true);
+    try {
+      const payload = {
+        tenants: tenantsList,
+        credentials: credentialsList,
+        timestamp: new Date().toISOString()
+      };
+      const res = await fetch("/api/database/sync", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+      const data = await res.json();
+      const isLive = Boolean(data.connected ?? data.success);
+      const mode = data.mode || (isLive ? "MYSQL_LIVE" : "PREVIEW_ISOLATED");
+      setDbMode(mode);
+      setDbTestSuccess(isLive);
+      setDbTestMessage(data.remoteStatus || data.message || null);
+      setDbErrorDetail(data.errorDetail || null);
+      if (data.host) {
+        setDbHostLabel(`${data.host}:${data.port || 3306}`);
+      }
+      if (isLive) {
+        const timeStr = new Date().toLocaleTimeString();
+        setLastSyncTimestamp(timeStr);
+        triggerNotification(`✓ Synced all records LIVE to Hostinger MySQL database ${data.database || "u559264694_expertbilling"}.`, "success");
+      } else if (mode === "PREVIEW_ISOLATED") {
+        triggerNotification("Studio Preview Mode: Live DB sync is disabled here and runs only in Production.", "warning");
+      } else {
+        triggerNotification(
+          data.remoteStatus || "Live database sync could not connect from this environment.",
+          "warning"
+        );
+      }
+    } catch (e: any) {
+      setDbTestSuccess(false);
+      setDbErrorDetail(e?.message || "Request failed");
+      triggerNotification("Failed to contact /api/database/sync endpoint.", "warning");
+    } finally {
+      setIsDbSyncing(false);
+    }
+  };
+
+  // Clean Database Except Super Admin (Password: 123456)
+  const executeResetDatabaseSuperAdminOnly = async () => {
+    setConfirmModal(null);
+    setIsDbResetting(true);
+    try {
+      const res = await fetch("/api/database/reset-superadmin-only", { method: "POST" });
+      const data = await res.json();
+      if (data.success && data.state) {
+        onUpdateTenants(data.state.tenants || []);
+        onUpdateCredentials(data.state.credentials || []);
+        setInvoicesList([]);
+        setPaymentsList([]);
+        setBranchNodes([]);
+        setCentralBroadcasts([]);
+        setStdCourses([]);
+        setBranchUsers([]);
+        setMbAuditLogs([]);
+        setSuperProfSelectedEmail("superadmin@expertbilling.in");
+        setSuperProfEmail("superadmin@expertbilling.in");
+        setSuperProfPassword("123456");
+        triggerNotification("Database cleaned: only Super Admin remains (password: 123456).", "success");
+      } else {
+        triggerNotification(data.error || "Failed to clean database.", "warning");
+      }
+    } catch (e: any) {
+      triggerNotification(e?.message || "Failed to reach cleanup endpoint.", "warning");
+    } finally {
+      setIsDbResetting(false);
+    }
+  };
+
+  const handleRequestResetSuperAdminOnly = () => {
+    setConfirmModal({
+      isOpen: true,
+      title: "Clean Database (Keep Super Admin Only)?",
+      message: "This will remove all clients/tenants, branches, categories, products, customers, invoices, expenses, and non-superadmin users, and set the Super Admin password to 123456. In Studio Preview this resets preview state only; in Production it resets the live MySQL database.",
+      confirmText: "Yes, Clean Database",
+      cancelText: "Cancel",
+      type: "danger",
+      onConfirm: executeResetDatabaseSuperAdminOnly
+    });
   };
 
   // Create Custom Role
@@ -6476,24 +6465,25 @@ export default function SuperAdminConsole({
                       <span>Open Multi-Branch HQ</span>
                     </button>
                   </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
-                    {[
-                      { name: "Main Street Supermarket HQ", code: "BRANCH-HQ-01", city: "New Delhi", staff: 14, status: "ONLINE" },
-                      { name: "Connaught Place Express Outlet", code: "BRANCH-CP-02", city: "New Delhi", staff: 8, status: "ONLINE" },
-                      { name: "South City Hypermarket", code: "BRANCH-SC-03", city: "Gurugram", staff: 22, status: "ONLINE" },
-                      { name: "West Gate Mall Counter", code: "BRANCH-WG-04", city: "Noida", staff: 6, status: "ONLINE" }
-                    ].map((b, i) => (
-                      <div key={i} className="p-4 bg-slate-50 border border-slate-200 rounded-2xl flex items-center justify-between">
-                        <div>
-                          <p className="text-xs font-bold text-slate-900">{b.name}</p>
-                          <p className="text-[10px] text-slate-500 font-mono mt-0.5">{b.code} · {b.city}</p>
+                  {branchNodes.length === 0 ? (
+                    <div className="p-6 bg-slate-50 border border-slate-200 rounded-2xl text-center text-xs text-slate-500">
+                      No branches provisioned yet. Onboard a client or open Multi-Branch HQ to add branches.
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
+                      {branchNodes.map((b, i) => (
+                        <div key={i} className="p-4 bg-slate-50 border border-slate-200 rounded-2xl flex items-center justify-between">
+                          <div>
+                            <p className="text-xs font-bold text-slate-900">{b.name}</p>
+                            <p className="text-[10px] text-slate-500 font-mono mt-0.5">{b.code} · {b.city}</p>
+                          </div>
+                          <span className="text-[9px] font-mono px-2 py-0.5 rounded font-bold bg-emerald-100 text-emerald-800">
+                            {b.status}
+                          </span>
                         </div>
-                        <span className="text-[9px] font-mono px-2 py-0.5 rounded font-bold bg-emerald-100 text-emerald-800">
-                          {b.status}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -6501,20 +6491,8 @@ export default function SuperAdminConsole({
               {activeSystemSettingsSubTab === "categories" && (
                 <div className="space-y-4 max-w-3xl">
                   <h3 className="text-sm font-bold text-slate-900">Product Categories & Tax Classifications</h3>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                    {[
-                      { name: "Dairy & Eggs", tax: "5% GST", items: 42 },
-                      { name: "Beverages & Drinks", tax: "18% GST", items: 68 },
-                      { name: "Bakery & Breads", tax: "5% GST", items: 35 },
-                      { name: "Fresh Produce", tax: "0% GST", items: 84 },
-                      { name: "Snacks & Confectionery", tax: "12% GST", items: 56 },
-                      { name: "Household Essentials", tax: "18% GST", items: 49 }
-                    ].map((c, i) => (
-                      <div key={i} className="p-3 bg-slate-50 border border-slate-200 rounded-xl">
-                        <p className="text-xs font-bold text-slate-800">{c.name}</p>
-                        <p className="text-[10px] text-purple-600 font-mono font-medium mt-0.5">{c.tax} · {c.items} SKU</p>
-                      </div>
-                    ))}
+                  <div className="p-6 bg-slate-50 border border-slate-200 rounded-2xl text-center text-xs text-slate-500">
+                    Categories are created per onboarded client workspace from their Admin Settings panel.
                   </div>
                 </div>
               )}
@@ -6523,23 +6501,8 @@ export default function SuperAdminConsole({
               {activeSystemSettingsSubTab === "suppliers" && (
                 <div className="space-y-4 max-w-3xl">
                   <h3 className="text-sm font-bold text-slate-900">Registered Commercial Vendors & Suppliers</h3>
-                  <div className="space-y-2">
-                    {[
-                      { name: "Amul Dairy Federation Ltd.", phone: "+91 9811223344", category: "Dairy & Milk", terms: "Net 15 days" },
-                      { name: "Britannia Industries Distributors", phone: "+91 9822334455", category: "Bakery & Biscuits", terms: "Net 30 days" },
-                      { name: "Hindustan Unilever Wholesale", phone: "+91 9833445566", category: "Household Goods", terms: "Net 21 days" },
-                      { name: "Metro Cash & Carry Wholesale Hub", phone: "+91 9844556677", category: "General Commodities", terms: "Immediate" }
-                    ].map((s, i) => (
-                      <div key={i} className="p-3 bg-slate-50 border border-slate-200 rounded-xl flex items-center justify-between">
-                        <div>
-                          <p className="text-xs font-bold text-slate-800">{s.name}</p>
-                          <p className="text-[10px] text-slate-500">{s.category} · {s.phone}</p>
-                        </div>
-                        <span className="text-[10px] font-mono text-slate-600 bg-white border border-slate-200 px-2 py-0.5 rounded">
-                          {s.terms}
-                        </span>
-                      </div>
-                    ))}
+                  <div className="p-6 bg-slate-50 border border-slate-200 rounded-2xl text-center text-xs text-slate-500">
+                    Vendors and suppliers are registered dynamically by each onboarded client workspace.
                   </div>
                 </div>
               )}
@@ -6580,33 +6543,239 @@ export default function SuperAdminConsole({
                 </div>
               )}
 
-              {/* Sub-tab 7: DATA BACKUP */}
+              {/* Sub-tab 7: DATA BACKUP & LIVE MYSQL DATABASE */}
               {activeSystemSettingsSubTab === "backup" && (
-                <div className="space-y-5 max-w-3xl">
-                  <div className="p-4 bg-blue-50 text-blue-900 rounded-2xl border border-blue-200 space-y-2">
-                    <div className="flex items-center gap-2">
-                      <Database className="w-5 h-5 text-blue-600 shrink-0" />
-                      <h4 className="font-extrabold text-sm">MySQL Production Database Archive</h4>
+                <div className="space-y-6 max-w-4xl">
+                  {/* Database Master Header Card */}
+                  <div className="bg-gradient-to-r from-slate-900 via-blue-950 to-indigo-950 text-white rounded-2xl p-6 border border-blue-900/40 shadow-xl space-y-4">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-white/10 pb-4">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-xl bg-blue-500/20 border border-blue-400/30 flex items-center justify-center text-blue-400">
+                          <Database className="w-5 h-5" />
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <h4 className="font-extrabold text-base tracking-tight text-white font-sans">MySQL Production Database Console</h4>
+                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-mono font-bold border flex items-center gap-1 ${
+                              dbTestSuccess === true
+                                ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/30"
+                                : dbTestSuccess === false
+                                ? "bg-amber-500/20 text-amber-300 border-amber-500/30"
+                                : "bg-blue-500/20 text-blue-300 border-blue-500/30"
+                            }`}>
+                              <span className={`w-1.5 h-1.5 rounded-full animate-pulse ${
+                                dbTestSuccess === true ? "bg-emerald-400" : dbTestSuccess === false ? "bg-amber-400" : "bg-blue-400"
+                              }`} />
+                              {dbTestSuccess === true
+                                ? "MYSQL LIVE CONNECTED (PRODUCTION)"
+                                : dbMode === "PREVIEW_ISOLATED"
+                                ? "PREVIEW ISOLATED (PRODUCTION SYNC ONLY)"
+                                : dbTestSuccess === false
+                                ? "LIVE MYSQL CONNECTION OFFLINE"
+                                : "MYSQL CREDENTIALS CONFIGURED"}
+                            </span>
+                          </div>
+                          <p className="text-xs text-blue-200/70 font-mono">Database &amp; User: <strong className="text-white">u559264694_expertbilling</strong></p>
+                        </div>
+                      </div>
+
+                      <div className="flex flex-wrap items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={handleTestDatabase}
+                          disabled={isDbTesting}
+                          className="px-3.5 py-2 bg-blue-600/30 hover:bg-blue-600/50 text-blue-200 hover:text-white border border-blue-400/30 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                        >
+                          <RefreshCw className={`w-3.5 h-3.5 ${isDbTesting ? "animate-spin" : ""}`} />
+                          <span>{isDbTesting ? "Testing..." : "Test Connection"}</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleSyncEveryDetailToDatabase}
+                          disabled={isDbSyncing}
+                          className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold transition-all shadow-md flex items-center gap-1.5 cursor-pointer disabled:opacity-50 active:scale-95"
+                        >
+                          <Zap className={`w-3.5 h-3.5 ${isDbSyncing ? "animate-bounce" : ""}`} />
+                          <span>{isDbSyncing ? "Syncing Every Detail..." : "Sync Every Detail to Database"}</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleRequestResetSuperAdminOnly}
+                          disabled={isDbResetting}
+                          className="px-3.5 py-2 bg-rose-600/80 hover:bg-rose-600 text-white rounded-xl text-xs font-bold transition-all shadow-md flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                          <span>{isDbResetting ? "Cleaning..." : "Clean DB (Super Admin Only)"}</span>
+                        </button>
+                      </div>
                     </div>
-                    <p className="text-xs text-blue-800/80 leading-relaxed">
-                      Download the production database schema and pre-seeded dataset for database <code className="font-mono bg-blue-100 px-1 rounded">u559264694_expertbilling</code>.
-                    </p>
-                    <div className="pt-2 flex flex-wrap gap-2.5">
+
+                    {/* Database Credentials Table */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                      <div className="bg-white/5 border border-white/10 rounded-xl p-3">
+                        <span className="text-[10px] text-blue-200/60 uppercase font-mono font-bold block mb-1">Database Name</span>
+                        <div className="flex items-center justify-between">
+                          <code className="text-xs font-mono font-bold text-white">u559264694_expertbilling</code>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              navigator.clipboard.writeText("u559264694_expertbilling");
+                              triggerNotification("Copied Database Name to clipboard!", "success");
+                            }}
+                            className="text-blue-300 hover:text-white p-1"
+                          >
+                            <Copy className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="bg-white/5 border border-white/10 rounded-xl p-3">
+                        <span className="text-[10px] text-blue-200/60 uppercase font-mono font-bold block mb-1">Database User</span>
+                        <div className="flex items-center justify-between">
+                          <code className="text-xs font-mono font-bold text-emerald-300">u559264694_expertbilling</code>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              navigator.clipboard.writeText("u559264694_expertbilling");
+                              triggerNotification("Copied Database User to clipboard!", "success");
+                            }}
+                            className="text-blue-300 hover:text-white p-1"
+                          >
+                            <Copy className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="bg-white/5 border border-white/10 rounded-xl p-3">
+                        <span className="text-[10px] text-blue-200/60 uppercase font-mono font-bold block mb-1">Database Password</span>
+                        <div className="flex items-center justify-between">
+                          <code className="text-xs font-mono font-bold text-amber-300">
+                            {showDbPassword ? "Billing2026" : "••••••••••"}
+                          </code>
+                          <div className="flex items-center gap-1">
+                            <button
+                              type="button"
+                              onClick={() => setShowDbPassword(!showDbPassword)}
+                              className="text-blue-300 hover:text-white p-1"
+                            >
+                              {showDbPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                navigator.clipboard.writeText("Billing2026");
+                                triggerNotification("Copied Database Password 'Billing2026' to clipboard!", "success");
+                              }}
+                              className="text-blue-300 hover:text-white p-1"
+                            >
+                              <Copy className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="bg-white/5 border border-white/10 rounded-xl p-3">
+                        <span className="text-[10px] text-blue-200/60 uppercase font-mono font-bold block mb-1">Host &amp; Port</span>
+                        <div className="flex items-center justify-between">
+                          <code className="text-xs font-mono font-bold text-slate-200">145.79.209.120:3306</code>
+                          <span className="text-[9px] text-blue-300/80 font-mono">SSH: 65002</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Live Test Diagnostic Result Banner */}
+                    {dbTestMessage && (
+                      <div className={`p-3 rounded-xl border text-xs font-mono flex items-start gap-2.5 ${
+                        dbTestSuccess 
+                          ? "bg-emerald-950/60 border-emerald-500/40 text-emerald-200" 
+                          : "bg-amber-950/60 border-amber-500/40 text-amber-200"
+                      }`}>
+                        {dbTestSuccess ? (
+                          <CheckCircle className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+                        ) : (
+                          <AlertCircle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                        )}
+                        <div className="space-y-1">
+                          <p className="font-bold">{dbTestMessage}</p>
+                          {dbErrorDetail && <p className="text-[11px] text-amber-300/90">Detail: {dbErrorDetail}</p>}
+                          {dbRecommendation && <p className="text-[11px] text-blue-200/90">{dbRecommendation}</p>}
+                          <p className="text-[10px] text-blue-300/70">Target Endpoint: {dbHostLabel} | Database: u559264694_expertbilling | User: u559264694_expertbilling</p>
+                        </div>
+                      </div>
+                    )}
+
+                    {lastSyncTimestamp && (
+                      <div className="flex items-center gap-2 text-xs font-mono text-emerald-300 bg-emerald-950/40 border border-emerald-500/30 p-2.5 rounded-xl">
+                        <Check className="w-4 h-4 text-emerald-400 shrink-0" />
+                        <span>Last synchronized at <strong>{lastSyncTimestamp}</strong>: All tenants ({tenantsList.length}), catalog products, invoices, and ledgers committed.</span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Export & Offline Snapshot Actions */}
+                  <div className="p-5 bg-white border border-slate-200/80 rounded-2xl shadow-sm space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h4 className="font-bold text-slate-900 text-sm">Production MySQL Archives &amp; Offline Dumps</h4>
+                        <p className="text-xs text-slate-500">Export the live SQL DDL schema or create a sovereign logical JSON state backup.</p>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-wrap gap-2.5 pt-1">
                       <a
                         href="/expertbilling_production.sql"
                         download="expertbilling_production.sql"
-                        className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl shadow-md flex items-center gap-2 transition-all cursor-pointer"
+                        className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl shadow-sm flex items-center gap-2 transition-all cursor-pointer"
                       >
                         <Download className="w-4 h-4" />
                         <span>Download Production MySQL Dump (.sql)</span>
                       </a>
+
                       <button
                         type="button"
                         onClick={handleExportBackup}
-                        className="px-4 py-2 bg-slate-900 hover:bg-black text-white font-bold text-xs rounded-xl shadow-md flex items-center gap-2 transition-all cursor-pointer"
+                        className="px-4 py-2.5 bg-slate-900 hover:bg-black text-white font-bold text-xs rounded-xl shadow-sm flex items-center gap-2 transition-all cursor-pointer"
                       >
                         <DatabaseBackup className="w-4 h-4" />
                         <span>Create Local JSON Snapshot</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const configStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify({
+                            development: {
+                              host: "145.79.209.120",
+                              port: 3306,
+                              user: "u559264694_expertbilling",
+                              password: "Billing2026",
+                              database: "u559264694_expertbilling"
+                            },
+                            production: {
+                              host: "localhost",
+                              port: 3306,
+                              user: "u559264694_expertbilling",
+                              password: "Billing2026",
+                              database: "u559264694_expertbilling"
+                            },
+                            sshTunnel: {
+                              host: "145.79.209.120",
+                              port: 65002,
+                              username: "u559264694"
+                            }
+                          }, null, 2));
+                          const anchor = document.createElement("a");
+                          anchor.setAttribute("href", configStr);
+                          anchor.setAttribute("download", "db_config.json");
+                          document.body.appendChild(anchor);
+                          anchor.click();
+                          anchor.remove();
+                          triggerNotification("Downloaded db_config.json successfully!", "success");
+                        }}
+                        className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-xs rounded-xl border border-slate-200 flex items-center gap-2 transition-all cursor-pointer"
+                      >
+                        <FileText className="w-4 h-4 text-slate-600" />
+                        <span>Download db_config.json</span>
                       </button>
                     </div>
                   </div>
@@ -6991,6 +7160,17 @@ export default function SuperAdminConsole({
         {/* Sub-tab 9: CLIENT TYPOGRAPHY & FONT CUSTOMIZATION STUDIO */}
         {activeSystemSettingsSubTab === "typography" && (() => {
           const selectedTenant = tenantsList.find(t => t.id === typographyTenantId) || tenantsList[0];
+          if (!selectedTenant) {
+            return (
+              <div className="p-8 bg-slate-50 border border-slate-200 rounded-2xl text-center space-y-2">
+                <Type className="w-8 h-8 text-purple-500 mx-auto" />
+                <h3 className="text-sm font-extrabold text-slate-900">No Clients Onboarded Yet</h3>
+                <p className="text-xs text-slate-500 max-w-md mx-auto">
+                  Onboard a client first from Client Onboarding, then customize their workspace font family and scaling here.
+                </p>
+              </div>
+            );
+          }
           return (
             <div className="space-y-6">
               {/* Header with Client Picker */}
@@ -7282,6 +7462,172 @@ export default function SuperAdminConsole({
                 <DatabaseBackup className="w-4 h-4" />
                 <span>Create Cluster Snapshot</span>
               </button>
+            </div>
+
+            {/* Live MySQL Database Cluster Sync & Configuration Hub */}
+            <div className="bg-gradient-to-r from-slate-900 via-blue-950 to-indigo-950 text-white rounded-2xl p-6 border border-blue-900/40 shadow-xl space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-white/10 pb-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-blue-500/20 border border-blue-400/30 flex items-center justify-center text-blue-400">
+                    <Database className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h4 className="font-extrabold text-base tracking-tight text-white font-sans">MySQL Production Database Hub</h4>
+                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-mono font-bold border flex items-center gap-1 ${
+                        dbTestSuccess === true
+                          ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/30"
+                          : dbTestSuccess === false
+                          ? "bg-amber-500/20 text-amber-300 border-amber-500/30"
+                          : "bg-blue-500/20 text-blue-300 border-blue-500/30"
+                      }`}>
+                        <span className={`w-1.5 h-1.5 rounded-full animate-pulse ${
+                          dbTestSuccess === true ? "bg-emerald-400" : dbTestSuccess === false ? "bg-amber-400" : "bg-blue-400"
+                        }`} />
+                        {dbTestSuccess === true
+                          ? "MYSQL LIVE CONNECTED (PRODUCTION)"
+                          : dbMode === "PREVIEW_ISOLATED"
+                          ? "PREVIEW ISOLATED (PRODUCTION SYNC ONLY)"
+                          : dbTestSuccess === false
+                          ? "LIVE MYSQL CONNECTION OFFLINE"
+                          : "DATABASE CONFIGURED"}
+                      </span>
+                    </div>
+                    <p className="text-xs text-blue-200/70 font-mono">User: <strong className="text-white">u559264694_expertbilling</strong> • Database: <strong className="text-white">u559264694_expertbilling</strong></p>
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handleTestDatabase}
+                    disabled={isDbTesting}
+                    className="px-3.5 py-2 bg-blue-600/30 hover:bg-blue-600/50 text-blue-200 hover:text-white border border-blue-400/30 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                  >
+                    <RefreshCw className={`w-3.5 h-3.5 ${isDbTesting ? "animate-spin" : ""}`} />
+                    <span>{isDbTesting ? "Testing..." : "Test Connection"}</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleSyncEveryDetailToDatabase}
+                    disabled={isDbSyncing}
+                    className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold transition-all shadow-md flex items-center gap-1.5 cursor-pointer disabled:opacity-50 active:scale-95"
+                  >
+                    <Zap className={`w-3.5 h-3.5 ${isDbSyncing ? "animate-bounce" : ""}`} />
+                    <span>{isDbSyncing ? "Syncing Every Detail..." : "Sync Every Detail to Database"}</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleRequestResetSuperAdminOnly}
+                    disabled={isDbResetting}
+                    className="px-3.5 py-2 bg-rose-600/80 hover:bg-rose-600 text-white rounded-xl text-xs font-bold transition-all shadow-md flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>{isDbResetting ? "Cleaning..." : "Clean DB (Super Admin Only)"}</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Database Credentials Grid */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                <div className="bg-white/5 border border-white/10 rounded-xl p-3">
+                  <span className="text-[10px] text-blue-200/60 uppercase font-mono font-bold block mb-1">Database Name</span>
+                  <div className="flex items-center justify-between">
+                    <code className="text-xs font-mono font-bold text-white">u559264694_expertbilling</code>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        navigator.clipboard.writeText("u559264694_expertbilling");
+                        triggerNotification("Copied Database Name to clipboard!", "success");
+                      }}
+                      className="text-blue-300 hover:text-white p-1"
+                    >
+                      <Copy className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+
+                <div className="bg-white/5 border border-white/10 rounded-xl p-3">
+                  <span className="text-[10px] text-blue-200/60 uppercase font-mono font-bold block mb-1">Database User</span>
+                  <div className="flex items-center justify-between">
+                    <code className="text-xs font-mono font-bold text-emerald-300">u559264694_expertbilling</code>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        navigator.clipboard.writeText("u559264694_expertbilling");
+                        triggerNotification("Copied Database User to clipboard!", "success");
+                      }}
+                      className="text-blue-300 hover:text-white p-1"
+                    >
+                      <Copy className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+
+                <div className="bg-white/5 border border-white/10 rounded-xl p-3">
+                  <span className="text-[10px] text-blue-200/60 uppercase font-mono font-bold block mb-1">Database Password</span>
+                  <div className="flex items-center justify-between">
+                    <code className="text-xs font-mono font-bold text-amber-300">
+                      {showDbPassword ? "Billing2026" : "••••••••••"}
+                    </code>
+                    <div className="flex items-center gap-1">
+                      <button
+                        type="button"
+                        onClick={() => setShowDbPassword(!showDbPassword)}
+                        className="text-blue-300 hover:text-white p-1"
+                      >
+                        {showDbPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          navigator.clipboard.writeText("Billing2026");
+                          triggerNotification("Copied Database Password 'Billing2026' to clipboard!", "success");
+                        }}
+                        className="text-blue-300 hover:text-white p-1"
+                      >
+                        <Copy className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-white/5 border border-white/10 rounded-xl p-3">
+                  <span className="text-[10px] text-blue-200/60 uppercase font-mono font-bold block mb-1">Host &amp; Port</span>
+                  <div className="flex items-center justify-between">
+                    <code className="text-xs font-mono font-bold text-slate-200">145.79.209.120:3306</code>
+                    <span className="text-[9px] text-blue-300/80 font-mono">SSH: 65002</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Live Test Result Banner */}
+              {dbTestMessage && (
+                <div className={`p-3 rounded-xl border text-xs font-mono flex items-start gap-2.5 ${
+                  dbTestSuccess 
+                    ? "bg-emerald-950/60 border-emerald-500/40 text-emerald-200" 
+                    : "bg-amber-950/60 border-amber-500/40 text-amber-200"
+                }`}>
+                  {dbTestSuccess ? (
+                    <CheckCircle className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+                  ) : (
+                    <AlertCircle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                  )}
+                  <div className="space-y-1">
+                    <p className="font-bold">{dbTestMessage}</p>
+                    {dbErrorDetail && <p className="text-[11px] text-amber-300/90">Detail: {dbErrorDetail}</p>}
+                    {dbRecommendation && <p className="text-[11px] text-blue-200/90">{dbRecommendation}</p>}
+                    <p className="text-[10px] text-blue-300/70">Target Endpoint: {dbHostLabel} | Database: u559264694_expertbilling | User: u559264694_expertbilling</p>
+                  </div>
+                </div>
+              )}
+
+              {lastSyncTimestamp && (
+                <div className="flex items-center gap-2 text-xs font-mono text-emerald-300 bg-emerald-950/40 border border-emerald-500/30 p-2.5 rounded-xl">
+                  <Check className="w-4 h-4 text-emerald-400 shrink-0" />
+                  <span>Last synchronized at <strong>{lastSyncTimestamp}</strong>: All tenants ({tenantsList.length}), catalog products, invoices, and ledgers committed.</span>
+                </div>
+              )}
             </div>
 
             <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
@@ -9386,6 +9732,7 @@ export default function SuperAdminConsole({
       {/* QUICK CLIENT TYPOGRAPHY CUSTOMIZATION MODAL */}
       {showTypographyModal && (() => {
         const modalTenant = tenantsList.find(t => t.id === typographyTenantId) || tenantsList[0];
+        if (!modalTenant) return null;
         return (
           <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fadeIn">
             <div className="bg-white text-slate-800 w-full max-w-2xl rounded-3xl overflow-hidden shadow-2xl border border-slate-200 flex flex-col max-h-[90vh]">

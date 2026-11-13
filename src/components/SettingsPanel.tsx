@@ -7,7 +7,7 @@ import {
   Sliders, Briefcase, Package, Clock, Plug, Layout, Zap, Percent, Cpu, Laptop, ChevronRight, Receipt, DollarSign,
   Upload, Image as ImageIcon, Building, RotateCcw, Camera, Sparkles, Tag, HardDrive, FileCode, MapPin, Building2
 } from "lucide-react";
-import { UserRole, normalizeUserRole, Tenant, Product, Customer, Invoice, Expense, Supplier, StoreBranch } from "../types";
+import { UserRole, normalizeUserRole, Tenant, Product, Customer, Invoice, Expense, Supplier, StoreBranch, LabelPrinterConfig } from "../types";
 import { LABEL_SIZE_PRESETS, printThermalLabelsDirect } from "../utils/labelPrinterEngine";
 
 export interface AppSettings {
@@ -29,6 +29,13 @@ interface SettingsPanelProps {
   onUpdateTenant: (updatedTenant: Tenant) => void;
   opsSettings?: AppSettings;
   onUpdateOpsSettings?: (settings: AppSettings) => void;
+  labelPrinterConfig?: LabelPrinterConfig;
+  onUpdateLabelPrinterConfig?: (config: LabelPrinterConfig) => void;
+  products?: Product[];
+  customers?: Customer[];
+  invoices?: Invoice[];
+  expenses?: Expense[];
+  onClearDatabase?: () => Promise<void>;
   triggerNotification: (msg: string, type: "success" | "warning") => void;
   productCategories: string[];
   onUpdateProductCategories: (categories: string[]) => void;
@@ -54,6 +61,13 @@ export default function SettingsPanel({
   onUpdateTenant,
   opsSettings: propOpsSettings,
   onUpdateOpsSettings,
+  labelPrinterConfig: propLabelPrinterConfig,
+  onUpdateLabelPrinterConfig,
+  products: propProducts = [],
+  customers: propCustomers = [],
+  invoices: propInvoices = [],
+  expenses: propExpenses = [],
+  onClearDatabase,
   triggerNotification,
   productCategories,
   onUpdateProductCategories,
@@ -265,15 +279,9 @@ export default function SettingsPanel({
     triggerNotification(`Successfully updated category bracket to "${catToSave}"!`, "success");
   };
 
-  // --- Dedicated Label Printer Hardware State ---
-  const [labelPrinterConfig, setLabelPrinterConfig] = useState(() => {
-    const saved = localStorage.getItem("expert_pos_label_printer_settings");
-    if (saved) {
-      try {
-        return JSON.parse(saved);
-      } catch (e) {}
-    }
-    return {
+  // --- Dedicated Label Printer Hardware State (persisted in MySQL) ---
+  const [labelPrinterConfig, setLabelPrinterConfig] = useState<LabelPrinterConfig>(() => (
+    propLabelPrinterConfig || {
       printerModel: "zebra-zpl",
       printerName: "Zebra ZD220 Direct Thermal Label Printer",
       presetId: "roll-50x25",
@@ -284,13 +292,19 @@ export default function SettingsPanel({
       darkness: 10,
       gapMm: 3,
       sensorType: "gap"
-    };
-  });
+    }
+  ));
+
+  useEffect(() => {
+    if (propLabelPrinterConfig) {
+      setLabelPrinterConfig(propLabelPrinterConfig);
+    }
+  }, [propLabelPrinterConfig]);
 
   const handleSaveLabelPrinterConfig = (e: React.FormEvent) => {
     e.preventDefault();
-    localStorage.setItem("expert_pos_label_printer_settings", JSON.stringify(labelPrinterConfig));
-    triggerNotification("Label printer hardware settings saved successfully!", "success");
+    onUpdateLabelPrinterConfig?.(labelPrinterConfig);
+    triggerNotification("Label printer hardware settings saved to database successfully!", "success");
   };
 
   const handleTestPrintFromSettings = () => {
@@ -464,24 +478,15 @@ export default function SettingsPanel({
   const isAdmin = normalizeUserRole(currentRole) === UserRole.ADMIN || String(currentRole).toUpperCase().includes("ADMIN") || currentUserEmail.toLowerCase().includes("admin");
 
   // --- POS Operational state variables ---
-  const [opsSettings, setOpsSettings] = useState<AppSettings>(() => {
-    if (propOpsSettings) return propOpsSettings;
-    const saved = localStorage.getItem("expert_aid_terminal_settings");
-    if (saved) {
-      try {
-        return JSON.parse(saved);
-      } catch (e) {
-        // Fallback default
-      }
-    }
-    return {
+  const [opsSettings, setOpsSettings] = useState<AppSettings>(() => (
+    propOpsSettings || {
       autoPrintReceipt: true,
       enableSound: true,
       receiptHeader: "OFFICIAL RETAIL CASH INVOICE",
       receiptFooter: "Thank you for shopping! Powered by Expert POS SaaS",
       maxDiscountAllowed: 25
-    };
-  });
+    }
+  ));
 
   useEffect(() => {
     if (propOpsSettings) {
@@ -489,39 +494,22 @@ export default function SettingsPanel({
     }
   }, [propOpsSettings]);
 
-  // Database stats state
-  const [stats, setStats] = useState({
-    products: 0,
-    customers: 0,
-    invoices: 0,
-    expenses: 0,
-    storageSizeKb: 0
-  });
-
-  useEffect(() => {
-    // Load local storage item counts
-    const productsSaved = localStorage.getItem("expert_aid_products") || "[]";
-    const customersSaved = localStorage.getItem("expert_aid_customers") || "[]";
-    const invoicesSaved = localStorage.getItem("expert_aid_invoices") || "[]";
-    const expensesSaved = localStorage.getItem("expert_aid_expenses") || "[]";
-
-    let size = 0;
+  // Live Database stats state (computed from MySQL-backed props)
+  const stats = useMemo(() => {
+    let sizeKb = 0;
     try {
-      size = parseFloat(((JSON.stringify(localStorage).length) / 1024).toFixed(2));
+      sizeKb = parseFloat(
+        (JSON.stringify({ products: propProducts, customers: propCustomers, invoices: propInvoices, expenses: propExpenses }).length / 1024).toFixed(2)
+      );
     } catch (_) {}
-
-    try {
-      setStats({
-        products: JSON.parse(productsSaved).length,
-        customers: JSON.parse(customersSaved).length,
-        invoices: JSON.parse(invoicesSaved).length,
-        expenses: JSON.parse(expensesSaved).length,
-        storageSizeKb: size
-      });
-    } catch (e) {
-      console.error(e);
-    }
-  }, []);
+    return {
+      products: propProducts.length,
+      customers: propCustomers.length,
+      invoices: propInvoices.length,
+      expenses: propExpenses.length,
+      storageSizeKb: sizeKb
+    };
+  }, [propProducts, propCustomers, propInvoices, propExpenses]);
 
   // Sync profile details when user changes
   useEffect(() => {
@@ -599,11 +587,10 @@ export default function SettingsPanel({
     });
 
     onUpdateCredentials(updatedList);
-    localStorage.setItem("expert_aid_credentials", JSON.stringify(updatedList));
     setSelectedProfileEmail(profEmail.trim());
     setProfEmailUnlocked(false);
 
-    triggerNotification(`Security credentials & profile for "${profName}" updated successfully!`, "success");
+    triggerNotification(`Security credentials & profile for "${profName}" updated in database!`, "success");
   };
 
   const handleSaveTenant = (e?: React.FormEvent) => {
@@ -691,56 +678,46 @@ export default function SettingsPanel({
 
   const handleSavePOSSettings = (e: React.FormEvent) => {
     e.preventDefault();
-    localStorage.setItem("expert_aid_terminal_settings", JSON.stringify(opsSettings));
     onUpdateOpsSettings?.(opsSettings);
-    triggerNotification("Point of Sale (POS) operational terminal preferences saved!", "success");
-    
-    // Broadcast setting changes for receipt rendering and sound configs
+    triggerNotification("Point of Sale (POS) operational terminal preferences saved to database!", "success");
     window.dispatchEvent(new Event("expert_aid_settings_updated"));
   };
 
-  const handleExportBackup = () => {
-    const backupData: Record<string, any> = {};
-    for (let i = 0; i < localStorage.length; i++) {
-      const key = localStorage.key(i);
-      if (key && key.startsWith("expert_aid_")) {
-        try {
-          backupData[key] = localStorage.getItem(key);
-        } catch (_) {}
-      }
+  const handleExportBackup = async () => {
+    try {
+      const res = await fetch("/api/database/export?format=json");
+      const data = await res.json();
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `expertpos_${activeTenant.subdomain}_mysql_backup.json`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      triggerNotification("Live MySQL database snapshot downloaded!", "success");
+    } catch (err) {
+      triggerNotification("Failed to export live database snapshot.", "warning");
     }
-
-    const blob = new Blob([JSON.stringify(backupData, null, 2)], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `expertpos_${activeTenant.subdomain}_backup.json`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
-    triggerNotification("Database backup file downloaded! Keep this safe for secure rollbacks.", "success");
   };
 
   const handleClearSystemData = () => {
     setShowClearConfirm(true);
   };
 
-  const executeClearSystemData = () => {
-    // Keys to remove
-    const keysToRemove = [
-      "expert_aid_products",
-      "expert_aid_customers",
-      "expert_aid_invoices",
-      "expert_aid_expenses",
-      "expert_aid_adjustments"
-    ];
-    keysToRemove.forEach(k => localStorage.removeItem(k));
-
-    triggerNotification("All transactions, CRM files, and products cleared. Reloading core values...", "success");
-    setTimeout(() => {
-      window.location.reload();
-    }, 1000);
+  const executeClearSystemData = async () => {
+    try {
+      if (onClearDatabase) {
+        await onClearDatabase();
+      } else {
+        await fetch("/api/database/clear", { method: "POST" });
+      }
+      setShowClearConfirm(false);
+      triggerNotification("All operational database records cleared successfully.", "success");
+    } catch (err) {
+      triggerNotification("Failed to clear database records.", "warning");
+    }
   };
 
   return (
@@ -2311,17 +2288,17 @@ export default function SettingsPanel({
 
               <div className="flex gap-2 text-[10px] text-slate-600 font-medium items-center">
                 <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 shrink-0 animate-pulse"></span>
-                <span>Local Sync Ledger Connected and Active (Normal State)</span>
+                <span>MySQL Database Engine Bound (u559264694_expertbilling)</span>
               </div>
             </div>
 
             {/* Backups trigger */}
             <div className="bg-slate-50 rounded-2xl border border-slate-200 p-5 space-y-4">
               <h3 className="text-xs font-black text-rose-700 uppercase tracking-widest flex items-center gap-1.5 font-mono">
-                🛡️ Backup &amp; Rollbacks
+                🛡️ MySQL Backup &amp; Rollbacks
               </h3>
               <p className="text-[11px] text-slate-600 leading-relaxed">
-                Expert POS operates with zero-knowledge local client-side encryption. Secure exports pack full inventory sheets, sales journals, and custom registers to safeguard against loss.
+                All products, customers, invoices, branches, and store settings are stored directly in your MySQL database (`u559264694_expertbilling`) with zero browser local storage.
               </p>
 
               <div className="flex flex-col gap-2 pt-1.5">
@@ -2338,7 +2315,7 @@ export default function SettingsPanel({
                   onClick={handleExportBackup}
                   className="w-full bg-white hover:bg-slate-50 text-slate-800 border border-slate-300 font-bold text-xs py-2 px-4 rounded-xl transition-all flex items-center justify-center gap-2 cursor-pointer shadow-2xs"
                 >
-                  📥 Export Database Backup (JSON)
+                  📥 Export Live MySQL Snapshot (JSON)
                 </button>
 
                 <button
@@ -2346,7 +2323,7 @@ export default function SettingsPanel({
                   onClick={handleClearSystemData}
                   className="w-full bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 font-bold text-xs py-2 px-4 rounded-xl transition-all flex items-center justify-center gap-2 cursor-pointer"
                 >
-                  <Trash2 className="w-3.5 h-3.5" /> Purge Cache Records
+                  <Trash2 className="w-3.5 h-3.5" /> Purge Operational DB Records
                 </button>
               </div>
             </div>

@@ -3,731 +3,407 @@ import path from "path";
 import fs from "fs";
 import dotenv from "dotenv";
 import { createServer as createViteServer } from "vite";
-import type { MeasurementUnit as TMeasurementUnit, PaymentMode as TPaymentMode, Product, Supplier, Customer, Invoice, StoreBranch, Expense, CashSession, StockAdjustment, StockTransfer } from "./src/types.ts";
-
-const MeasurementUnit = {
-  KG: "KG" as TMeasurementUnit,
-  GRAM: "Gram" as TMeasurementUnit,
-  LITRE: "Litre" as TMeasurementUnit,
-  LITER: "Liters" as TMeasurementUnit,
-  ML: "Milliliter (mL)" as TMeasurementUnit,
-  PIECE: "Pieces" as TMeasurementUnit,
-  PACKET: "Packets" as TMeasurementUnit,
-  PACK: "Packs" as TMeasurementUnit,
-  BOX: "Boxes" as TMeasurementUnit,
-};
-
-const PaymentMode = {
-  CASH: "CASH" as TPaymentMode,
-  UPI: "UPI" as TPaymentMode,
-  CARD: "CARD" as TPaymentMode,
-  STORE_CREDIT: "STORE_CREDIT" as TPaymentMode,
-};
+import { mysqlDb } from "./server/mysqlDb.ts";
 
 dotenv.config();
 
 const app = express();
 const PORT: number | string = process.env.PORT || 3000;
 
-app.use(express.json());
+app.use(express.json({ limit: "15mb" }));
 
-// Health check endpoint for hostinger & load balancers
+// Health check endpoint for Hostinger & load balancers
 app.get(["/health", "/api/health"], (_req, res) => {
-  res.status(200).json({ status: "ok", timestamp: new Date().toISOString() });
+  const dbStatus = mysqlDb.getStatus();
+  res.status(200).json({
+    status: "ok",
+    database: dbStatus,
+    timestamp: new Date().toISOString(),
+  });
 });
 
-// Production database dump download route
-app.get(["/api/database/export", "/api/database/download"], (_req, res) => {
+// Production database dump download route (supports both static schema & live JSON snapshot)
+app.get(["/api/database/export", "/api/database/download"], async (req, res) => {
+  const format = String(req.query.format || "sql").toLowerCase();
+  if (format === "json") {
+    try {
+      const state = await mysqlDb.getFullState();
+      res.setHeader("Content-Disposition", `attachment; filename="u559264694_expertbilling_backup_${new Date().toISOString().slice(0, 10)}.json"`);
+      res.setHeader("Content-Type", "application/json");
+      return res.send(JSON.stringify(state, null, 2));
+    } catch (e: any) {
+      return res.status(500).json({ error: e?.message || "Failed to export JSON snapshot" });
+    }
+  }
+
   const filePath = path.join(process.cwd(), "database", "expertbilling_production.sql");
   if (fs.existsSync(filePath)) {
     res.setHeader("Content-Disposition", 'attachment; filename="expertbilling_production.sql"');
     res.setHeader("Content-Type", "application/sql");
     return res.sendFile(filePath);
   }
-  res.status(404).json({ error: "Database file not found" });
+  return res.status(404).json({ error: "Database file not found" });
 });
 
-// Path to low-overhead database file
-const DB_FILE = path.join(process.cwd(), "db.json");
+// Database active configuration & live status endpoint
+app.get("/api/database/config", (_req, res) => {
+  const status = mysqlDb.getStatus();
+  res.json({
+    configured: true,
+    connected: status.connected,
+    mode: status.mode,
+    host: status.host,
+    port: status.port,
+    user: status.user,
+    database: status.database,
+    sshPort: 65002,
+    sshUser: "u559264694",
+    status: status.mode,
+    errorDetail: status.errorDetail,
+    lastSynced: status.lastChecked,
+  });
+});
 
-// Helper structure for our DB state
-interface DbState {
-  products: Product[];
-  suppliers: Supplier[];
-  customers: Customer[];
-  invoices: Invoice[];
-  branches: StoreBranch[];
-  expenses: Expense[];
-  adjustments: StockAdjustment[];
-  cashSessions: CashSession[];
-  transfers: StockTransfer[];
-}
-
-const DEFAULT_SUPPLIERS: Supplier[] = [
-  { id: "S1", name: "Supreme Agro Foods Ltd.", contact: "Rajesh Kumar", phone: "9876543210", email: "sales@supremeagro.com", gstin: "07AAAAA1111A1Z1" },
-  { id: "S2", name: "Apex Retail Supplies", contact: "Lydia Reynolds", phone: "8765432109", email: "orders@apexretail.com", gstin: "08BBBBB2222B2Z2" },
-  { id: "S3", name: "Organica Green Farm Producers", contact: "Sandeep Patil", phone: "7654321098", email: "fresh@organicafarm.org", gstin: "09CCCCC3333C3Z3" },
-  { id: "S4", name: "Zenith Household Brands", contact: "Sarah Jenkins", phone: "6543210987", email: " zenithcontacts@gmail.com", gstin: "10DDDDD4444D4Z4" }
-];
-
-const DEFAULT_BRANCHES: StoreBranch[] = [
-  { id: "B1", name: "Flagship Retail Store", address: "Plot 14, Barakhamba Road, Connaught Place", city: "New Delhi", phone: "+91 9988776655" }
-];
-
-const DEFAULT_PRODUCTS: Product[] = [
-  {
-    id: "PROD-F01",
-    name: "Golden Delicious Apples (Imported)",
-    barcode: "8901031200051",
-    category: "Fresh Fruits & Vegetables",
-    sku: "FRT-APP-GD",
-    purchasePrice: 120,
-    mrp: 200,
-    price: 180,
-    gstRate: 5,
-    unit: MeasurementUnit.KG,
-    unitQuantity: 1,
-    unitLabel: "1 Kg",
-    stock: 75,
-    minStockAlert: 20,
-    batchNumber: "B-APL-05A",
-    expiryDate: "2026-06-15",
-    supplierName: "Organica Green Farm Producers"
-  },
-  {
-    id: "PROD-F02",
-    name: "Organic Cavendish Bananas",
-    barcode: "8901031200068",
-    category: "Fresh Fruits & Vegetables",
-    sku: "FRT-BAN-OC",
-    purchasePrice: 35,
-    mrp: 70,
-    price: 60,
-    gstRate: 0,
-    unit: MeasurementUnit.KG,
-    unitQuantity: 1,
-    unitLabel: "1 Kg",
-    stock: 12, // LOW STOCK DEMO
-    minStockAlert: 25,
-    batchNumber: "B-BAN-08V",
-    expiryDate: "2026-05-28", // EXPIRES VERY SOON
-    supplierName: "Organica Green Farm Producers"
-  },
-  {
-    id: "PROD-D01",
-    name: "Classic Salted Butter 500g",
-    barcode: "8901262010115",
-    category: "Dairy & Eggs",
-    sku: "DRY-BUT-AM",
-    purchasePrice: 210,
-    mrp: 299,
-    price: 260,
-    gstRate: 12,
-    unit: MeasurementUnit.GRAM,
-    unitQuantity: 500,
-    unitLabel: "500 Grams",
-    stock: 48,
-    minStockAlert: 15,
-    batchNumber: "MFT-BUT-C6",
-    expiryDate: "2026-08-10",
-    supplierName: "Supreme Agro Foods Ltd."
-  },
-  {
-    id: "PROD-D02",
-    name: "Full Cream Milk 1L Tetra",
-    barcode: "8901262020213",
-    category: "Dairy & Eggs",
-    sku: "DRY-MLK-FC",
-    purchasePrice: 62,
-    mrp: 85,
-    price: 78,
-    gstRate: 5,
-    unit: MeasurementUnit.LITER,
-    unitQuantity: 1,
-    unitLabel: "1 Liter",
-    stock: 9, // LOW STOCK DEMO
-    minStockAlert: 30,
-    batchNumber: "MFT-MLK-M1",
-    expiryDate: "2026-06-03", // EXPIRES SOON
-    supplierName: "Supreme Agro Foods Ltd."
-  },
-  {
-    id: "PROD-G01",
-    name: "Basmati Premium Rice 5Kg",
-    barcode: "8902511000122",
-    category: "Grains & Grocery",
-    sku: "GRN-BAS-R5",
-    purchasePrice: 480,
-    mrp: 720,
-    price: 650,
-    gstRate: 5,
-    unit: MeasurementUnit.PIECE,
-    unitQuantity: 5,
-    unitLabel: "5 Kg Pack",
-    stock: 120,
-    minStockAlert: 30,
-    batchNumber: "B-BAS-09",
-    expiryDate: "2027-12-31",
-    supplierName: "Apex Retail Supplies"
-  },
-  {
-    id: "PROD-G02",
-    name: "Whole Wheat Atta 10Kg",
-    barcode: "8901725181222",
-    category: "Grains & Grocery",
-    sku: "GRN-ATT-W10",
-    purchasePrice: 320,
-    mrp: 520,
-    price: 440,
-    gstRate: 0,
-    unit: MeasurementUnit.PIECE,
-    unitQuantity: 10,
-    unitLabel: "10 Kg Pack",
-    stock: 85,
-    minStockAlert: 25,
-    batchNumber: "B-ATT-242",
-    expiryDate: "2026-11-20",
-    supplierName: "Apex Retail Supplies"
-  },
-  {
-    id: "PROD-B01",
-    name: "Fizzy Cola Zero Sugar 330ml Can",
-    barcode: "5449000133335",
-    category: "Beverages",
-    sku: "BEV-COL-ZC",
-    purchasePrice: 18,
-    price: 40,
-    gstRate: 18,
-    unit: MeasurementUnit.PIECE,
-    stock: 450,
-    minStockAlert: 100,
-    batchNumber: "B-COL-990",
-    expiryDate: "2026-12-05",
-    supplierName: "Apex Retail Supplies"
-  },
-  {
-    id: "PROD-B02",
-    name: "Premium Roasted Coffee Beans 250g",
-    barcode: "8906044675543",
-    category: "Beverages",
-    sku: "BEV-COF-PR",
-    purchasePrice: 280,
-    price: 499,
-    gstRate: 18,
-    unit: MeasurementUnit.PIECE,
-    stock: 35,
-    minStockAlert: 10,
-    batchNumber: "B-CFB-A1",
-    expiryDate: "2026-05-30", // EXPIRES EXTREMELY SOON
-    supplierName: "Apex Retail Supplies"
-  },
-  {
-    id: "PROD-S01",
-    name: "Crisp Potato Wafers (Classic Salted)",
-    barcode: "8901491101830",
-    category: "Snacks & Sweets",
-    sku: "SNC-POT-CS",
-    purchasePrice: 12,
-    price: 20,
-    gstRate: 18,
-    unit: MeasurementUnit.PIECE,
-    stock: 280,
-    minStockAlert: 50,
-    batchNumber: "B-POT-88",
-    expiryDate: "2026-09-18",
-    supplierName: "Apex Retail Supplies"
-  },
-  {
-    id: "PROD-H01",
-    name: "Multipurpose Glass Cleaner Spray 500ml",
-    barcode: "8901248102322",
-    category: "Household",
-    sku: "HSD-GLS-CL",
-    purchasePrice: 55,
-    price: 95,
-    gstRate: 18,
-    unit: MeasurementUnit.PIECE,
-    stock: 40,
-    minStockAlert: 12,
-    batchNumber: "B-HSD-312",
-    expiryDate: "2028-04-12",
-    supplierName: "Zenith Household Brands"
-  }
-];
-
-const DEFAULT_CUSTOMERS: Customer[] = [
-  { id: "CUST-01", name: "Ananya Sharma", phone: "9810234567", email: "ananya@gmail.com", loyaltyPoints: 485, creditBalance: 120, createdAt: "2026-01-15T12:00:00Z" },
-  { id: "CUST-02", name: "Vikram Malhotra", phone: "9920198754", email: "vikram.m@yahoo.com", loyaltyPoints: 1250, creditBalance: 0, createdAt: "2026-02-10T15:20:00Z" },
-  { id: "CUST-03", name: "Sunita Deshmukh", phone: "9830561234", email: "sunita.d@outlook.com", loyaltyPoints: 180, creditBalance: 500, createdAt: "2026-03-24T09:30:00Z" },
-  { id: "CUST-04", name: "Rahul Verma", phone: "9510111222", email: "rahul@verma.net", loyaltyPoints: 50, creditBalance: 0, createdAt: "2026-05-01T17:45:00Z" }
-];
-
-const DEFAULT_INVOICES: Invoice[] = [
-  {
-    id: "EAS-20260521-1042",
-    date: "2026-05-21",
-    time: "14:24",
-    customerId: "CUST-01",
-    customerName: "Ananya Sharma",
-    customerPhone: "9810234567",
-    items: [
-      { productId: "PROD-F01", name: "Golden Delicious Apples (Imported)", barcode: "8901031200051", price: 180, quantity: 2, unit: MeasurementUnit.KG, gstRate: 5, gstAmount: 18, subtotal: 360 },
-      { productId: "PROD-D01", name: "Classic Salted Butter 500g", barcode: "8901262010115", price: 260, quantity: 1, unit: MeasurementUnit.PIECE, gstRate: 12, gstAmount: 31.2, subtotal: 260 },
-      { productId: "PROD-S01", name: "Crisp Potato Wafers (Classic Salted)", barcode: "8901491101830", price: 20, quantity: 5, unit: MeasurementUnit.PIECE, gstRate: 18, gstAmount: 18, subtotal: 100 }
-    ],
-    subtotal: 720,
-    taxAmount: 67.2,
-    discountPercent: 5,
-    discountAmount: 36,
-    couponCode: "WELCOME5",
-    grandTotal: 684,
-    paymentMode: PaymentMode.UPI,
-    cashierName: "Arundhati Roy",
-    storeBranchId: "B1",
-    status: "PAID"
-  },
-  {
-    id: "EAS-20260521-1899",
-    date: "2026-05-21",
-    time: "18:45",
-    customerId: "CUST-02",
-    customerName: "Vikram Malhotra",
-    customerPhone: "9920198754",
-    items: [
-      { productId: "PROD-G01", name: "Basmati Premium Rice 5Kg", barcode: "8902511000122", price: 650, quantity: 2, unit: MeasurementUnit.PIECE, gstRate: 5, gstAmount: 65, subtotal: 1300 },
-      { productId: "PROD-H01", name: "Multipurpose Glass Cleaner Spray 500ml", barcode: "8901248102322", price: 95, quantity: 1, unit: MeasurementUnit.PIECE, gstRate: 18, gstAmount: 17.1, subtotal: 95 }
-    ],
-    subtotal: 1395,
-    taxAmount: 82.1,
-    discountPercent: 0,
-    discountAmount: 0,
-    grandTotal: 1395,
-    paymentMode: PaymentMode.CARD,
-    cashierName: "Samarjeet Sen",
-    storeBranchId: "B1",
-    status: "PAID"
-  }
-];
-
-const DEFAULT_EXPENSES: Expense[] = [
-  { id: "EXP-01", date: "2026-05-18", category: "Utility (Electricity)", amount: 14500, description: "Monthly warehouse air cooling bill", approvedBy: "Admin", storeBranchId: "B1" },
-  { id: "EXP-02", date: "2026-05-20", category: "Store Branding", amount: 3500, description: "New LED signboards and display posters printing", approvedBy: "Manager B1", storeBranchId: "B1" },
-  { id: "EXP-03", date: "2026-05-21", category: "Logistics", amount: 2400, description: "Supplier freight charges for fresh vegetables delivery", approvedBy: "Store Keeper", storeBranchId: "B1" }
-];
-
-const DEFAULT_ADJUSTMENTS: StockAdjustment[] = [
-  { id: "ADJ-01", date: "2026-05-19", productId: "PROD-F01", productName: "Golden Delicious Apples (Imported)", previousStock: 80, newStock: 75, reason: "Discarded bruised fruits", adjustedBy: "Store Keeper" }
-];
-
-// Read DB state
-function readDb(): DbState {
-  let state: DbState;
-  if (!fs.existsSync(DB_FILE)) {
-    state = {
-      products: DEFAULT_PRODUCTS,
-      suppliers: DEFAULT_SUPPLIERS,
-      customers: DEFAULT_CUSTOMERS,
-      invoices: DEFAULT_INVOICES,
-      branches: DEFAULT_BRANCHES,
-      expenses: DEFAULT_EXPENSES,
-      adjustments: DEFAULT_ADJUSTMENTS,
-      cashSessions: [],
-      transfers: []
-    };
-    fs.writeFileSync(DB_FILE, JSON.stringify(state, null, 2), "utf8");
-  } else {
-    try {
-      const data = fs.readFileSync(DB_FILE, "utf8");
-      state = JSON.parse(data);
-    } catch (error) {
-      console.error("Error reading database file, returning default", error);
-      state = {
-        products: DEFAULT_PRODUCTS,
-        suppliers: DEFAULT_SUPPLIERS,
-        customers: DEFAULT_CUSTOMERS,
-        invoices: DEFAULT_INVOICES,
-        branches: DEFAULT_BRANCHES,
-        expenses: DEFAULT_EXPENSES,
-        adjustments: DEFAULT_ADJUSTMENTS,
-        cashSessions: [],
-        transfers: []
-      };
-    }
-  }
-
-  // Ensure transfers array is initialised
-  if (!state.transfers) {
-    state.transfers = [];
-  }
-
-  // Ensure branches array is initialised
-  if (!state.branches || state.branches.length === 0) {
-    state.branches = DEFAULT_BRANCHES;
-  }
-
-  // Normalize and seed branchStocks for each product to guarantee branch-wise isolated inventory exists cleanly!
-  if (state.products) {
-    state.products.forEach((p) => {
-      if (!p.branchStocks) {
-        p.branchStocks = {};
-      }
-      state.branches.forEach((b) => {
-        if (p.branchStocks![b.id] === undefined) {
-          if (b.id === "B1") {
-            p.branchStocks![b.id] = p.stock || 0;
-          } else if (b.id === "B2") {
-            p.branchStocks![b.id] = Math.max(2, Math.floor((p.stock || 50) * 0.6));
-          } else {
-            p.branchStocks![b.id] = Math.max(1, Math.floor((p.stock || 50) * 0.3));
-          }
-        }
-      });
+// Test live connection to MySQL Database cluster (Production only)
+app.post("/api/database/test", async (_req, res) => {
+  const status = await mysqlDb.connectAndInitialize(true);
+  if (status.mode === "PREVIEW_ISOLATED") {
+    return res.json({
+      success: false,
+      connected: false,
+      mode: "PREVIEW_ISOLATED",
+      user: status.user,
+      database: status.database,
+      host: status.host,
+      port: status.port,
+      message: "AI Studio Preview Mode: Live MySQL sync is disabled in preview. Production deployments (NODE_ENV=production) connect to live MySQL automatically.",
+      errorDetail: null,
+      recommendation:
+        "Preview uses isolated in-memory state so preview tests never modify your live Hostinger database. Deploy with npm start (NODE_ENV=production) on Hostinger to connect live.",
+      timestamp: new Date().toISOString(),
     });
   }
 
-  return state;
-}
+  if (status.connected) {
+    return res.json({
+      success: true,
+      connected: true,
+      mode: "MYSQL_LIVE",
+      user: status.user,
+      database: status.database,
+      host: status.host,
+      port: status.port,
+      message: `Connected LIVE to MySQL database '${status.database}' on ${status.host}:${status.port} as user '${status.user}'. All schema tables are verified.`,
+      timestamp: new Date().toISOString(),
+    });
+  }
 
-// Write DB state
-function writeDb(state: DbState) {
+  return res.json({
+    success: false,
+    connected: false,
+    mode: status.mode,
+    user: status.user,
+    database: status.database,
+    host: status.host,
+    port: status.port,
+    message: `MySQL credentials are configured for '${status.user}', but direct connection failed in production.`,
+    errorDetail: status.errorDetail || "Access denied or port 3306 unreachable.",
+    recommendation:
+      "On Hostinger hosting, set DB_HOST=localhost (or import database/schema.sql via phpMyAdmin).",
+    timestamp: new Date().toISOString(),
+  });
+});
+
+// Full state synchronization to MySQL database (Production only; isolated in Preview)
+app.post("/api/database/sync", async (req, res) => {
   try {
-    fs.writeFileSync(DB_FILE, JSON.stringify(state, null, 2), "utf8");
-  } catch (error) {
-    console.error("Error writing database file", error);
-  }
-}
-
-// Ensure database file exists on startup
-readDb();
-
-// API Routes
-
-// Load full database State
-app.get("/api/state", (req, res) => {
-  const db = readDb();
-  res.json(db);
-});
-
-// Update products list (Create / Edit)
-app.post("/api/products", (req, res) => {
-  const db = readDb();
-  const index = db.products.findIndex((p) => p.id === req.body.id);
-  if (index >= 0) {
-    // Edit Product
-    db.products[index] = { ...db.products[index], ...req.body };
-  } else {
-    // Create Product
-    db.products.push(req.body);
-  }
-  writeDb(db);
-  res.json({ success: true, products: db.products });
-});
-
-// Bulk products upload (Create or Edit in batch)
-app.post("/api/products/bulk", (req, res) => {
-  const db = readDb();
-  const list = req.body.products;
-  if (!Array.isArray(list)) {
-    return res.status(400).json({ success: false, error: "Missing or invalid 'products' array field." });
-  }
-
-  let addedCount = 0;
-  let updatedCount = 0;
-
-  for (const item of list) {
-    if (!item.name || !item.sku) continue; // skip invalid records
-
-    // Ensure it has an id
-    const finalId = item.id || `PROD-${Math.floor(10000 + Math.random() * 90000)}`;
-    const finalProduct = {
-      id: finalId,
-      name: item.name,
-      barcode: item.barcode || item.sku || `BC-${Math.floor(1000000 + Math.random() * 9000000)}`,
-      category: item.category || "General",
-      sku: item.sku,
-      purchasePrice: Number(item.purchasePrice || 0),
-      price: Number(item.price || 0),
-      gstRate: Number(item.gstRate || 0),
-      unit: item.unit || "Pieces",
-      stock: Number(item.stock || 0),
-      minStockAlert: Number(item.minStockAlert || 5),
-      batchNumber: item.batchNumber || "B-BULK",
-      expiryDate: item.expiryDate || "2027-12-31",
-      supplierName: item.supplierName || "Apex Retail Supplies",
-      tenantId: item.tenantId || "TENANT-001"
-    };
-
-    const index = db.products.findIndex((p) => p.id === finalId || p.sku === finalProduct.sku);
-    if (index >= 0) {
-      db.products[index] = { ...db.products[index], ...finalProduct };
-      updatedCount++;
-    } else {
-      db.products.push(finalProduct);
-      addedCount++;
-    }
-  }
-
-  writeDb(db);
-  res.json({ success: true, products: db.products, addedCount, updatedCount });
-});
-
-// Delete Product
-app.delete("/api/products/:id", (req, res) => {
-  const db = readDb();
-  db.products = db.products.filter((p) => p.id !== req.params.id);
-  writeDb(db);
-  res.json({ success: true, products: db.products });
-});
-
-// Save Store Adjustment Log and apply new stock limit
-app.post("/api/adjust-stock", (req, res) => {
-  const db = readDb();
-  const { productId, newStock, reason, adjustedBy, branchId } = req.body;
-  const prodIndex = db.products.findIndex((p) => p.id === productId);
-  if (prodIndex >= 0) {
-    const prod = db.products[prodIndex];
-    const bId = branchId || "B1";
-    if (!prod.branchStocks) {
-      prod.branchStocks = {};
-    }
-    db.branches.forEach((b) => {
-      if (prod.branchStocks![b.id] === undefined) {
-        prod.branchStocks![b.id] = b.id === "B1" ? prod.stock : 10;
-      }
+    const { state, status } = await mysqlDb.syncFullPayload(req.body || {});
+    const isPreviewIsolated = status.mode === "PREVIEW_ISOLATED";
+    return res.json({
+      success: status.connected,
+      connected: status.connected,
+      mode: status.mode,
+      user: status.user,
+      database: status.database,
+      host: status.host,
+      port: status.port,
+      errorDetail: status.errorDetail,
+      syncSummary: {
+        tenantsCount: state.tenants.length,
+        credentialsCount: state.credentials.length,
+        categoriesCount: state.categories.length,
+        productsCount: state.products.length,
+        customersCount: state.customers.length,
+        suppliersCount: state.suppliers.length,
+        invoicesCount: state.invoices.length,
+        branchesCount: state.branches.length,
+      },
+      remoteStatus: status.connected
+        ? `Live synchronized to Hostinger MySQL database ${status.database} at ${status.host}:${status.port}`
+        : isPreviewIsolated
+        ? "AI Studio Preview Mode: Live database sync is disabled in preview (Production only). Changes stay isolated in preview memory."
+        : `Production MySQL connection unavailable (${status.errorDetail}). Check DB credentials and DB_HOST=localhost.`,
+      state,
+      timestamp: new Date().toISOString(),
     });
-
-    const oldStock = prod.branchStocks[bId] ?? prod.stock;
-    prod.branchStocks[bId] = Number(newStock);
-    prod.stock = Number(newStock);
-
-    const adjustment: StockAdjustment = {
-      id: `ADJ-${Date.now()}`,
-      date: new Date().toISOString().split("T")[0],
-      productId,
-      productName: prod.name,
-      previousStock: oldStock,
-      newStock: Number(newStock),
-      reason,
-      adjustedBy,
-      storeBranchId: bId
-    };
-    db.adjustments.push(adjustment);
-    writeDb(db);
-    res.json({ success: true, products: db.products, adjustments: db.adjustments });
-  } else {
-    res.status(404).json({ error: "Product not found" });
+  } catch (e: any) {
+    return res.status(500).json({ success: false, error: e?.message || "Sync failed" });
   }
 });
 
-// Save client invoice (billing sales checkout)
-app.post("/api/invoices", (req, res) => {
-  const db = readDb();
-  const invoice: Invoice = req.body;
-  const bId = invoice.storeBranchId || "B1";
-  
-  // Apply changes to stock limits
-  for (const item of invoice.items) {
-    const prodIndex = db.products.findIndex((p) => p.id === item.productId || p.barcode === item.barcode);
-    if (prodIndex >= 0) {
-      const prod = db.products[prodIndex];
-      if (!prod.branchStocks) {
-        prod.branchStocks = {};
-      }
-      db.branches.forEach((b) => {
-        if (prod.branchStocks![b.id] === undefined) {
-          prod.branchStocks![b.id] = b.id === "B1" ? prod.stock : 10;
-        }
-      });
-      const currentBranchStock = prod.branchStocks[bId] ?? prod.stock;
-      prod.branchStocks[bId] = Math.max(0, currentBranchStock - item.quantity);
-      prod.stock = prod.branchStocks[bId]; // Sink fallback
+// Clear operational records from MySQL
+app.post("/api/database/clear", async (_req, res) => {
+  try {
+    const state = await mysqlDb.clearOperationalData();
+    res.json({ success: true, state });
+  } catch (e: any) {
+    res.status(500).json({ success: false, error: e?.message || "Failed to clear database records" });
+  }
+});
+
+// Clean entire database except Super Admin (resets Super Admin password to 123456)
+app.post("/api/database/reset-superadmin-only", async (_req, res) => {
+  try {
+    const state = await mysqlDb.resetToSuperAdminOnly();
+    res.json({ success: true, state });
+  } catch (e: any) {
+    res.status(500).json({ success: false, error: e?.message || "Failed to reset database to Super Admin only" });
+  }
+});
+
+// Load full database state
+app.get("/api/state", async (_req, res) => {
+  try {
+    const state = await mysqlDb.getFullState();
+    res.json(state);
+  } catch (e: any) {
+    res.status(500).json({ error: e?.message || "Failed to fetch state from MySQL" });
+  }
+});
+
+// Products CRUD
+app.post("/api/products", async (req, res) => {
+  try {
+    const products = await mysqlDb.upsertProduct(req.body);
+    res.json({ success: true, products });
+  } catch (e: any) {
+    res.status(500).json({ success: false, error: e?.message || "Failed to save product" });
+  }
+});
+
+app.post("/api/products/bulk", async (req, res) => {
+  try {
+    const list = req.body.products;
+    if (!Array.isArray(list)) {
+      return res.status(400).json({ success: false, error: "Missing or invalid 'products' array field." });
     }
+    const result = await mysqlDb.bulkUpsertProducts(list);
+    res.json({ success: true, ...result });
+  } catch (e: any) {
+    res.status(500).json({ success: false, error: e?.message || "Failed bulk product import" });
   }
+});
 
-  // Award customer loyalty points
-  if (invoice.customerId) {
-    const custIndex = db.customers.findIndex((c) => c.id === invoice.customerId);
-    if (custIndex >= 0) {
-      // 1 point per 10 currency spent
-      const pointsEarned = Math.floor(invoice.grandTotal / 10);
-      db.customers[custIndex].loyaltyPoints += pointsEarned;
+app.delete("/api/products/:id", async (req, res) => {
+  try {
+    const products = await mysqlDb.deleteProduct(req.params.id);
+    res.json({ success: true, products });
+  } catch (e: any) {
+    res.status(500).json({ success: false, error: e?.message || "Failed to delete product" });
+  }
+});
+
+// Stock Adjustment Log
+app.post("/api/adjust-stock", async (req, res) => {
+  try {
+    const result = await mysqlDb.adjustStock(req.body);
+    if (!result) {
+      return res.status(404).json({ error: "Product not found" });
     }
+    res.json({ success: true, ...result });
+  } catch (e: any) {
+    res.status(500).json({ success: false, error: e?.message || "Failed to adjust stock" });
   }
-
-  db.invoices.push(invoice);
-  writeDb(db);
-  res.json({ success: true, state: db });
 });
 
-// GET transfers list
-app.get("/api/transfers", (req, res) => {
-  const db = readDb();
-  res.json({ success: true, transfers: db.transfers || [] });
+// Invoices (Checkout)
+app.post("/api/invoices", async (req, res) => {
+  try {
+    const state = await mysqlDb.createInvoice(req.body);
+    res.json({ success: true, state });
+  } catch (e: any) {
+    res.status(500).json({ success: false, error: e?.message || "Failed to persist invoice" });
+  }
 });
 
-// POST submit a transfer request
-app.post("/api/transfers", (req, res) => {
-  const db = readDb();
-  const { productId, fromBranchId, toBranchId, quantity, requestedBy } = req.body;
-  const prod = db.products.find((p) => p.id === productId);
-  if (!prod) {
-    return res.status(404).json({ success: false, error: "Product not found to transfer." });
+// Stock Transfers
+app.get("/api/transfers", async (_req, res) => {
+  try {
+    const state = await mysqlDb.getFullState();
+    res.json({ success: true, transfers: state.transfers || [] });
+  } catch (e: any) {
+    res.status(500).json({ success: false, error: e?.message || "Failed to load transfers" });
   }
-
-  const newTransfer: StockTransfer = {
-    id: `TR-${Math.floor(1000 + Math.random() * 9000)}`,
-    productId,
-    productName: prod.name,
-    sku: prod.sku,
-    fromBranchId,
-    toBranchId,
-    quantity: Number(quantity),
-    status: "PENDING",
-    requestedBy,
-    requestedDate: new Date().toISOString().split("T")[0]
-  };
-
-  if (!db.transfers) {
-    db.transfers = [];
-  }
-  db.transfers.push(newTransfer);
-  writeDb(db);
-  res.json({ success: true, transfers: db.transfers });
 });
 
-// POST action a transfer request (approve/reject)
-app.post("/api/transfers/:id/action", (req, res) => {
-  const db = readDb();
-  const { action, actionedBy, comments } = req.body; // action: 'APPROVED' or 'REJECTED'
-  const transIndex = db.transfers.findIndex((t) => t.id === req.params.id);
-  
-  if (transIndex < 0) {
-    return res.status(404).json({ success: false, error: "Transfer request not found." });
+app.post("/api/transfers", async (req, res) => {
+  try {
+    const transfers = await mysqlDb.createTransfer(req.body);
+    if (!transfers) {
+      return res.status(404).json({ success: false, error: "Product not found to transfer." });
+    }
+    res.json({ success: true, transfers });
+  } catch (e: any) {
+    res.status(500).json({ success: false, error: e?.message || "Failed to create transfer" });
   }
+});
 
-  const transfer = db.transfers[transIndex];
-  if (transfer.status !== "PENDING") {
-    return res.status(400).json({ success: false, error: "This request has already been processed." });
-  }
-
-  if (action === "APPROVED") {
-    const prodIndex = db.products.findIndex((p) => p.id === transfer.productId);
-    if (prodIndex >= 0) {
-      const prod = db.products[prodIndex];
-      if (!prod.branchStocks) {
-        prod.branchStocks = {};
-      }
-      db.branches.forEach((b) => {
-        if (prod.branchStocks![b.id] === undefined) {
-          prod.branchStocks![b.id] = b.id === "B1" ? prod.stock : 10;
-        }
-      });
-
-      const sourceStock = prod.branchStocks[transfer.fromBranchId] || 0;
-      if (sourceStock < transfer.quantity) {
-        return res.status(400).json({ 
-          success: false, 
-          error: `Insufficient source inventory. Source branch has only ${sourceStock} units, but ${transfer.quantity} requested.` 
-        });
-      }
-
-      // Deduct from source branch, add to destination branch
-      prod.branchStocks[transfer.fromBranchId] = Math.max(0, sourceStock - transfer.quantity);
-      prod.branchStocks[transfer.toBranchId] = (prod.branchStocks[transfer.toBranchId] || 0) + transfer.quantity;
-      prod.stock = prod.branchStocks[transfer.toBranchId]; // local reference sync
-    } else {
+app.post("/api/transfers/:id/action", async (req, res) => {
+  try {
+    const result = await mysqlDb.actionTransfer(req.params.id, req.body);
+    if (result.error === "NOT_FOUND") {
+      return res.status(404).json({ success: false, error: "Transfer request not found." });
+    }
+    if (result.error === "ALREADY_PROCESSED") {
+      return res.status(400).json({ success: false, error: "This request has already been processed." });
+    }
+    if (result.error === "PRODUCT_NOT_FOUND") {
       return res.status(404).json({ success: false, error: "Target product no longer exists in catalogue." });
     }
+    if (result.error) {
+      return res.status(400).json({ success: false, error: result.error });
+    }
+    res.json({ success: true, transfers: result.transfers, products: result.products });
+  } catch (e: any) {
+    res.status(500).json({ success: false, error: e?.message || "Failed to process transfer" });
   }
-
-  transfer.status = action; // APPROVED or REJECTED
-  transfer.actionedBy = actionedBy;
-  transfer.actionedDate = new Date().toISOString().split("T")[0];
-  transfer.comments = comments || "";
-
-  writeDb(db);
-  res.json({ success: true, transfers: db.transfers, products: db.products });
 });
 
-// Add branch expense record
-app.post("/api/expenses", (req, res) => {
-  const db = readDb();
-  const expense: Expense = {
-    id: `EXP-${Date.now()}`,
-    ...req.body
-  };
-  db.expenses.push(expense);
-  writeDb(db);
-  res.json({ success: true, expenses: db.expenses });
-});
-
-// Create/Update Loyalty Customer
-app.post("/api/customers", (req, res) => {
-  const db = readDb();
-  const customer = req.body;
-  const index = db.customers.findIndex((c) => c.id === customer.id || c.phone === customer.phone);
-  if (index >= 0) {
-    db.customers[index] = { ...db.customers[index], ...customer };
-  } else {
-    customer.id = `CUST-${Math.floor(1000 + Math.random() * 9000)}`;
-    customer.createdAt = new Date().toISOString();
-    customer.loyaltyPoints = customer.loyaltyPoints || 0;
-    customer.creditBalance = customer.creditBalance || 0;
-    db.customers.push(customer);
+// Expenses
+app.post("/api/expenses", async (req, res) => {
+  try {
+    const expenses = await mysqlDb.createExpense(req.body);
+    res.json({ success: true, expenses });
+  } catch (e: any) {
+    res.status(500).json({ success: false, error: e?.message || "Failed to save expense" });
   }
-  writeDb(db);
-  res.json({ success: true, customers: db.customers });
 });
 
-// Create/Update Supplier
-app.post("/api/suppliers", (req, res) => {
-  const db = readDb();
-  const supplier = req.body;
-  const index = db.suppliers.findIndex((s) => s.id === supplier.id);
-  if (index >= 0) {
-    db.suppliers[index] = { ...db.suppliers[index], ...supplier };
-  } else {
-    supplier.id = `SUPL-${Math.floor(1000 + Math.random() * 9000)}`;
-    db.suppliers.push(supplier);
+// Customers
+app.post("/api/customers", async (req, res) => {
+  try {
+    const customers = await mysqlDb.upsertCustomer(req.body);
+    res.json({ success: true, customers });
+  } catch (e: any) {
+    res.status(500).json({ success: false, error: e?.message || "Failed to save customer" });
   }
-  writeDb(db);
-  res.json({ success: true, suppliers: db.suppliers });
 });
 
-// Delete Supplier
-app.delete("/api/suppliers/:id", (req, res) => {
-  const db = readDb();
-  db.suppliers = db.suppliers.filter((s) => s.id !== req.params.id);
-  writeDb(db);
-  res.json({ success: true, suppliers: db.suppliers });
-});
-
-// Create/Update Brand Branch
-app.post("/api/branches", (req, res) => {
-  const db = readDb();
-  const branch = req.body;
-  const index = db.branches.findIndex((b) => b.id === branch.id);
-  if (index >= 0) {
-    db.branches[index] = { ...db.branches[index], ...branch };
-  } else {
-    branch.id = `B${db.branches.length + 1}`;
-    db.branches.push(branch);
+// Suppliers
+app.post("/api/suppliers", async (req, res) => {
+  try {
+    const suppliers = await mysqlDb.upsertSupplier(req.body);
+    res.json({ success: true, suppliers });
+  } catch (e: any) {
+    res.status(500).json({ success: false, error: e?.message || "Failed to save supplier" });
   }
-  writeDb(db);
-  res.json({ success: true, branches: db.branches });
 });
 
-// Delete Branch
-app.delete("/api/branches/:id", (req, res) => {
-  const db = readDb();
-  db.branches = db.branches.filter((b) => b.id !== req.params.id);
-  writeDb(db);
-  res.json({ success: true, branches: db.branches });
+app.delete("/api/suppliers/:id", async (req, res) => {
+  try {
+    const suppliers = await mysqlDb.deleteSupplier(req.params.id);
+    res.json({ success: true, suppliers });
+  } catch (e: any) {
+    res.status(500).json({ success: false, error: e?.message || "Failed to delete supplier" });
+  }
 });
 
+// Branches
+app.post("/api/branches", async (req, res) => {
+  try {
+    const branches = await mysqlDb.upsertBranch(req.body);
+    res.json({ success: true, branches });
+  } catch (e: any) {
+    res.status(500).json({ success: false, error: e?.message || "Failed to save branch" });
+  }
+});
+
+app.delete("/api/branches/:id", async (req, res) => {
+  try {
+    const branches = await mysqlDb.deleteBranch(req.params.id);
+    res.json({ success: true, branches });
+  } catch (e: any) {
+    res.status(500).json({ success: false, error: e?.message || "Failed to delete branch" });
+  }
+});
+
+// Tenants (Create / Update / Sync full list)
+app.post("/api/tenants", async (req, res) => {
+  try {
+    const tenants = await mysqlDb.upsertTenant(req.body);
+    res.json({ success: true, tenants });
+  } catch (e: any) {
+    res.status(500).json({ success: false, error: e?.message || "Failed to save tenant" });
+  }
+});
+
+app.post("/api/tenants/sync", async (req, res) => {
+  try {
+    const list = Array.isArray(req.body?.tenants) ? req.body.tenants : [];
+    const tenants = await mysqlDb.syncTenants(list);
+    res.json({ success: true, tenants });
+  } catch (e: any) {
+    res.status(500).json({ success: false, error: e?.message || "Failed to sync tenants" });
+  }
+});
+
+// Credentials / Users
+app.post("/api/credentials", async (req, res) => {
+  try {
+    const list = Array.isArray(req.body?.credentials) ? req.body.credentials : [];
+    const credentials = await mysqlDb.syncCredentials(list);
+    res.json({ success: true, credentials });
+  } catch (e: any) {
+    res.status(500).json({ success: false, error: e?.message || "Failed to save credentials" });
+  }
+});
+
+// Product Categories
+app.post("/api/categories", async (req, res) => {
+  try {
+    const list = Array.isArray(req.body?.categories) ? req.body.categories : [];
+    const categories = await mysqlDb.syncCategories(list);
+    res.json({ success: true, categories });
+  } catch (e: any) {
+    res.status(500).json({ success: false, error: e?.message || "Failed to save categories" });
+  }
+});
+
+// App & Terminal Settings
+app.post("/api/settings", async (req, res) => {
+  try {
+    const settings = await mysqlDb.updateSettings(req.body || {});
+    res.json({ success: true, settings });
+  } catch (e: any) {
+    res.status(500).json({ success: false, error: e?.message || "Failed to save settings" });
+  }
+});
+
+// Cash Sessions (Open / Close register)
+app.post("/api/cash-sessions", async (req, res) => {
+  try {
+    const cashSessions = await mysqlDb.upsertCashSession(req.body);
+    res.json({ success: true, cashSessions });
+  } catch (e: any) {
+    res.status(500).json({ success: false, error: e?.message || "Failed to save cash session" });
+  }
+});
 
 // Production & Development server setup
 (async () => {
+  // Attempt live MySQL initialization on startup (never writes db.json)
+  await mysqlDb.connectAndInitialize();
+
   const isProduction = process.env.NODE_ENV === "production";
   const distPath = path.join(process.cwd(), "dist");
   const indexPath = path.join(distPath, "index.html");

@@ -91,6 +91,7 @@ import {
   Tenant,
   StockTransfer,
   AppSettings,
+  LabelPrinterConfig,
   printElementById,
   saveElementAsPDF,
   downloadPrintableHtmlSlip,
@@ -104,7 +105,7 @@ import {
   TENANT_FONT_SIZE_OPTIONS
 } from "./types";
 
-import SuperAdminConsole from "./components/SuperAdminConsole";
+import SuperAdminConsole, { AccessProfile } from "./components/SuperAdminConsole";
 import StaffRegistry from "./components/StaffRegistry";
 import SettingsPanel from "./components/SettingsPanel";
 import { ExpertAidLogo } from "./components/ExpertAidLogo";
@@ -116,346 +117,55 @@ import {
   QUICK_FILL_PRESET_TEMPLATES 
 } from "./utils/productCatalogResolver";
 
-const PRESET_TENANTS: Tenant[] = [
-  {
-    id: "TENANT-001",
-    name: "Expert POS Retail Hub",
-    subdomain: "hub",
-    domainUrl: "https://hub.expertbilling.in",
-    domainStatus: "ACTIVE",
-    businessSector: "SUPERMARKET",
-    sectorConfig: {
-      sector: "SUPERMARKET",
-      sectorName: "Supermarket & Grocery",
-      enabledModules: BUSINESS_SECTORS_CATALOG.SUPERMARKET.defaultModules,
-      posMode: "SUPERMARKET_FAST_SCAN",
-      defaultCategories: BUSINESS_SECTORS_CATALOG.SUPERMARKET.defaultCategories,
-      unitPresets: BUSINESS_SECTORS_CATALOG.SUPERMARKET.unitPresets,
-      quickActions: BUSINESS_SECTORS_CATALOG.SUPERMARKET.quickActions
-    },
-    typography: {
-      fontFamily: "Inter",
-      fontSizeScale: "standard"
-    },
-    adminEmail: "admin@expertbilling.in",
-    phone: "+91 9988776655",
-    currency: "₹",
-    tier: "ENTERPRISE",
-    status: "ACTIVE",
-    createdAt: "2026-01-10T08:00:00Z",
-    colorTheme: "emerald",
-    maxBranches: 10,
-    maxProducts: 250,
-    onboardingFeePaid: 150000,
-    monthlySubscriptionFee: 4500,
-    billingCycle: "MONTHLY",
-    lastPaymentAmount: 4500,
-    lastPaymentDate: "2026-05-10",
-    subscriptionStartDate: "2026-01-10",
-    subscriptionEndDate: "2027-01-10",
-    contractDurationMonths: 12,
-    renewalStatus: "AUTO_RENEW",
-    onboardingSetupStatus: "COMPLETED",
-    hardwareProvisioned: ["Electronic Weighing Scale RS-232", "High-Speed Laser Scanner", "Heavy Duty Cash Drawer", "80mm Thermal Printer"],
-    onboardingNotes: "Initial sandbox isolation slice provisioned and physical hardware package dispatched.",
-    clientVerificationStatus: "VERIFIED",
-    gstinRegNumber: "07AAAAA1111A1Z1",
-    businessLocation: "Main Flagship Store (Connaught Place)",
-    address: "Plot 14, Barakhamba Road, Connaught Place",
-    city: "New Delhi",
-    state: "Delhi",
-    pincode: "110001",
-    country: "India"
+const PRESET_TENANTS: Tenant[] = [];
+
+const EMPTY_WORKSPACE_TENANT: Tenant = {
+  id: "",
+  name: "Expert Billing Workspace",
+  subdomain: "app",
+  domainUrl: "https://expertbilling.in",
+  domainStatus: "ACTIVE",
+  businessSector: "SUPERMARKET",
+  sectorConfig: {
+    sector: "SUPERMARKET",
+    sectorName: "Supermarket & Grocery",
+    enabledModules: BUSINESS_SECTORS_CATALOG.SUPERMARKET.defaultModules,
+    posMode: "SUPERMARKET_FAST_SCAN",
+    defaultCategories: BUSINESS_SECTORS_CATALOG.SUPERMARKET.defaultCategories,
+    unitPresets: BUSINESS_SECTORS_CATALOG.SUPERMARKET.unitPresets,
+    quickActions: BUSINESS_SECTORS_CATALOG.SUPERMARKET.quickActions
   },
-  {
-    id: "TENANT-002",
-    name: "Tech Solutions Pvt. Ltd.",
-    subdomain: "techsolutions",
-    domainUrl: "https://techsolutions.expertbilling.in",
-    domainStatus: "ACTIVE",
-    businessSector: "RETAIL",
-    sectorConfig: {
-      sector: "RETAIL",
-      sectorName: "Retail & Apparel",
-      enabledModules: BUSINESS_SECTORS_CATALOG.RETAIL.defaultModules,
-      posMode: "RETAIL_QUICK",
-      defaultCategories: BUSINESS_SECTORS_CATALOG.RETAIL.defaultCategories,
-      unitPresets: BUSINESS_SECTORS_CATALOG.RETAIL.unitPresets,
-      quickActions: BUSINESS_SECTORS_CATALOG.RETAIL.quickActions
-    },
-    typography: {
-      fontFamily: "Plus Jakarta Sans",
-      fontSizeScale: "standard"
-    },
-    adminEmail: "info@techsolutions.com",
-    phone: "+91 9811223344",
-    currency: "₹",
-    tier: "ENTERPRISE",
-    status: "ACTIVE",
-    createdAt: "2024-05-20T10:00:00Z",
-    colorTheme: "indigo",
-    maxBranches: 5,
-    maxProducts: 100,
-    onboardingFeePaid: 75000,
-    monthlySubscriptionFee: 4500,
-    billingCycle: "MONTHLY",
-    subscriptionStartDate: "2024-05-20",
-    subscriptionEndDate: "2025-05-20",
-    contractDurationMonths: 12,
-    renewalStatus: "AUTO_RENEW",
-    onboardingSetupStatus: "COMPLETED",
-    hardwareProvisioned: ["Barcode Label Printer", "Wireless Laser Scanner", "Heavy Duty Cash Drawer", "80mm Thermal Printer"],
-    clientVerificationStatus: "VERIFIED",
-    gstinRegNumber: "07EXPAID2026A1Z1",
-    businessLocation: "Cyber City Tech Hub Branch",
-    address: "Tower B, Level 4, DLF Cyber City, Sector 24",
-    city: "Gurugram",
-    state: "Haryana",
-    pincode: "122002",
-    country: "India"
+  typography: {
+    fontFamily: "Inter",
+    fontSizeScale: "standard"
   },
-  {
-    id: "TENANT-003",
-    name: "The Gourmet Bistro & Cafe",
-    subdomain: "gourmetbistro",
-    domainUrl: "https://gourmetbistro.expertbilling.in",
-    domainStatus: "ACTIVE",
-    businessSector: "RESTAURANT",
-    sectorConfig: {
-      sector: "RESTAURANT",
-      sectorName: "Restaurant & F&B",
-      enabledModules: BUSINESS_SECTORS_CATALOG.RESTAURANT.defaultModules,
-      posMode: "RESTAURANT_TABLES",
-      defaultCategories: BUSINESS_SECTORS_CATALOG.RESTAURANT.defaultCategories,
-      unitPresets: BUSINESS_SECTORS_CATALOG.RESTAURANT.unitPresets,
-      quickActions: BUSINESS_SECTORS_CATALOG.RESTAURANT.quickActions
-    },
-    typography: {
-      fontFamily: "Playfair Display",
-      fontSizeScale: "spacious"
-    },
-    adminEmail: "contact@gourmetbistro.com",
-    phone: "+91 9822334455",
-    currency: "₹",
-    tier: "GROWTH",
-    status: "ACTIVE",
-    createdAt: "2024-05-18T11:00:00Z",
-    colorTheme: "amber",
-    maxBranches: 3,
-    maxProducts: 50,
-    onboardingFeePaid: 45000,
-    monthlySubscriptionFee: 2500,
-    billingCycle: "MONTHLY",
-    subscriptionStartDate: "2024-05-18",
-    subscriptionEndDate: "2025-05-18",
-    contractDurationMonths: 12,
-    renewalStatus: "AUTO_RENEW",
-    onboardingSetupStatus: "COMPLETED",
-    hardwareProvisioned: ["Kitchen KOT Thermal Printer", "80mm POS Receipt Printer", "Touch POS Display"],
-    clientVerificationStatus: "VERIFIED",
-    gstinRegNumber: "07ABCRE1818B2Y2",
-    businessLocation: "The Gourmet Bistro & Cafe (Indiranagar)",
-    address: "100 Feet Road, HAL 2nd Stage, Indiranagar",
-    city: "Bengaluru",
-    state: "Karnataka",
-    pincode: "560038",
-    country: "India"
-  },
-  {
-    id: "TENANT-004",
-    name: "MedPlus Chemist & Pharmacy",
-    subdomain: "medpluscare",
-    domainUrl: "https://medpluscare.expertbilling.in",
-    domainStatus: "ACTIVE",
-    businessSector: "PHARMACY",
-    sectorConfig: {
-      sector: "PHARMACY",
-      sectorName: "Pharmacy & Healthcare",
-      enabledModules: BUSINESS_SECTORS_CATALOG.PHARMACY.defaultModules,
-      posMode: "PHARMACY_RX",
-      defaultCategories: BUSINESS_SECTORS_CATALOG.PHARMACY.defaultCategories,
-      unitPresets: BUSINESS_SECTORS_CATALOG.PHARMACY.unitPresets,
-      quickActions: BUSINESS_SECTORS_CATALOG.PHARMACY.quickActions
-    },
-    typography: {
-      fontFamily: "Roboto",
-      fontSizeScale: "compact"
-    },
-    adminEmail: "hello@medpluscare.com",
-    phone: "+91 9833445566",
-    currency: "₹",
-    tier: "ENTERPRISE",
-    status: "ACTIVE",
-    createdAt: "2024-05-15T09:30:00Z",
-    colorTheme: "rose",
-    maxBranches: 8,
-    maxProducts: 200,
-    onboardingFeePaid: 120000,
-    monthlySubscriptionFee: 4500,
-    billingCycle: "MONTHLY",
-    subscriptionStartDate: "2024-05-15",
-    subscriptionEndDate: "2025-05-15",
-    contractDurationMonths: 12,
-    renewalStatus: "AUTO_RENEW",
-    onboardingSetupStatus: "COMPLETED",
-    hardwareProvisioned: ["Wireless Barcode Scanner", "80mm Thermal Receipt Printer", "Medicine Label Printer"],
-    clientVerificationStatus: "VERIFIED",
-    gstinRegNumber: "07GLOBA1515C3X3",
-    businessLocation: "MedPlus Chemist Central Outlet",
-    address: "Shop 4-5, Ground Floor, Bandra West Link Road",
-    city: "Mumbai",
-    state: "Maharashtra",
-    pincode: "400050",
-    country: "India"
-  },
-  {
-    id: "TENANT-005",
-    name: "Luxe Glow Salon & Spa",
-    subdomain: "luxeglow",
-    domainUrl: "https://luxeglow.expertbilling.in",
-    domainStatus: "ACTIVE",
-    businessSector: "SERVICES",
-    sectorConfig: {
-      sector: "SERVICES",
-      sectorName: "Services & Salon / Spa",
-      enabledModules: BUSINESS_SECTORS_CATALOG.SERVICES.defaultModules,
-      posMode: "SERVICES_BOOKING",
-      defaultCategories: BUSINESS_SECTORS_CATALOG.SERVICES.defaultCategories,
-      unitPresets: BUSINESS_SECTORS_CATALOG.SERVICES.unitPresets,
-      quickActions: BUSINESS_SECTORS_CATALOG.SERVICES.quickActions
-    },
-    typography: {
-      fontFamily: "Outfit",
-      fontSizeScale: "spacious"
-    },
-    adminEmail: "support@luxeglow.com",
-    phone: "+91 9844556677",
-    currency: "₹",
-    tier: "STARTER",
-    status: "ACTIVE",
-    createdAt: "2024-05-12T14:15:00Z",
-    colorTheme: "violet",
-    maxBranches: 2,
-    maxProducts: 40,
-    onboardingFeePaid: 35000,
-    monthlySubscriptionFee: 1800,
-    billingCycle: "MONTHLY",
-    subscriptionStartDate: "2024-05-12",
-    subscriptionEndDate: "2025-05-12",
-    contractDurationMonths: 12,
-    renewalStatus: "AUTO_RENEW",
-    onboardingSetupStatus: "COMPLETED",
-    hardwareProvisioned: ["80mm Thermal Receipt Printer", "Appointment Tablet Display"],
-    clientVerificationStatus: "VERIFIED",
-    gstinRegNumber: "07LUXEG1212D4W4",
-    businessLocation: "Luxe Glow Flagship Salon",
-    address: "Jubilee Hills Road No. 36",
-    city: "Hyderabad",
-    state: "Telangana",
-    pincode: "500033",
-    country: "India"
-  },
-  {
-    id: "TENANT-006",
-    name: "Digital World",
-    subdomain: "digitalworld",
-    adminEmail: "info@digitalworld.com",
-    phone: "+91 9855667788",
-    currency: "₹",
-    tier: "GROWTH",
-    status: "ACTIVE",
-    createdAt: "2024-05-10T16:00:00Z",
-    colorTheme: "emerald",
-    maxBranches: 3,
-    maxProducts: 50,
-    onboardingFeePaid: 50000,
-    monthlySubscriptionFee: 2500,
-    billingCycle: "MONTHLY",
-    subscriptionStartDate: "2024-05-10",
-    subscriptionEndDate: "2025-05-10",
-    contractDurationMonths: 12,
-    renewalStatus: "AUTO_RENEW",
-    onboardingSetupStatus: "COMPLETED",
-    hardwareProvisioned: ["80mm Thermal Printer"],
-    clientVerificationStatus: "VERIFIED",
-    gstinRegNumber: "07DIGIT1010D4W4"
-  },
-  {
-    id: "TENANT-007",
-    name: "Innovateech Systems",
-    subdomain: "innovateech",
-    adminEmail: "innovateech@gmail.com",
-    phone: "+91 9866778899",
-    currency: "₹",
-    tier: "ENTERPRISE",
-    status: "ACTIVE",
-    createdAt: "2024-05-21T08:00:00Z",
-    colorTheme: "indigo",
-    maxBranches: 5,
-    maxProducts: 100,
-    onboardingFeePaid: 80000,
-    monthlySubscriptionFee: 4500,
-    billingCycle: "MONTHLY",
-    subscriptionStartDate: "2024-05-21",
-    subscriptionEndDate: "2025-05-21",
-    contractDurationMonths: 12,
-    renewalStatus: "AUTO_RENEW",
-    onboardingSetupStatus: "COMPLETED",
-    hardwareProvisioned: ["Heavy Duty Cash Drawer", "80mm Thermal Printer"],
-    clientVerificationStatus: "VERIFIED",
-    gstinRegNumber: "07INNOV2121E5V5"
-  },
-  {
-    id: "TENANT-008",
-    name: "Shree Traders",
-    subdomain: "shreetraders",
-    adminEmail: "shreetraders@gmail.com",
-    phone: "+91 9877889900",
-    currency: "₹",
-    tier: "GROWTH",
-    status: "ACTIVE",
-    createdAt: "2024-05-20T14:00:00Z",
-    colorTheme: "amber",
-    maxBranches: 3,
-    maxProducts: 50,
-    onboardingFeePaid: 45000,
-    monthlySubscriptionFee: 2500,
-    billingCycle: "MONTHLY",
-    subscriptionStartDate: "2024-05-20",
-    subscriptionEndDate: "2025-05-20",
-    contractDurationMonths: 12,
-    renewalStatus: "AUTO_RENEW",
-    onboardingSetupStatus: "COMPLETED",
-    hardwareProvisioned: ["80mm Thermal Printer"],
-    clientVerificationStatus: "VERIFIED",
-    gstinRegNumber: "07SHREE2020F6U6"
-  },
-  {
-    id: "TENANT-009",
-    name: "Prime Solutions",
-    subdomain: "primesolutions",
-    adminEmail: "primesolutions@gmail.com",
-    phone: "+91 9888990011",
-    currency: "₹",
-    tier: "STARTER",
-    status: "ACTIVE",
-    createdAt: "2024-05-19T10:00:00Z",
-    colorTheme: "rose",
-    maxBranches: 1,
-    maxProducts: 20,
-    onboardingFeePaid: 25000,
-    monthlySubscriptionFee: 1200,
-    billingCycle: "MONTHLY",
-    subscriptionStartDate: "2024-05-19",
-    subscriptionEndDate: "2024-11-19",
-    contractDurationMonths: 6,
-    renewalStatus: "AUTO_RENEW",
-    onboardingSetupStatus: "COMPLETED",
-    hardwareProvisioned: [],
-    clientVerificationStatus: "VERIFIED",
-    gstinRegNumber: "07PRIME1919G7T7"
-  }
-];
+  adminEmail: "superadmin@expertbilling.in",
+  phone: "",
+  currency: "₹",
+  tier: "ENTERPRISE",
+  status: "ACTIVE",
+  createdAt: "2026-01-01T00:00:00Z",
+  colorTheme: "emerald",
+  maxBranches: 10,
+  maxProducts: 1000,
+  onboardingFeePaid: 0,
+  monthlySubscriptionFee: 0,
+  billingCycle: "MONTHLY",
+  subscriptionStartDate: "2026-01-01",
+  subscriptionEndDate: "2027-01-01",
+  contractDurationMonths: 12,
+  renewalStatus: "AUTO_RENEW",
+  onboardingSetupStatus: "COMPLETED",
+  hardwareProvisioned: [],
+  clientVerificationStatus: "VERIFIED",
+  gstinRegNumber: "",
+  businessLocation: "",
+  address: "",
+  city: "",
+  state: "",
+  pincode: "",
+  country: "India"
+};
 
 const LOGIN_BG_CONFIGS: Record<string, {
   name: string;
@@ -529,12 +239,13 @@ const LOGIN_BG_CONFIGS: Record<string, {
   }
 };
 
-const PRESET_CREDENTIALS = [
+const PRESET_CREDENTIALS: AccessProfile[] = [
   {
     role: UserRole.ADMIN,
     title: "Super Admin Master Controls",
     email: "superadmin@expertbilling.in",
-    password: "SuperAdminMasterKey2026",
+    username: "superadmin",
+    password: "123456",
     name: "System Sovereign (Super Admin)",
     color: "violet",
     gradient: "from-purple-500 to-indigo-600",
@@ -545,91 +256,6 @@ const PRESET_CREDENTIALS = [
     description: "Sovereign master access credentials for cross-border tenancy. Provision corporate clients, customize database slices, switch live active workspaces, and monitor overall SaaS subscriptions.",
     privileges: ["Cross-tenant onboarding", "Global subscription audit", "Database isolation scaling", "Bypassing branch ceilings", "Modify workspace context"],
     phone: "+91 9900112233"
-  },
-  {
-    role: UserRole.ADMIN,
-    title: "Client Admin (ABC Retailers)",
-    email: "contact@abcretailers.com",
-    password: "AbcRetailersAdmin2026",
-    name: "ABC Retailers Administrator",
-    color: "amber",
-    gradient: "from-amber-500 to-orange-600",
-    bgHover: "hover:bg-amber-500/5",
-    accent: "text-amber-500",
-    border: "border-amber-500/20",
-    glow: "shadow-amber-500/10",
-    description: "Client Store Administrator with full operational governance across POS billing, product catalog, inventory, CRM, staff onboarding, and branding configurations.",
-    privileges: ["POS Sandbox access", "Audit profit & tax ledgers", "Modify products/suppliers", "Administer loyalty points", "Store branding & settings"],
-    phone: "+91 9988776655",
-    tenantId: "TENANT-003"
-  },
-  {
-    role: UserRole.ADMIN,
-    title: "Client Admin (Expert POS Hub)",
-    email: "admin@expertbilling.in",
-    password: "AdminOverrideX99",
-    name: "John Doe (Admin)",
-    color: "emerald",
-    gradient: "from-emerald-500 to-teal-600",
-    bgHover: "hover:bg-emerald-500/5",
-    accent: "text-emerald-500",
-    border: "border-emerald-500/20",
-    glow: "shadow-emerald-500/10",
-    description: "Full master key to POS checkout, financial ledgers, inventory catalogue, CRM, and expense logs.",
-    privileges: ["POS Sandbox access", "Audit profit & tax ledgers", "Modify products/suppliers", "Administer loyalty points", "Direct DB sync states"],
-    phone: "+91 9911223344",
-    tenantId: "TENANT-001"
-  },
-  {
-    role: UserRole.MANAGER,
-    title: "Manager Reports & Stock",
-    email: "manager@expertbilling.in",
-    password: "ManagerProfit77",
-    name: "Alice Manager",
-    color: "indigo",
-    gradient: "from-indigo-500 to-violet-600",
-    bgHover: "hover:bg-indigo-500/5",
-    accent: "text-indigo-400",
-    border: "border-indigo-500/20",
-    glow: "shadow-indigo-500/10",
-    description: "Manage physical store health, reconcile stock adjustment ledgers, approve utility expenses, and review reports.",
-    privileges: ["Analytics dashboard view", "Adjust and count stock", "Log utility & operating expenses", "Review cash drawers & logs"],
-    storeBranchId: "B1",
-    phone: "+91 9922334455"
-  },
-  {
-    role: UserRole.CASHIER,
-    title: "Cashier Billing Only",
-    email: "cashier@expertbilling.in",
-    password: "CashierBilling101",
-    name: "John Cashier",
-    color: "amber",
-    gradient: "from-amber-500 to-orange-600",
-    bgHover: "hover:bg-amber-500/5",
-    accent: "text-amber-400",
-    border: "border-amber-500/20",
-    glow: "shadow-amber-500/10",
-    description: "Primary front-line role. Focuses on retail scanning, customer checkout flow, processing payments, and coupons.",
-    privileges: ["POS checkout scanning", "Configure item quantities", "Associate loyalty members", "UPI, Cash, or Card prints"],
-    storeBranchId: "B1",
-    phone: "+91 9933445566"
-  },
-  {
-    role: UserRole.STORE_KEEPER,
-    title: "Store Keeper Inventory Management",
-    email: "storekeeper@expertbilling.in",
-    password: "StoreKeeperReconcile26",
-    name: "Devin Stocker",
-    color: "rose",
-    gradient: "from-rose-500 to-pink-600",
-    bgHover: "hover:bg-rose-500/5",
-    accent: "text-rose-400",
-    border: "border-rose-500/20",
-    glow: "shadow-rose-500/10",
-    description: "Track warehouse levels, inspect batch codes, monitor nearing expiry warnings, and align supplier rosters.",
-    privileges: ["Inventory levels inspection", "Filter categories & alert status", "Register new supplier entries", "Expiry count audits"],
-    storeBranchId: "B2",
-    phone: "+91 9944556677"
   }
 ];
 
@@ -717,78 +343,15 @@ export default function App() {
   const [transfers, setTransfers] = useState<StockTransfer[]>([]);
   const [cashSessions, setCashSessions] = useState<CashSession[]>([]);
 
-  // Dynamic product categories management state
-  const [productCategories, setProductCategories] = useState<string[]>(() => {
-    const saved = localStorage.getItem("expert_aid_product_categories");
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          return parsed;
-        }
-      } catch (e) {
-        console.error("Failed to parse saved product categories:", e);
-      }
-    }
-    const defaults = [
-      "Fresh Fruits & Vegetables",
-      "Dairy & Eggs",
-      "Grains & Grocery",
-      "Beverages",
-      "Snacks & Sweets",
-      "Household"
-    ];
-    localStorage.setItem("expert_aid_product_categories", JSON.stringify(defaults));
-    return defaults;
-  });
+  // Dynamic product categories management state (hydrated from MySQL)
+  const [productCategories, setProductCategories] = useState<string[]>([]);
 
-  // Multi-tenant client onboarding states
-  const [tenantsList, setTenantsList] = useState<Tenant[]>(() => {
-    const saved = localStorage.getItem("expert_aid_tenants");
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          let migrated = false;
-          const updated = parsed.map((t: any) => {
-            let name = t.name || "";
-            if (name.includes("ExpertAid") || name.includes("Expertaid") || name.includes("Expert-Aid")) {
-              migrated = true;
-              name = name.replace(/ExpertAid/g, "Expert POS")
-                         .replace(/Expertaid/g, "Expert POS")
-                         .replace(/Expert-Aid/g, "Expert POS");
-            }
-            let businessLocation = t.businessLocation || "";
-            if (businessLocation.includes("Downtown Smart Hypermarket")) {
-              migrated = true;
-              businessLocation = "Main Flagship Store (Connaught Place)";
-            }
-            let address = t.address || "";
-            if (address.includes("Central Plaza")) {
-              migrated = true;
-              address = "Plot 14, Barakhamba Road, Connaught Place";
-            }
-            return { ...t, name, businessLocation, address };
-          });
-          if (migrated) {
-            localStorage.setItem("expert_aid_tenants", JSON.stringify(updated));
-            return updated;
-          }
-          return parsed;
-        }
-      } catch (e) {
-        console.error("Failed to restore tenants database:", e);
-      }
-    }
-    localStorage.setItem("expert_aid_tenants", JSON.stringify(PRESET_TENANTS));
-    return PRESET_TENANTS;
-  });
+  // Multi-tenant client onboarding states (hydrated from MySQL)
+  const [tenantsList, setTenantsList] = useState<Tenant[]>(PRESET_TENANTS);
 
-  const [activeTenantId, setActiveTenantId] = useState<string>(() => {
-    return localStorage.getItem("expert_aid_active_tenant_id") || "TENANT-001";
-  });
+  const [activeTenantId, setActiveTenantId] = useState<string>("");
 
-  const activeTenant = tenantsList.find(t => t.id === activeTenantId) || tenantsList[0] || PRESET_TENANTS[0];
+  const activeTenant = tenantsList.find(t => t.id === activeTenantId) || tenantsList[0] || EMPTY_WORKSPACE_TENANT;
 
   // Active Tenant Typography Classes
   const activeTenantFontClass = useMemo(() => {
@@ -893,9 +456,7 @@ export default function App() {
     }
   };
 
-  const [attractiveMode, setAttractiveMode] = useState<"mint" | "cosmic" | "cream" | "velvet" | "sunset" | "oceanic" | "cyberpunk" | "nordic" | "espresso" | "aura">(() => {
-    return (localStorage.getItem("expert_aid_attractive_mode") as any) || "mint";
-  });
+  const [attractiveMode, setAttractiveMode] = useState<"mint" | "cosmic" | "cream" | "velvet" | "sunset" | "oceanic" | "cyberpunk" | "nordic" | "espresso" | "aura">("mint");
 
   const getAttractiveBgClasses = (mode: string) => {
     switch (mode) {
@@ -1077,78 +638,41 @@ export default function App() {
 
   const currentTheme = getThemeColorClasses(activeTenant.colorTheme);
 
-  // User credentials state for RBAC management
-  const [credentialsList, setCredentialsList] = useState<typeof PRESET_CREDENTIALS>(() => {
-    const saved = localStorage.getItem("expert_aid_credentials");
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed)) {
-          const merged = [...parsed];
-          for (const preset of PRESET_CREDENTIALS) {
-            if (!merged.some((c: any) => c.email && c.email.toLowerCase() === preset.email.toLowerCase())) {
-              merged.push(preset);
-            }
-          }
-          return merged.map((c: any) => ({
-            ...c,
-            role: normalizeUserRole(c.role)
-          }));
-        }
-      } catch (e) {
-        console.error("Failed to restore credentials directory:", e);
-      }
-    }
-    return PRESET_CREDENTIALS;
-  });
+  // User credentials state for RBAC management (hydrated from MySQL)
+  const [credentialsList, setCredentialsList] = useState<AccessProfile[]>(PRESET_CREDENTIALS);
 
   // App UI Navigation states
   const [activeTab, setActiveTab] = useState<string>("pos");
   const [currentBranch, setCurrentBranch] = useState<StoreBranch | null>(null);
   const [currentRole, setCurrentRole] = useState<UserRole>(UserRole.ADMIN);
-  const [currentCashierName, setCurrentCashierName] = useState<string>(() => {
-    return localStorage.getItem("expert_aid_active_cashier_name") || "John Doe";
-  });
+  const [currentCashierName, setCurrentCashierName] = useState<string>("John Doe");
   const [loadingState, setLoadingState] = useState<boolean>(true);
 
-  // Terminal & hardware operational preferences
-  const [opsSettings, setOpsSettings] = useState<AppSettings>(() => {
-    const saved = localStorage.getItem("expert_aid_terminal_settings");
-    if (saved) {
-      try {
-        return JSON.parse(saved);
-      } catch (e) {}
-    }
-    return {
-      autoPrintReceipt: true,
-      enableSound: true,
-      receiptHeader: "OFFICIAL RETAIL CASH INVOICE",
-      receiptFooter: "Thank you for shopping! Powered by Expert POS SaaS",
-      maxDiscountAllowed: 25
-    };
+  // Terminal & hardware operational preferences (hydrated from MySQL)
+  const [opsSettings, setOpsSettings] = useState<AppSettings>({
+    autoPrintReceipt: true,
+    enableSound: true,
+    receiptHeader: "OFFICIAL RETAIL CASH INVOICE",
+    receiptFooter: "Thank you for shopping! Powered by Expert POS SaaS",
+    maxDiscountAllowed: 25
+  });
+
+  const [labelPrinterConfig, setLabelPrinterConfig] = useState<LabelPrinterConfig>({
+    printerModel: "tsc_te244",
+    printerName: "TSC TE244 Thermal Label Printer",
+    presetId: "50x25_1col",
+    connectionType: "usb",
+    networkIp: "192.168.1.100",
+    networkPort: "9100",
+    dpi: 203,
+    darkness: 10,
+    gapMm: 2,
+    sensorType: "gap"
   });
 
   const handleUpdateCashierName = (name: string) => {
     setCurrentCashierName(name);
-    localStorage.setItem("expert_aid_active_cashier_name", name);
   };
-
-  useEffect(() => {
-    const handleSettingsUpdate = () => {
-      const saved = localStorage.getItem("expert_aid_terminal_settings");
-      if (saved) {
-        try {
-          const parsed = JSON.parse(saved);
-          setOpsSettings(parsed);
-          if (typeof parsed.enableSound === "boolean") {
-            setSoundEnabled(parsed.enableSound);
-          }
-        } catch (e) {}
-      }
-    };
-    window.addEventListener("expert_aid_settings_updated", handleSettingsUpdate);
-    return () => window.removeEventListener("expert_aid_settings_updated", handleSettingsUpdate);
-  }, []);
 
   // User Authentication Portal States
   const [isLoggedIn, setIsLoggedIn] = useState<boolean>(false);
@@ -1163,11 +687,10 @@ export default function App() {
   const [loginError, setLoginError] = useState<string | null>(null);
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState<boolean>(false);
-  const [loginBgMode, setLoginBgMode] = useState<string>(() => {
-    return localStorage.getItem("expert_pos_login_bg_mode") || "cosmic-aurora";
-  });
+  const [loginBgMode, setLoginBgMode] = useState<string>("cosmic-aurora");
 
-  const isSuperAdmin = currentUserEmail.toLowerCase() === "superadmin@expertbilling.in" || currentUserEmail.toLowerCase() === "superadmin@expertpos.com";
+  const isSuperAdmin = currentUserEmail.toLowerCase() === "superadmin@expertbilling.in" ||
+                       currentUserEmail.toLowerCase() === "superadmin@expertpos.com";
 
   // Active POS cart states
   const [cartItems, setCartItems] = useState<InvoiceItem[]>([]);
@@ -1271,7 +794,106 @@ export default function App() {
   const [notifText, setNotifText] = useState<string | null>(null);
   const [notifType, setNotifType] = useState<"success" | "warning">("success");
 
-  // Fetch initial state
+  // Backend database persistence helpers (zero browser storage)
+  const persistSettings = async (partial: Record<string, any>) => {
+    try {
+      await fetch("/api/settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(partial)
+      });
+    } catch (e) {
+      console.error("Failed to persist settings to MySQL:", e);
+    }
+  };
+
+  const persistTenants = async (list: Tenant[]) => {
+    try {
+      await fetch("/api/tenants/sync", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tenants: list })
+      });
+    } catch (e) {
+      console.error("Failed to persist tenants to MySQL:", e);
+    }
+  };
+
+  const persistTenantSingle = async (tenant: Tenant) => {
+    try {
+      await fetch("/api/tenants", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(tenant)
+      });
+    } catch (e) {
+      console.error("Failed to persist tenant to MySQL:", e);
+    }
+  };
+
+  const persistCredentials = async (list: AccessProfile[]) => {
+    try {
+      await fetch("/api/credentials", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ credentials: list })
+      });
+    } catch (e) {
+      console.error("Failed to persist credentials to MySQL:", e);
+    }
+  };
+
+  const persistCategories = async (list: string[]) => {
+    try {
+      await fetch("/api/categories", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ categories: list })
+      });
+    } catch (e) {
+      console.error("Failed to persist categories to MySQL:", e);
+    }
+  };
+
+  const persistCashSession = async (session: CashSession) => {
+    try {
+      const res = await fetch("/api/cash-sessions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(session)
+      });
+      const data = await res.json();
+      if (data.success && Array.isArray(data.cashSessions)) {
+        setCashSessions(data.cashSessions);
+      }
+    } catch (e) {
+      console.error("Failed to persist cash session to MySQL:", e);
+    }
+  };
+
+  const handleClearDatabase = async () => {
+    const res = await fetch("/api/database/clear", { method: "POST" });
+    const data = await res.json();
+    if (data.success && data.state) {
+      setProducts(data.state.products || []);
+      setSuppliers(data.state.suppliers || []);
+      setCustomers(data.state.customers || []);
+      setInvoices(data.state.invoices || []);
+      setBranches(data.state.branches || []);
+      setExpenses(data.state.expenses || []);
+      setAdjustments(data.state.adjustments || []);
+      setTransfers(data.state.transfers || []);
+      setCashSessions(data.state.cashSessions || []);
+      setActiveSession(null);
+      if (data.state.branches && data.state.branches.length > 0) {
+        setCurrentBranch(data.state.branches[0]);
+      }
+    } else {
+      throw new Error(data.error || "Failed to purge database records");
+    }
+  };
+
+  // Fetch initial state directly from MySQL backend
   const loadState = async () => {
     try {
       setLoadingState(true);
@@ -1286,15 +908,66 @@ export default function App() {
         setExpenses(data.expenses || []);
         setAdjustments(data.adjustments || []);
         setTransfers(data.transfers || []);
-        setCashSessions(data.cashSessions || []);
-        
+
+        const sessionsList: CashSession[] = Array.isArray(data.cashSessions) ? data.cashSessions : [];
+        setCashSessions(sessionsList);
+        const openSess = sessionsList.find((s) => s.status === "OPEN") || null;
+        if (openSess) {
+          setActiveSession(openSess);
+        }
+
+        if (Array.isArray(data.categories)) {
+          setProductCategories(data.categories);
+        }
+        if (Array.isArray(data.tenants)) {
+          setTenantsList(data.tenants);
+        }
+        if (Array.isArray(data.credentials)) {
+          setCredentialsList(
+            data.credentials.map((c: any) => ({
+              ...c,
+              role: normalizeUserRole(c.role)
+            }))
+          );
+        }
+
+        if (data.settings) {
+          const s = data.settings;
+          setOpsSettings({
+            autoPrintReceipt: typeof s.autoPrintReceipt === "boolean" ? s.autoPrintReceipt : true,
+            enableSound: typeof s.enableSound === "boolean" ? s.enableSound : true,
+            receiptHeader: s.receiptHeader || "OFFICIAL RETAIL CASH INVOICE",
+            receiptFooter: s.receiptFooter || "Thank you for shopping! Powered by Expert POS SaaS",
+            maxDiscountAllowed: typeof s.maxDiscountAllowed === "number" ? s.maxDiscountAllowed : 25
+          });
+          if (typeof s.enableSound === "boolean") {
+            setSoundEnabled(s.enableSound);
+          }
+          if (s.labelPrinterConfig) {
+            setLabelPrinterConfig(s.labelPrinterConfig);
+          }
+          if (s.attractiveMode) {
+            setAttractiveMode(s.attractiveMode);
+          }
+          if (s.loginBgMode) {
+            setLoginBgMode(s.loginBgMode);
+          }
+          setActiveTenantId(s.activeTenantId ?? "");
+        }
+
         if (data.branches && data.branches.length > 0) {
-          setCurrentBranch(data.branches[0]);
+          const savedBranchId = data.settings?.currentBranchId;
+          const matchedBranch = savedBranchId
+            ? data.branches.find((b: StoreBranch) => b.id === savedBranchId)
+            : null;
+          setCurrentBranch(matchedBranch || data.branches[0]);
+        } else {
+          setCurrentBranch(null);
         }
       }
     } catch (e) {
       console.error(e);
-      triggerNotification("Failed to boot database state. Playing in self-restored fallback.", "warning");
+      triggerNotification("Failed to reach backend /api/state endpoint.", "warning");
     } finally {
       setLoadingState(false);
     }
@@ -1333,7 +1006,7 @@ export default function App() {
 
       if (matchedTenant && matchedTenant.id !== activeTenantId) {
         setActiveTenantId(matchedTenant.id);
-        localStorage.setItem("expert_aid_active_tenant_id", matchedTenant.id);
+        persistSettings({ activeTenantId: matchedTenant.id });
         triggerNotification(`Auto-configured client workspace to "${matchedTenant.name}" based on URL environment!`, "success");
       }
     }
@@ -1377,7 +1050,7 @@ export default function App() {
           const branchMatch = branches.find((b) => b.id === match.storeBranchId);
           if (branchMatch) {
             setCurrentBranch(branchMatch);
-            localStorage.setItem("expert_aid_current_branch", JSON.stringify(branchMatch));
+            persistSettings({ currentBranchId: branchMatch.id });
           }
         }
 
@@ -1429,15 +1102,49 @@ export default function App() {
       return;
     }
 
-    const match = credentialsList.find(
-      (cred) => cred.email.toLowerCase() === trimmedId && cred.password === trimmedPassword
+    let match = credentialsList.find(
+      (cred) => {
+        const idMatches = cred.email.toLowerCase() === trimmedId ||
+                          (cred.username && cred.username.toLowerCase() === trimmedId);
+        const passMatches = cred.password === trimmedPassword;
+        return idMatches && passMatches;
+      }
     );
+
+    if (!match) {
+      // Fallback: also authenticate directly against any onboarded Tenant's adminEmail / adminLoginId & adminPassword
+      const directTenantMatch = tenantsList.find(
+        (t) =>
+          ((t.adminEmail && t.adminEmail.toLowerCase() === trimmedId) ||
+            (t.adminLoginId && t.adminLoginId.toLowerCase() === trimmedId)) &&
+          t.adminPassword === trimmedPassword
+      );
+      if (directTenantMatch) {
+        match = {
+          role: UserRole.ADMIN,
+          title: `${directTenantMatch.name} (Admin)`,
+          email: directTenantMatch.adminEmail || directTenantMatch.adminLoginId || trimmedId,
+          username: directTenantMatch.adminLoginId || directTenantMatch.adminEmail,
+          password: directTenantMatch.adminPassword || trimmedPassword,
+          name: `${directTenantMatch.name} Administrator`,
+          color: "emerald",
+          gradient: "from-emerald-500 to-teal-600",
+          bgHover: "hover:bg-emerald-500/5",
+          accent: "text-emerald-500",
+          border: "border-emerald-500/20",
+          glow: "shadow-emerald-500/10",
+          description: `Client Administrator for ${directTenantMatch.name}.`,
+          privileges: ["POS Sandbox access", "Audit profit & tax ledgers", "Modify products/suppliers", "Administer loyalty points"],
+          tenantId: directTenantMatch.id,
+          phone: directTenantMatch.phone
+        };
+      }
+    }
 
     if (match) {
       const normalizedRole = normalizeUserRole(match.role);
       setCurrentRole(normalizedRole);
       setCurrentCashierName(match.name);
-      localStorage.setItem("expert_aid_active_cashier_name", match.name);
       setCurrentUserEmail(match.email);
       setIsLoggedIn(true);
 
@@ -1446,12 +1153,13 @@ export default function App() {
         const branchMatch = branches.find((b) => b.id === match.storeBranchId);
         if (branchMatch) {
           setCurrentBranch(branchMatch);
-          localStorage.setItem("expert_aid_current_branch", JSON.stringify(branchMatch));
+          persistSettings({ currentBranchId: branchMatch.id });
         }
       }
-      
+
       // Auto-route to respective application based on role & permissions
-      if (match.email.toLowerCase() === "superadmin@expertbilling.in" || match.email.toLowerCase() === "superadmin@expertpos.com") {
+      if (match.email.toLowerCase().includes("superadmin") ||
+          match.email.toLowerCase() === "superadmin@expertpos.com") {
         setActiveTab("super-admin");
       } else if (normalizedRole === UserRole.MANAGER) {
         setActiveTab("analytics");
@@ -1464,10 +1172,19 @@ export default function App() {
       }
 
       // Automatically detect and select the appropriate client company tenant workspace!
-      if (trimmedId !== "superadmin@expertbilling.in" && trimmedId !== "superadmin@expertpos.com") {
-        let tenantMatch = tenantsList.find(
-          (t) => t.adminEmail.toLowerCase() === trimmedId
-        );
+      if (!match.email.toLowerCase().includes("superadmin")) {
+        let tenantMatch = match.tenantId
+          ? tenantsList.find((t) => t.id === match!.tenantId)
+          : undefined;
+
+        if (!tenantMatch) {
+          tenantMatch = tenantsList.find(
+            (t) =>
+              t.adminEmail.toLowerCase() === trimmedId ||
+              (t.adminLoginId && t.adminLoginId.toLowerCase() === trimmedId) ||
+              t.adminEmail.toLowerCase() === match!.email.toLowerCase()
+          );
+        }
 
         if (!tenantMatch) {
           tenantMatch = tenantsList.find((t) => {
@@ -1486,20 +1203,20 @@ export default function App() {
 
         if (!tenantMatch && match.title) {
           tenantMatch = tenantsList.find((t) => {
-            return match.title.toLowerCase().includes(t.name.toLowerCase()) || 
-                   match.title.toLowerCase().includes(t.subdomain.toLowerCase());
+            return match!.title.toLowerCase().includes(t.name.toLowerCase()) ||
+                   match!.title.toLowerCase().includes(t.subdomain.toLowerCase());
           });
         }
 
         if (tenantMatch) {
           setActiveTenantId(tenantMatch.id);
-          localStorage.setItem("expert_aid_active_tenant_id", tenantMatch.id);
+          persistSettings({ activeTenantId: tenantMatch.id });
         }
       }
 
       triggerNotification(`Access Granted: Welcome back, ${match.name}!`, "success");
     } else {
-      setLoginError("Access Denied: Invalid security credentials. Please double-check or click a quick-fill card.");
+      setLoginError("Access Denied: Invalid security credentials. Please verify your username/email and password.");
     }
   };
 
@@ -1509,11 +1226,11 @@ export default function App() {
     const normalizedRole = normalizeUserRole(cred.role);
     setCurrentRole(normalizedRole);
     setCurrentCashierName(cred.name);
-    localStorage.setItem("expert_aid_active_cashier_name", cred.name);
     setCurrentUserEmail(cred.email);
     setIsLoggedIn(true);
 
-    if (cred.email.toLowerCase() === "superadmin@expertbilling.in" || cred.email.toLowerCase() === "superadmin@expertpos.com") {
+    if (cred.email.toLowerCase().includes("superadmin") ||
+        cred.email.toLowerCase() === "superadmin@expertpos.com") {
       setActiveTab("super-admin");
     } else if (normalizedRole === UserRole.MANAGER) {
       setActiveTab("analytics");
@@ -1527,10 +1244,18 @@ export default function App() {
 
     // Automatically detect and select the appropriate client company tenant workspace!
     const trimmedId = cred.email.toLowerCase();
-    if (trimmedId !== "superadmin@expertbilling.in" && trimmedId !== "superadmin@expertpos.com") {
-      let tenantMatch = tenantsList.find(
-        (t) => t.adminEmail.toLowerCase() === trimmedId
-      );
+    if (!trimmedId.includes("superadmin")) {
+      let tenantMatch = cred.tenantId
+        ? tenantsList.find((t) => t.id === cred.tenantId)
+        : undefined;
+
+      if (!tenantMatch) {
+        tenantMatch = tenantsList.find(
+          (t) =>
+            t.adminEmail.toLowerCase() === trimmedId ||
+            (t.adminLoginId && t.adminLoginId.toLowerCase() === trimmedId)
+        );
+      }
 
       if (!tenantMatch) {
         tenantMatch = tenantsList.find((t) => {
@@ -1549,7 +1274,7 @@ export default function App() {
 
       if (tenantMatch) {
         setActiveTenantId(tenantMatch.id);
-        localStorage.setItem("expert_aid_active_tenant_id", tenantMatch.id);
+        persistSettings({ activeTenantId: tenantMatch.id });
       }
     }
 
@@ -1557,7 +1282,35 @@ export default function App() {
   };
 
   const handleImpersonateClient = (email: string) => {
-    const match = credentialsList.find(c => c.email.toLowerCase() === email.toLowerCase());
+    const lowerEmail = email.toLowerCase();
+    let match = credentialsList.find(
+      c => c.email.toLowerCase() === lowerEmail || (c.username && c.username.toLowerCase() === lowerEmail)
+    );
+    if (!match) {
+      const tenant = tenantsList.find(
+        t => t.adminEmail.toLowerCase() === lowerEmail || (t.adminLoginId && t.adminLoginId.toLowerCase() === lowerEmail)
+      );
+      if (tenant) {
+        match = {
+          role: UserRole.ADMIN,
+          title: `${tenant.name} (Admin)`,
+          email: tenant.adminEmail || tenant.adminLoginId || email,
+          username: tenant.adminLoginId || tenant.adminEmail,
+          password: tenant.adminPassword || "Pass@123456",
+          name: `${tenant.name} Administrator`,
+          color: "emerald",
+          gradient: "from-emerald-500 to-teal-600",
+          bgHover: "hover:bg-emerald-500/5",
+          accent: "text-emerald-500",
+          border: "border-emerald-500/20",
+          glow: "shadow-emerald-500/10",
+          description: `Client Administrator for ${tenant.name}.`,
+          privileges: ["POS Sandbox access", "Audit profit & tax ledgers", "Modify products/suppliers", "Administer loyalty points"],
+          tenantId: tenant.id,
+          phone: tenant.phone
+        };
+      }
+    }
     if (match) {
       const normalizedRole = normalizeUserRole(match.role);
       setCurrentRole(normalizedRole);
@@ -1566,9 +1319,14 @@ export default function App() {
       setIsLoggedIn(true);
 
       // Find tenant match
-      let tenantMatch = tenantsList.find(
-        (t) => t.adminEmail.toLowerCase() === email.toLowerCase()
-      );
+      let tenantMatch = match.tenantId
+        ? tenantsList.find((t) => t.id === match!.tenantId)
+        : undefined;
+      if (!tenantMatch) {
+        tenantMatch = tenantsList.find(
+          (t) => t.adminEmail.toLowerCase() === lowerEmail || (t.adminLoginId && t.adminLoginId.toLowerCase() === lowerEmail)
+        );
+      }
       if (!tenantMatch) {
         tenantMatch = tenantsList.find((t) => {
           const domainParts = email.split("@");
@@ -1585,13 +1343,13 @@ export default function App() {
       }
       if (!tenantMatch && match.title) {
         tenantMatch = tenantsList.find((t) => {
-          return match.title.toLowerCase().includes(t.name.toLowerCase()) || 
-                 match.title.toLowerCase().includes(t.subdomain.toLowerCase());
+          return match!.title.toLowerCase().includes(t.name.toLowerCase()) || 
+                 match!.title.toLowerCase().includes(t.subdomain.toLowerCase());
         });
       }
       if (tenantMatch) {
         setActiveTenantId(tenantMatch.id);
-        localStorage.setItem("expert_aid_active_tenant_id", tenantMatch.id);
+        persistSettings({ activeTenantId: tenantMatch.id });
       }
       setActiveTab("pos");
       triggerNotification(`Access Granted: Logged in as ${match.name} (Admin)!`, "success");
@@ -1901,6 +1659,7 @@ export default function App() {
     const selected = branches.find((b) => b.id === branchId);
     if (selected) {
       setCurrentBranch(selected);
+      persistSettings({ currentBranchId: selected.id });
       triggerNotification(`Switched to active branch: ${selected.name}`, "success");
     }
   };
@@ -2020,7 +1779,7 @@ export default function App() {
     };
     const updatedTenantsList = tenantsList.map(t => t.id === updatedTenant.id ? updatedTenant : t);
     setTenantsList(updatedTenantsList);
-    localStorage.setItem("expert_aid_tenants", JSON.stringify(updatedTenantsList));
+    await persistTenantSingle(updatedTenant);
 
     // 2. Update currentBranch if existing
     if (currentBranch) {
@@ -2055,9 +1814,13 @@ export default function App() {
       receiptFooter: details.receiptFooter
     };
     setOpsSettings(newOps);
-    localStorage.setItem("expert_aid_terminal_settings", JSON.stringify(newOps));
+    await persistSettings({
+      receiptHeader: details.receiptHeader,
+      receiptFooter: details.receiptFooter,
+      currentBranchId: currentBranch?.id
+    });
 
-    triggerNotification("Receipt address and store details updated successfully! Live receipt preview refreshed.", "success");
+    triggerNotification("Receipt address and store details saved to database! Live receipt preview refreshed.", "success");
   };
 
   // Scanner modal callbacks
@@ -3283,16 +3046,19 @@ export default function App() {
     const handleOtpSubmit = (e: React.FormEvent) => {
       e.preventDefault();
       if (otpInput.trim() === "123456") {
-        // Log in as tenant admin by default
-        const match = credentialsList.find(c => c.email === "admin@expertbilling.in" || c.email === "admin@expertpos.com") || PRESET_CREDENTIALS[1];
+        const match = credentialsList.find(c => normalizeUserRole(c.role) === UserRole.ADMIN) || credentialsList[0] || PRESET_CREDENTIALS[0];
+        if (!match) {
+          triggerNotification("No registered user account found.", "warning");
+          return;
+        }
         setCurrentRole(match.role);
         setCurrentCashierName(match.name);
         setCurrentUserEmail(match.email);
         setIsLoggedIn(true);
-        setActiveTab("pos");
+        setActiveTab(match.email.toLowerCase().includes("superadmin") ? "super-admin" : "pos");
         triggerNotification("Authenticated successfully via secure OTP!", "success");
       } else {
-        triggerNotification("Invalid OTP code. Please use 123456 for demo.", "warning");
+        triggerNotification("Invalid OTP code. Please enter a valid 6-digit OTP.", "warning");
       }
     };
 
@@ -3654,9 +3420,7 @@ export default function App() {
                     <button
                       type="button"
                       onClick={() => {
-                        setLoginUserId("admin@expertbilling.in");
-                        setLoginPassword("AdminOverrideX99");
-                        triggerNotification("Credentials quick-filled! Click 'Login' to enter.", "success");
+                        triggerNotification("Please contact your System Super Admin to reset credentials.", "warning");
                       }}
                       className={`transition-colors hover:underline ${
                         isDarkTheme ? "text-violet-600 hover:text-violet-800" : "text-blue-600 hover:text-blue-800"
@@ -3793,18 +3557,18 @@ export default function App() {
           credentialsList={credentialsList}
           onUpdateCredentials={(newList) => {
             setCredentialsList(newList);
-            localStorage.setItem("expert_aid_credentials", JSON.stringify(newList));
+            persistCredentials(newList);
           }}
           triggerNotification={triggerNotification}
           tenantsList={tenantsList}
           onUpdateTenants={(newList) => {
             setTenantsList(newList);
-            localStorage.setItem("expert_aid_tenants", JSON.stringify(newList));
+            persistTenants(newList);
           }}
           activeTenantId={activeTenantId}
           onSelectTenant={(id) => {
             setActiveTenantId(id);
-            localStorage.setItem("expert_aid_active_tenant_id", id);
+            persistSettings({ activeTenantId: id });
           }}
           onLogout={() => {
             setIsLoggedIn(false);
@@ -4199,7 +3963,7 @@ export default function App() {
                 onChange={(e) => {
                   const newMode = e.target.value as any;
                   setAttractiveMode(newMode);
-                  localStorage.setItem("expert_aid_attractive_mode", newMode);
+                  persistSettings({ attractiveMode: newMode });
                   triggerNotification(`Switched visual canvas to ${newMode.toUpperCase()} mode!`, "success");
                 }}
                 className={`bg-white dark:bg-slate-850 border ${bgMode.border} rounded-lg text-[10.5px] font-bold ${bgMode.textHeading} px-2 py-0.5 outline-none cursor-pointer hover:bg-slate-50 transition-colors focus:ring-0`}
@@ -6820,9 +6584,12 @@ export default function App() {
                                 <p className="text-[9px] text-slate-600 font-mono font-bold">
                                   {opsSettings.receiptHeader || "OFFICIAL RETAIL CASH INVOICE"}
                                 </p>
-                                <p className="text-[9px] text-slate-600 font-mono font-bold">
-                                  {activeTenant.businessLocation || activeTenant.name}
-                                </p>
+                                {activeTenant.businessLocation && 
+                                 activeTenant.businessLocation.trim().toLowerCase() !== activeTenant.name.trim().toLowerCase() && (
+                                  <p className="text-[9px] text-slate-600 font-mono font-semibold">
+                                    Branch: {activeTenant.businessLocation}
+                                  </p>
+                                )}
                                 <p className="text-[9.5px] text-slate-500 font-mono leading-tight">
                                   {(() => {
                                     const parts = [activeTenant.address, activeTenant.city, activeTenant.state].filter(Boolean);
@@ -7150,6 +6917,7 @@ Payment Mode:   ${selectedInv.paymentMode}
                         };
                         setActiveSession(sess);
                         setCashSessions((prev) => [...prev, sess]);
+                        persistCashSession(sess);
                         triggerNotification(`Cashier drawer shift opened float: ₹${openingBalance}`, "success");
                       }}
                       className="w-full py-2 bg-emerald-600 text-slate-950 hover:bg-emerald-500 font-bold text-xs rounded-lg transition-transform"
@@ -7212,6 +6980,7 @@ Payment Mode:   ${selectedInv.paymentMode}
                         setCashSessions((prev) => prev.map(s => s.id === activeSession.id ? finalCopy : s));
                         setActiveSession(null);
                         setActualCashDrawer(0);
+                        persistCashSession(finalCopy);
                         triggerNotification(
                           `Register shift terminated. Drawer difference is ₹${difference.toFixed(2)}`,
                           difference < 0 ? "warning" : "success"
@@ -7728,9 +7497,12 @@ Payment Mode:   ${selectedInv.paymentMode}
                           <h1 className="text-base font-black text-slate-900 font-sans tracking-tight">
                             {activeTenant.name}
                           </h1>
-                          <p className="text-xs font-bold text-slate-600 font-mono">
-                            {activeTenant.businessLocation || "Main Commercial Outlet"}
-                          </p>
+                          {activeTenant.businessLocation && 
+                           activeTenant.businessLocation.trim().toLowerCase() !== activeTenant.name.trim().toLowerCase() && (
+                            <p className="text-xs font-bold text-slate-600 font-mono">
+                              {activeTenant.businessLocation}
+                            </p>
+                          )}
                         </div>
                       </div>
 
@@ -8070,15 +7842,18 @@ Payment Mode:   ${selectedInv.paymentMode}
                 credentialsList={credentialsList}
                 onUpdateCredentials={(newList) => {
                   setCredentialsList(newList);
-                  localStorage.setItem("expert_aid_credentials", JSON.stringify(newList));
+                  persistCredentials(newList);
                 }}
                 triggerNotification={triggerNotification}
                 tenantsList={tenantsList}
-                onUpdateTenants={setTenantsList}
+                onUpdateTenants={(newList) => {
+                  setTenantsList(newList);
+                  persistTenants(newList);
+                }}
                 activeTenantId={activeTenantId}
                 onSelectTenant={(id) => {
                   setActiveTenantId(id);
-                  localStorage.setItem("expert_aid_active_tenant_id", id);
+                  persistSettings({ activeTenantId: id });
                 }}
                 onLogout={() => {
                   setIsLoggedIn(false);
@@ -8104,7 +7879,7 @@ Payment Mode:   ${selectedInv.paymentMode}
                 credentialsList={credentialsList}
                 onUpdateCredentials={(newList) => {
                   setCredentialsList(newList);
-                  localStorage.setItem("expert_aid_credentials", JSON.stringify(newList));
+                  persistCredentials(newList);
                 }}
                 triggerNotification={triggerNotification}
                 activeTenant={activeTenant}
@@ -8128,7 +7903,7 @@ Payment Mode:   ${selectedInv.paymentMode}
                 credentialsList={credentialsList}
                 onUpdateCredentials={(newList) => {
                   setCredentialsList(newList);
-                  localStorage.setItem("expert_aid_credentials", JSON.stringify(newList));
+                  persistCredentials(newList);
                 }}
                 isSuperAdmin={isSuperAdmin}
                 activeTenant={activeTenant}
@@ -8138,21 +7913,31 @@ Payment Mode:   ${selectedInv.paymentMode}
                     ? tenantsList.map(t => t.id === updatedTenant.id ? updatedTenant : t)
                     : [...tenantsList, updatedTenant];
                   setTenantsList(updatedList);
-                  localStorage.setItem("expert_aid_tenants", JSON.stringify(updatedList));
+                  persistTenantSingle(updatedTenant);
                 }}
                 opsSettings={opsSettings}
                 onUpdateOpsSettings={(newOps) => {
                   setOpsSettings(newOps);
-                  localStorage.setItem("expert_aid_terminal_settings", JSON.stringify(newOps));
+                  persistSettings(newOps);
                   if (typeof newOps.enableSound === "boolean") {
                     setSoundEnabled(newOps.enableSound);
                   }
                 }}
+                labelPrinterConfig={labelPrinterConfig}
+                onUpdateLabelPrinterConfig={(cfg) => {
+                  setLabelPrinterConfig(cfg);
+                  persistSettings({ labelPrinterConfig: cfg });
+                }}
+                products={products}
+                customers={customers}
+                invoices={invoices}
+                expenses={expenses}
+                onClearDatabase={handleClearDatabase}
                 triggerNotification={triggerNotification}
                 productCategories={productCategories}
                 onUpdateProductCategories={(newCats) => {
                   setProductCategories(newCats);
-                  localStorage.setItem("expert_aid_product_categories", JSON.stringify(newCats));
+                  persistCategories(newCats);
                 }}
                 suppliers={suppliers}
                 onAddSupplier={handleAddSupplier}
@@ -8260,9 +8045,12 @@ Payment Mode:   ${selectedInv.paymentMode}
                 <p className="text-[9.5px] font-bold text-slate-600 uppercase tracking-wide">
                   {opsSettings.receiptHeader || "OFFICIAL RETAIL CASH INVOICE"}
                 </p>
-                <p className="text-[10px] text-slate-600 font-mono font-bold">
-                  {activeTenant.businessLocation || activeTenant.name}
-                </p>
+                {activeTenant.businessLocation && 
+                 activeTenant.businessLocation.trim().toLowerCase() !== activeTenant.name.trim().toLowerCase() && (
+                  <p className="text-[9.5px] text-slate-600 font-mono font-semibold">
+                    Branch: {activeTenant.businessLocation}
+                  </p>
+                )}
                 <p className="text-[10px] text-slate-500 font-mono leading-tight">
                   {(() => {
                     const parts = [activeTenant.address, activeTenant.city, activeTenant.state].filter(Boolean);

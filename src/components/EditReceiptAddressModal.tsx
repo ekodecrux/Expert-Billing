@@ -133,9 +133,6 @@ export const EditReceiptAddressModal: React.FC<EditReceiptAddressModalProps> = (
               <p className="text-[9.5px] font-bold text-slate-700 uppercase tracking-wide">
                 {headerTitle || "OFFICIAL RETAIL CASH INVOICE"}
               </p>
-              <p className="text-[9.5px] text-slate-600 font-semibold mt-0.5">
-                {storeName || activeTenant.name}
-              </p>
               <p className="text-[9.5px] text-slate-600 leading-tight">
                 {formattedAddressPreview || "Registered Store Address"}
               </p>
