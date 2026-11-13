@@ -260,6 +260,14 @@ class MySqlDatabaseEngine {
     return this.pool && this.schemaReady ? this.pool : null;
   }
 
+  private assertLivePoolInProduction(pool: Pool | null, operation: string): void {
+    if (this.isProductionRuntime() && !pool) {
+      throw new Error(
+        `Production MySQL is not connected (${operation}). ${this.lastError || "Ensure DB_HOST=localhost on Hostinger and valid u559264694_expertbilling credentials."}`
+      );
+    }
+  }
+
   private async addColumnIfMissing(pool: Pool, table: string, column: string, definition: string) {
     const [rows] = await pool.query<RowDataPacket[]>(
       `SELECT COUNT(*) AS cnt FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ?`,
@@ -1312,6 +1320,7 @@ class MySqlDatabaseEngine {
 
   public async upsertProduct(productInput: Partial<Product> & { id: string }): Promise<Product[]> {
     const pool = await this.getLivePool();
+    this.assertLivePoolInProduction(pool, "upsertProduct");
     if (pool) {
       const current = await this.readFullStateFromMysql(pool);
       const existing = current.products.find((p) => p.id === productInput.id);
@@ -1333,6 +1342,7 @@ class MySqlDatabaseEngine {
 
   public async bulkUpsertProducts(list: any[]): Promise<{ products: Product[]; addedCount: number; updatedCount: number }> {
     const pool = await this.getLivePool();
+    this.assertLivePoolInProduction(pool, "bulkUpsertProducts");
     const currentProducts = pool ? (await this.readFullStateFromMysql(pool)).products : this.runtimeMemoryState.products;
     const branches = pool ? (await this.readFullStateFromMysql(pool)).branches : this.runtimeMemoryState.branches;
 
@@ -1384,6 +1394,7 @@ class MySqlDatabaseEngine {
 
   public async deleteProduct(id: string): Promise<Product[]> {
     const pool = await this.getLivePool();
+    this.assertLivePoolInProduction(pool, "deleteProduct");
     if (pool) {
       await pool.query(`DELETE FROM \`branch_inventory\` WHERE \`product_id\` = ?`, [id]);
       await pool.query(`DELETE FROM \`products\` WHERE \`id\` = ?`, [id]);
@@ -1402,6 +1413,7 @@ class MySqlDatabaseEngine {
   }): Promise<{ products: Product[]; adjustments: StockAdjustment[] } | null> {
     const bId = payload.branchId || "B1";
     const pool = await this.getLivePool();
+    this.assertLivePoolInProduction(pool, "adjustStock");
 
     if (pool) {
       const state = await this.readFullStateFromMysql(pool);
@@ -1456,6 +1468,7 @@ class MySqlDatabaseEngine {
   public async createInvoice(invoice: Invoice): Promise<FullDbState> {
     const bId = invoice.storeBranchId || "B1";
     const pool = await this.getLivePool();
+    this.assertLivePoolInProduction(pool, "createInvoice");
 
     if (pool) {
       const conn = await pool.getConnection();
@@ -1519,6 +1532,7 @@ class MySqlDatabaseEngine {
     requestedBy: string;
   }): Promise<StockTransfer[] | null> {
     const pool = await this.getLivePool();
+    this.assertLivePoolInProduction(pool, "createTransfer");
     const state = await this.getFullState();
     const prod = state.products.find((p) => p.id === payload.productId);
     if (!prod) return null;
@@ -1554,6 +1568,7 @@ class MySqlDatabaseEngine {
     payload: { action: "APPROVED" | "REJECTED"; actionedBy: string; comments?: string }
   ): Promise<{ error?: string; transfers?: StockTransfer[]; products?: Product[] }> {
     const pool = await this.getLivePool();
+    this.assertLivePoolInProduction(pool, "actionTransfer");
     const state = await this.getFullState();
     const transfer = state.transfers.find((t) => t.id === transferId);
     if (!transfer) return { error: "NOT_FOUND" };
@@ -1608,6 +1623,7 @@ class MySqlDatabaseEngine {
   public async createExpense(payload: Omit<Expense, "id">): Promise<Expense[]> {
     const expense: Expense = { id: `EXP-${Date.now()}`, ...payload };
     const pool = await this.getLivePool();
+    this.assertLivePoolInProduction(pool, "createExpense");
     if (pool) {
       await this.insertExpenseMysql(pool, expense);
       return (await this.readFullStateFromMysql(pool)).expenses;
@@ -1618,6 +1634,7 @@ class MySqlDatabaseEngine {
 
   public async upsertCustomer(customer: Partial<Customer>): Promise<Customer[]> {
     const pool = await this.getLivePool();
+    this.assertLivePoolInProduction(pool, "upsertCustomer");
     const state = await this.getFullState();
     const existing = state.customers.find((c) => c.id === customer.id || (customer.phone && c.phone === customer.phone));
     const finalCust: Customer = existing
@@ -1644,6 +1661,7 @@ class MySqlDatabaseEngine {
 
   public async upsertSupplier(supplier: Partial<Supplier>): Promise<Supplier[]> {
     const pool = await this.getLivePool();
+    this.assertLivePoolInProduction(pool, "upsertSupplier");
     const state = await this.getFullState();
     const existing = state.suppliers.find((s) => s.id === supplier.id);
     const finalSup: Supplier = existing
@@ -1669,6 +1687,7 @@ class MySqlDatabaseEngine {
 
   public async deleteSupplier(id: string): Promise<Supplier[]> {
     const pool = await this.getLivePool();
+    this.assertLivePoolInProduction(pool, "deleteSupplier");
     if (pool) {
       await pool.query(`DELETE FROM \`suppliers\` WHERE \`id\` = ?`, [id]);
       return (await this.readFullStateFromMysql(pool)).suppliers;
@@ -1679,6 +1698,7 @@ class MySqlDatabaseEngine {
 
   public async upsertBranch(branch: Partial<StoreBranch>): Promise<StoreBranch[]> {
     const pool = await this.getLivePool();
+    this.assertLivePoolInProduction(pool, "upsertBranch");
     const state = await this.getFullState();
     const existing = state.branches.find((b) => b.id === branch.id);
     const finalBranch: StoreBranch = existing
@@ -1704,6 +1724,7 @@ class MySqlDatabaseEngine {
 
   public async deleteBranch(id: string): Promise<StoreBranch[]> {
     const pool = await this.getLivePool();
+    this.assertLivePoolInProduction(pool, "deleteBranch");
     if (pool) {
       await pool.query(`DELETE FROM \`branch_inventory\` WHERE \`branch_id\` = ?`, [id]);
       await pool.query(`DELETE FROM \`store_branches\` WHERE \`id\` = ?`, [id]);
@@ -1715,6 +1736,7 @@ class MySqlDatabaseEngine {
 
   public async syncTenants(tenants: Tenant[]): Promise<Tenant[]> {
     const pool = await this.getLivePool();
+    this.assertLivePoolInProduction(pool, "syncTenants");
     if (pool) {
       const conn = await pool.getConnection();
       try {
@@ -1741,6 +1763,7 @@ class MySqlDatabaseEngine {
 
   public async upsertTenant(tenant: Tenant): Promise<Tenant[]> {
     const pool = await this.getLivePool();
+    this.assertLivePoolInProduction(pool, "upsertTenant");
     if (pool) {
       await this.upsertTenantsMysql(pool, [tenant]);
       return (await this.readFullStateFromMysql(pool)).tenants;
@@ -1753,6 +1776,7 @@ class MySqlDatabaseEngine {
 
   public async syncCredentials(credentials: AccessProfile[]): Promise<AccessProfile[]> {
     const pool = await this.getLivePool();
+    this.assertLivePoolInProduction(pool, "syncCredentials");
     if (pool) {
       await this.replaceUsersMysql(pool, credentials);
       return (await this.readFullStateFromMysql(pool)).credentials;
@@ -1763,6 +1787,7 @@ class MySqlDatabaseEngine {
 
   public async syncCategories(categories: string[]): Promise<string[]> {
     const pool = await this.getLivePool();
+    this.assertLivePoolInProduction(pool, "syncCategories");
     if (pool) {
       await this.replaceCategoriesMysql(pool, categories);
       return (await this.readFullStateFromMysql(pool)).categories;
@@ -1773,6 +1798,7 @@ class MySqlDatabaseEngine {
 
   public async updateSettings(partial: Partial<ExtendedAppSettings>): Promise<ExtendedAppSettings> {
     const pool = await this.getLivePool();
+    this.assertLivePoolInProduction(pool, "updateSettings");
     const current = await this.getFullState();
     const merged: ExtendedAppSettings = {
       ...current.settings,
@@ -1792,6 +1818,7 @@ class MySqlDatabaseEngine {
 
   public async upsertCashSession(session: CashSession): Promise<CashSession[]> {
     const pool = await this.getLivePool();
+    this.assertLivePoolInProduction(pool, "upsertCashSession");
     if (pool) {
       await pool.query(
         `INSERT INTO \`cash_sessions\` (
@@ -1829,6 +1856,7 @@ class MySqlDatabaseEngine {
 
   public async clearOperationalData(): Promise<FullDbState> {
     const pool = await this.getLivePool();
+    this.assertLivePoolInProduction(pool, "clearOperationalData");
     if (pool) {
       await pool.query(`DELETE FROM \`invoice_items\``);
       await pool.query(`DELETE FROM \`invoices\``);
@@ -1853,6 +1881,7 @@ class MySqlDatabaseEngine {
 
   public async resetToSuperAdminOnly(): Promise<FullDbState> {
     const pool = await this.getLivePool();
+    this.assertLivePoolInProduction(pool, "resetToSuperAdminOnly");
     if (pool) {
       await this.cleanDatabaseExceptSuperAdminMysql(pool);
       return this.readFullStateFromMysql(pool);
@@ -1872,6 +1901,10 @@ class MySqlDatabaseEngine {
     }
 
     const pool = this.isProductionRuntime() && this.pool && this.schemaReady ? this.pool : null;
+    if (this.isProductionRuntime() && !pool) {
+      const state = await this.getFullState();
+      return { state, status: this.getStatus() };
+    }
     if (payload) {
       if (Array.isArray(payload.tenants)) {
         await this.syncTenants(payload.tenants);
