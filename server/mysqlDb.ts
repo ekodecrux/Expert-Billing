@@ -1,4 +1,5 @@
 import mysql, { Pool, PoolConnection, RowDataPacket } from "mysql2/promise";
+import fs from "fs";
 import {
   AccessProfile,
   DEFAULT_ADJUSTMENTS,
@@ -38,6 +39,12 @@ function clone<T>(val: T): T {
   return JSON.parse(JSON.stringify(val));
 }
 
+interface DbConnectionTarget {
+  label: string;
+  host?: string;
+  socketPath?: string;
+}
+
 function getDbConfigCandidates() {
   const rawEnvPort = Number(process.env.DB_PORT);
   // 65002 is Hostinger's SSH port; MySQL always listens on 3306 (or custom non-SSH DB_PORT)
@@ -49,16 +56,35 @@ function getDbConfigCandidates() {
   const rawEnvHost = process.env.DB_HOST?.trim();
   const envHost = rawEnvHost === "142.79.209.120" ? "145.79.209.120" : rawEnvHost;
 
+  // Prefer IPv4 127.0.0.1 over 'localhost' in production so Node doesn't resolve localhost to IPv6 '::1'
   const rawHosts = envHost
     ? isProd
-      ? ["localhost", envHost, "145.79.209.120"]
-      : [envHost, "145.79.209.120", "localhost"]
+      ? [envHost === "localhost" ? "127.0.0.1" : envHost, "127.0.0.1", "localhost", "145.79.209.120"]
+      : [envHost, "145.79.209.120", "127.0.0.1", "localhost"]
     : isProd
-      ? ["localhost", "145.79.209.120"]
-      : ["145.79.209.120", "localhost"];
+      ? ["127.0.0.1", "localhost", "145.79.209.120"]
+      : ["145.79.209.120", "127.0.0.1", "localhost"];
 
   const hosts = Array.from(new Set(rawHosts.filter(Boolean)));
-  return { hosts, port, user, password, database };
+  const targets: DbConnectionTarget[] = [];
+
+  if (isProd) {
+    // Check standard Linux/Hostinger MySQL Unix sockets first/early for '@localhost' socket grants
+    const socketPaths = ["/var/run/mysqld/mysqld.sock", "/var/lib/mysql/mysql.sock", "/tmp/mysql.sock"];
+    for (const sock of socketPaths) {
+      try {
+        if (fs.existsSync(sock)) {
+          targets.push({ label: `socket:${sock}`, socketPath: sock });
+        }
+      } catch {}
+    }
+  }
+
+  for (const h of hosts) {
+    targets.push({ label: h, host: h });
+  }
+
+  return { hosts, targets, port, user, password, database };
 }
 
 function safeJsonParse<T>(raw: any, fallback: T): T {
@@ -205,12 +231,11 @@ class MySqlDatabaseEngine {
     this.lastAttemptMs = now;
 
     const errors: string[] = [];
-    for (const host of cfg.hosts) {
+    for (const target of cfg.targets) {
       let candidatePool: Pool | null = null;
       try {
         candidatePool = mysql.createPool({
-          host,
-          port: cfg.port,
+          ...(target.socketPath ? { socketPath: target.socketPath } : { host: target.host, port: cfg.port }),
           user: cfg.user,
           password: cfg.password,
           database: cfg.database,
@@ -223,17 +248,18 @@ class MySqlDatabaseEngine {
         });
         await candidatePool.query("SELECT 1");
         this.pool = candidatePool;
-        this.activeHost = host;
+        this.activeHost = target.label;
         await this.ensureSchema(candidatePool);
         await this.migrateLiveToCleanSuperAdminIfLegacy(candidatePool);
         await this.seedIfEmpty(candidatePool);
         this.schemaReady = true;
         this.lastError = null;
         this.loggedPreviewNotice = false;
-        console.log(`[MySQL] Connected LIVE (Production) to ${cfg.database} @ ${host}:${cfg.port}`);
+        console.log(`[MySQL] Connected LIVE (Production) to ${cfg.database} @ ${target.label}${target.socketPath ? "" : `:${cfg.port}`}`);
         return this.getStatus();
       } catch (err: any) {
-        errors.push(`${host}:${cfg.port} -> ${err?.code || ""} ${err?.message || err}`);
+        const endpointLabel = target.socketPath ? target.label : `${target.label}:${cfg.port}`;
+        errors.push(`${endpointLabel} -> ${err?.code || ""} ${err?.message || err}`);
         if (candidatePool) {
           try {
             await candidatePool.end();
@@ -263,7 +289,7 @@ class MySqlDatabaseEngine {
   private assertLivePoolInProduction(pool: Pool | null, operation: string): void {
     if (this.isProductionRuntime() && !pool) {
       throw new Error(
-        `Production MySQL is not connected (${operation}). ${this.lastError || "Ensure DB_HOST=localhost on Hostinger and valid u559264694_expertbilling credentials."}`
+        `Production MySQL is not connected (${operation}). ${this.lastError || "Set DB_HOST=127.0.0.1 on Hostinger and verify u559264694_expertbilling password."}`
       );
     }
   }

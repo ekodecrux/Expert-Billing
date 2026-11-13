@@ -109,7 +109,7 @@ app.post("/api/database/test", async (_req, res) => {
     message: `MySQL credentials are configured for '${status.user}', but direct connection failed in production.`,
     errorDetail: status.errorDetail || "Access denied or port 3306 unreachable.",
     recommendation:
-      "On Hostinger hosting, set DB_HOST=localhost (or import database/schema.sql via phpMyAdmin).",
+      "On Hostinger hosting, set DB_HOST=127.0.0.1 (avoids IPv6 ::1), verify the password for u559264694_expertbilling in Hostinger hPanel > Databases, or add Remote MySQL '%' if hosted externally.",
     timestamp: new Date().toISOString(),
   });
 });
@@ -142,7 +142,7 @@ app.post("/api/database/sync", async (req, res) => {
         ? `Live synchronized to Hostinger MySQL database ${status.database} at ${status.host}:${status.port}`
         : isPreviewIsolated
         ? "AI Studio Preview Mode: Live database sync is disabled in preview (Production only). Changes stay isolated in preview memory."
-        : `Production MySQL connection unavailable (${status.errorDetail}). Check DB credentials and DB_HOST=localhost.`,
+        : `Production MySQL connection unavailable (${status.errorDetail}). Set DB_HOST=127.0.0.1 and check u559264694_expertbilling password in Hostinger hPanel.`,
       state,
       timestamp: new Date().toISOString(),
     });
