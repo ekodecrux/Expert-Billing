@@ -604,6 +604,9 @@ class MySqlDatabaseEngine {
     `);
 
     // Ensure missing columns exist if tables were pre-created with older DDL
+    await this.addColumnIfMissing(pool, "tenants", "admin_login_id", "VARCHAR(100) DEFAULT NULL");
+    await this.addColumnIfMissing(pool, "tenants", "password_hash", "VARCHAR(255) DEFAULT NULL");
+    await this.addColumnIfMissing(pool, "tenants", "company_logo", "MEDIUMTEXT DEFAULT NULL");
     await this.addColumnIfMissing(pool, "tenants", "domain_url", "VARCHAR(255) DEFAULT NULL");
     await this.addColumnIfMissing(pool, "tenants", "domain_status", "VARCHAR(40) DEFAULT 'ACTIVE'");
     await this.addColumnIfMissing(pool, "tenants", "business_sector", "VARCHAR(50) DEFAULT 'SUPERMARKET'");
@@ -616,6 +619,7 @@ class MySqlDatabaseEngine {
     await this.addColumnIfMissing(pool, "tenants", "pincode", "VARCHAR(20) DEFAULT NULL");
     await this.addColumnIfMissing(pool, "tenants", "country", "VARCHAR(80) DEFAULT 'India'");
 
+    await this.addColumnIfMissing(pool, "users", "tenant_id", "VARCHAR(64) DEFAULT NULL");
     await this.addColumnIfMissing(pool, "users", "title", "VARCHAR(150) DEFAULT NULL");
     await this.addColumnIfMissing(pool, "users", "color", "VARCHAR(40) DEFAULT 'emerald'");
     await this.addColumnIfMissing(pool, "users", "gradient", "VARCHAR(100) DEFAULT NULL");

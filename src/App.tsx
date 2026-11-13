@@ -809,37 +809,52 @@ export default function App() {
 
   const persistTenants = async (list: Tenant[]) => {
     try {
-      await fetch("/api/tenants/sync", {
+      const res = await fetch("/api/tenants/sync", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ tenants: list })
       });
-    } catch (e) {
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        triggerNotification(errData.error || "Failed to save client record to database.", "warning");
+      }
+    } catch (e: any) {
       console.error("Failed to persist tenants to MySQL:", e);
+      triggerNotification("Network error while saving client record to database.", "warning");
     }
   };
 
   const persistTenantSingle = async (tenant: Tenant) => {
     try {
-      await fetch("/api/tenants", {
+      const res = await fetch("/api/tenants", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(tenant)
       });
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        triggerNotification(errData.error || "Failed to save client record to database.", "warning");
+      }
     } catch (e) {
       console.error("Failed to persist tenant to MySQL:", e);
+      triggerNotification("Network error while saving client record to database.", "warning");
     }
   };
 
   const persistCredentials = async (list: AccessProfile[]) => {
     try {
-      await fetch("/api/credentials", {
+      const res = await fetch("/api/credentials", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ credentials: list })
       });
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        triggerNotification(errData.error || "Failed to save user credentials to database.", "warning");
+      }
     } catch (e) {
       console.error("Failed to persist credentials to MySQL:", e);
+      triggerNotification("Network error while saving user credentials to database.", "warning");
     }
   };
 
