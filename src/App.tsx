@@ -93,8 +93,8 @@ import {
   AppSettings,
   LabelPrinterConfig,
   printElementById,
+  printElementDirect,
   saveElementAsPDF,
-  downloadPrintableHtmlSlip,
   exportToExcelCSV,
   BusinessSector,
   TenantFontFamily,
@@ -104,6 +104,24 @@ import {
   TENANT_FONT_OPTIONS,
   TENANT_FONT_SIZE_OPTIONS
 } from "./types";
+import {
+  PrinterLayoutProfile,
+  ThermalConnectionMode,
+  ThermalPrinterConfig,
+  THERMAL_LAYOUT_SPECS,
+  loadThermalPrinterConfig,
+  saveThermalPrinterConfig,
+  buildEscPosPayload,
+  printViaWebUSB,
+  printViaWebSerial,
+  printViaNetworkSocket,
+  isFeatureAllowedByPolicy,
+  hasPairedUsbPrinter,
+  hasPairedSerialPrinter,
+  savePrintSnapshot,
+  sendPrintSnapshotToServer,
+  buildStandalonePrintUrl
+} from "./utils/thermalPrinter";
 
 import SuperAdminConsole, { AccessProfile } from "./components/SuperAdminConsole";
 import StaffRegistry from "./components/StaffRegistry";
@@ -713,7 +731,24 @@ export default function App() {
   const [isLabelModalOpen, setIsLabelModalOpen] = useState<boolean>(false);
   const [labelModalProduct, setLabelModalProduct] = useState<Product | null>(null);
   const [showInvoicePrintPreview, setShowInvoicePrintPreview] = useState<Invoice | null>(null);
-  const [selectedPrinterLayout, setSelectedPrinterLayout] = useState<"standard-a4" | "thermal-80mm" | "thermal-58mm">("thermal-80mm");
+  const [printerConfig, setPrinterConfig] = useState<ThermalPrinterConfig>(() => loadThermalPrinterConfig());
+  const selectedPrinterLayout = printerConfig.layoutProfile;
+  const setSelectedPrinterLayout = (layout: PrinterLayoutProfile) => {
+    setPrinterConfig((prev) => {
+      const next = { ...prev, layoutProfile: layout };
+      saveThermalPrinterConfig(next);
+      return next;
+    });
+  };
+  const updatePrinterConfig = (patch: Partial<ThermalPrinterConfig>) => {
+    setPrinterConfig((prev) => {
+      const next = { ...prev, ...patch };
+      saveThermalPrinterConfig(next);
+      return next;
+    });
+  };
+  const [printSandboxNotice, setPrintSandboxNotice] = useState<boolean>(false);
+  const [printTabUrl, setPrintTabUrl] = useState<string>("/?printReceipt=1");
   const [categoryFilter, setCategoryFilter] = useState<string>("All");
   const [reprintSearch, setReprintSearch] = useState<string>("");
   const [reprintShowAllBranches, setReprintShowAllBranches] = useState<boolean>(false);
@@ -1663,9 +1698,167 @@ export default function App() {
         setCouponCode("");
         setAppliedDiscountPercent(0);
         setCashReceived("");
+
+        // Silently auto-dispatch to already-configured/paired direct hardware printer when enabled (never opens extra dialog windows)
+        if (opsSettings.autoPrintReceipt && printerConfig.connectionMode !== "system") {
+          setTimeout(async () => {
+            if (printerConfig.connectionMode === "network") {
+              handlePrintReceipt("invoice-receipt-theme", newInvoice.id, false, true);
+            } else if (printerConfig.connectionMode === "webusb" && (await hasPairedUsbPrinter())) {
+              handlePrintReceipt("invoice-receipt-theme", newInvoice.id, false, true);
+            } else if (printerConfig.connectionMode === "webserial" && (await hasPairedSerialPrinter())) {
+              handlePrintReceipt("invoice-receipt-theme", newInvoice.id, false, true);
+            }
+          }, 180);
+        }
       }
     } catch (e) {
       triggerNotification("Failed to finalize transaction on database.", "warning");
+    }
+  };
+
+  const preparePrintSnapshot = (elementId: string, invoiceId?: string): string => {
+    const el = document.getElementById(elementId);
+    if (!el) return "/?printReceipt=1";
+    const clone = el.cloneNode(true) as HTMLElement;
+    clone.querySelectorAll("button, .no-print, .action-buttons, [role='button']").forEach((n) => n.remove());
+    const cleanInvoice = (invoiceId || "REC").replace(/[^a-zA-Z0-9_-]/g, "");
+    const jobId = `PJ-${cleanInvoice}-${Date.now()}`;
+    const payload = {
+      jobId,
+      html: clone.innerHTML,
+      layoutProfile: printerConfig.layoutProfile,
+      connectionMode: printerConfig.connectionMode,
+      invoiceId,
+      createdAt: Date.now()
+    };
+    savePrintSnapshot(payload);
+    sendPrintSnapshotToServer(jobId, payload);
+    const url = buildStandalonePrintUrl(jobId, payload);
+    setPrintTabUrl(url);
+    return url;
+  };
+
+  useEffect(() => {
+    if (!showInvoicePrintPreview) return;
+    const timer = setTimeout(() => {
+      preparePrintSnapshot("invoice-receipt-theme", showInvoicePrintPreview.id);
+    }, 50);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showInvoicePrintPreview, printerConfig.layoutProfile, printerConfig.connectionMode, activeTenant.name, opsSettings.receiptHeader, opsSettings.receiptFooter]);
+
+  useEffect(() => {
+    if (!selectedReprintInvoiceId) return;
+    const timer = setTimeout(() => {
+      preparePrintSnapshot("virtual-receipt-roll-wrapper", selectedReprintInvoiceId);
+    }, 60);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedReprintInvoiceId, virtualPrintDone, printerConfig.layoutProfile, printerConfig.connectionMode]);
+
+  // Unified thermal & standard receipt print dispatcher (never downloads files on print)
+  const handlePrintReceipt = (
+    elementId: string,
+    invoiceId?: string,
+    forceDevicePrompt = false,
+    silentOnly = false
+  ) => {
+    setPrintSandboxNotice(false);
+    preparePrintSnapshot(elementId, invoiceId);
+
+    const mode = printerConfig.connectionMode;
+    const layout = printerConfig.layoutProfile;
+    const nav = navigator as any;
+    const usbBlockedOrMissing = mode === "webusb" && (!nav?.usb || !isFeatureAllowedByPolicy("usb"));
+    const serialBlockedOrMissing = mode === "webserial" && (!nav?.serial || !isFeatureAllowedByPolicy("serial"));
+
+    // Keep system / fallback print calls strictly synchronous in the click gesture so window.print() stays allowed
+    if (mode === "system" || usbBlockedOrMissing || serialBlockedOrMissing) {
+      if (silentOnly) return;
+      const result = printElementDirect(elementId, layout);
+      if (result.ok) {
+        if (usbBlockedOrMissing || serialBlockedOrMissing) {
+          triggerNotification(
+            "Direct raw USB/Serial is restricted inside this embedded frame — sent cleanly via OS / USB Printer Driver instead.",
+            "success"
+          );
+        } else {
+          triggerNotification(
+            `✓ Sent directly to printer (${THERMAL_LAYOUT_SPECS[layout]?.label || layout}).`,
+            "success"
+          );
+        }
+      } else if (result.blockedBySandbox) {
+        setPrintSandboxNotice(true);
+        triggerNotification(
+          "Preview iframe blocks direct printing — click 'Open Direct Print Window' to open the printing window.",
+          "warning"
+        );
+      } else {
+        triggerNotification(result.reason || "Unable to open print dialog.", "warning");
+      }
+      return;
+    }
+
+    const element = document.getElementById(elementId);
+    if (!element) {
+      if (!silentOnly) triggerNotification("Receipt preview element not ready to print.", "warning");
+      return;
+    }
+
+    const payload = buildEscPosPayload(element, printerConfig);
+
+    if (mode === "webusb") {
+      if (!silentOnly) triggerNotification("Connecting to USB thermal printer...", "success");
+      void (async () => {
+        const res = await printViaWebUSB(payload, forceDevicePrompt);
+        if (res.ok) {
+          if (res.deviceLabel) updatePrinterConfig({ pairedDeviceLabel: res.deviceLabel });
+          triggerNotification(`✓ Printed directly via USB (${res.deviceLabel || "Thermal Printer"})!`, "success");
+        } else if (res.fallbackToSystemPrint && !silentOnly) {
+          triggerNotification(res.error || "Routing to OS / USB Printer Driver...", "warning");
+          const sysRes = printElementDirect(elementId, layout);
+          if (sysRes.blockedBySandbox) {
+            setPrintSandboxNotice(true);
+          }
+        } else if (!silentOnly) {
+          triggerNotification(res.error || "USB printer selection cancelled.", "warning");
+        }
+      })();
+      return;
+    }
+
+    if (mode === "webserial") {
+      if (!silentOnly) triggerNotification(`Sending ESC/POS job (${printerConfig.serialBaudRate} baud)...`, "success");
+      void (async () => {
+        const res = await printViaWebSerial(payload, printerConfig.serialBaudRate, forceDevicePrompt);
+        if (res.ok) {
+          if (res.deviceLabel) updatePrinterConfig({ pairedDeviceLabel: res.deviceLabel });
+          triggerNotification(`✓ Printed directly via Serial/BT (${res.deviceLabel || "COM Printer"})!`, "success");
+        } else if (res.fallbackToSystemPrint && !silentOnly) {
+          triggerNotification(res.error || "Routing to OS Printer Driver...", "warning");
+          const sysRes = printElementDirect(elementId, layout);
+          if (sysRes.blockedBySandbox) {
+            setPrintSandboxNotice(true);
+          }
+        } else if (!silentOnly) {
+          triggerNotification(res.error || "Serial / Bluetooth COM printer failed.", "warning");
+        }
+      })();
+      return;
+    }
+
+    if (mode === "network") {
+      triggerNotification(`Sending ESC/POS to ${printerConfig.networkIp}:${printerConfig.networkPort}...`, "success");
+      void (async () => {
+        const res = await printViaNetworkSocket(payload, printerConfig.networkIp, printerConfig.networkPort);
+        if (res.ok) {
+          triggerNotification(`✓ Printed to LAN thermal printer ${printerConfig.networkIp}:${printerConfig.networkPort}!`, "success");
+        } else {
+          triggerNotification(res.error || "Network thermal printer unreachable.", "warning");
+        }
+      })();
     }
   };
 
@@ -6501,37 +6694,21 @@ export default function App() {
                     <div className="col-span-1 text-xs font-bold text-slate-500 flex items-center">
                       Paper Width:
                     </div>
-                    <div className="col-span-3 grid grid-cols-3 gap-2">
-                      <button
-                        onClick={() => setSelectedPrinterLayout("thermal-80mm")}
-                        className={`py-1.5 rounded-lg border font-bold text-[10px] flex items-center justify-center gap-1 transition-all cursor-pointer ${
-                          selectedPrinterLayout === "thermal-80mm"
-                            ? "bg-slate-900 text-white border-slate-900 shadow"
-                            : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
-                        }`}
-                      >
-                        <span>🧾 80mm POS Roll</span>
-                      </button>
-                      <button
-                        onClick={() => setSelectedPrinterLayout("thermal-58mm")}
-                        className={`py-1.5 rounded-lg border font-bold text-[10px] flex items-center justify-center gap-1 transition-all cursor-pointer ${
-                          selectedPrinterLayout === "thermal-58mm"
-                            ? "bg-slate-900 text-white border-slate-900 shadow"
-                            : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
-                        }`}
-                      >
-                        <span>🎟️ 58mm Handheld</span>
-                      </button>
-                      <button
-                        onClick={() => setSelectedPrinterLayout("standard-a4")}
-                        className={`py-1.5 rounded-lg border font-bold text-[10px] flex items-center justify-center gap-1 transition-all cursor-pointer ${
-                          selectedPrinterLayout === "standard-a4"
-                            ? "bg-slate-900 text-white border-slate-900 shadow"
-                            : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
-                        }`}
-                      >
-                        <span>🖨️ Office A4 Page</span>
-                      </button>
+                    <div className="col-span-3 grid grid-cols-5 gap-1.5">
+                      {(["thermal-58mm", "thermal-76mm", "thermal-80mm", "thermal-112mm", "standard-a4"] as PrinterLayoutProfile[]).map((prof) => (
+                        <button
+                          key={prof}
+                          type="button"
+                          onClick={() => setSelectedPrinterLayout(prof)}
+                          className={`py-1.5 px-1 rounded-lg border font-bold text-[10px] flex items-center justify-center gap-1 transition-all cursor-pointer ${
+                            selectedPrinterLayout === prof
+                              ? "bg-slate-900 text-white border-slate-900 shadow"
+                              : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
+                          }`}
+                        >
+                          <span>{THERMAL_LAYOUT_SPECS[prof].shortLabel}</span>
+                        </button>
+                      ))}
                     </div>
                   </div>
                 </div>
@@ -6573,7 +6750,15 @@ export default function App() {
                             {/* Inner receipt paper tape */}
                             <div 
                               className={`bg-white text-slate-900 font-mono text-[10px] p-5 border-x-2 border-dashed border-slate-300 relative ${
-                                selectedPrinterLayout === "thermal-58mm" ? "w-[240px]" : selectedPrinterLayout === "standard-a4" ? "w-[450px]" : "w-[330px]"
+                                selectedPrinterLayout === "thermal-58mm"
+                                  ? "w-[240px]"
+                                  : selectedPrinterLayout === "thermal-76mm"
+                                  ? "w-[305px]"
+                                  : selectedPrinterLayout === "thermal-112mm"
+                                  ? "w-[410px]"
+                                  : selectedPrinterLayout === "standard-a4"
+                                  ? "w-[450px]"
+                                  : "w-[330px]"
                               }`}
                               style={{ 
                                 backgroundImage: "linear-gradient(rgba(240,240,240,0.1) 1px, transparent 1px)",
@@ -6589,23 +6774,24 @@ export default function App() {
                                     <img 
                                       src={activeTenant.companyLogo} 
                                       alt={`${activeTenant.name} Logo`} 
+                                      data-receipt-logo="true"
                                       className="h-8 max-w-[120px] object-contain"
                                     />
                                   </div>
                                 )}
-                                <h4 className="font-display font-black text-xs uppercase tracking-tight text-slate-950">
-                                  ⭐ {activeTenant.name} ⭐
+                                <h4 data-receipt-store-name="true" className="font-display font-black text-xs uppercase tracking-tight text-slate-950">
+                                  {activeTenant.name}
                                 </h4>
-                                <p className="text-[9px] text-slate-600 font-mono font-bold">
+                                <p data-receipt-header="true" className="text-[9px] text-slate-600 font-mono font-bold">
                                   {opsSettings.receiptHeader || "OFFICIAL RETAIL CASH INVOICE"}
                                 </p>
                                 {activeTenant.businessLocation && 
                                  activeTenant.businessLocation.trim().toLowerCase() !== activeTenant.name.trim().toLowerCase() && (
-                                  <p className="text-[9px] text-slate-600 font-mono font-semibold">
+                                  <p data-receipt-branch="true" className="text-[9px] text-slate-600 font-mono font-semibold">
                                     Branch: {activeTenant.businessLocation}
                                   </p>
                                 )}
-                                <p className="text-[9.5px] text-slate-500 font-mono leading-tight">
+                                <p data-receipt-address="true" className="text-[9.5px] text-slate-500 font-mono leading-tight">
                                   {(() => {
                                     const parts = [activeTenant.address, activeTenant.city, activeTenant.state].filter(Boolean);
                                     if (parts.length > 0) {
@@ -6618,8 +6804,8 @@ export default function App() {
                                     return "Registered Store Location";
                                   })()}
                                 </p>
-                                <p className="text-[8.5px] text-slate-400 font-mono">
-                                  Phone: {activeTenant.phone || branches.find(b => b.id === selectedInv.storeBranchId)?.phone || currentBranch?.phone || "N/A"}
+                                <p data-receipt-contact="true" className="text-[8.5px] text-slate-400 font-mono">
+                                  Contact: {activeTenant.phone || branches.find(b => b.id === selectedInv.storeBranchId)?.phone || currentBranch?.phone || "N/A"}
                                 </p>
                                 {(normalizeUserRole(currentRole) === UserRole.ADMIN || isSuperAdmin) && (
                                   <button
@@ -6634,30 +6820,30 @@ export default function App() {
                               </div>
 
                               <div className="border-t border-dashed border-slate-300 py-2 space-y-0.5 text-[9.5px]">
-                                <div className="flex justify-between">
+                                <div className="flex justify-between" data-receipt-meta-row="true">
                                   <span>Invoice ID:</span>
                                   <span className="font-bold">{selectedInv.id}</span>
                                 </div>
-                                <div className="flex justify-between">
+                                <div className="flex justify-between" data-receipt-meta-row="true">
                                   <span>GSTIN Check:</span>
-                                  <span className="font-bold uppercase">{activeTenant.gstinRegNumber || "07AAAAA1111A1Z1"}</span>
+                                  <span className="font-bold uppercase">{activeTenant.gstinRegNumber || (selectedInv.storeBranchId ? branches.find(b => b.id === selectedInv.storeBranchId)?.gstin : "") || "07AAAAA1111A1Z1"}</span>
                                 </div>
-                                <div className="flex justify-between">
+                                <div className="flex justify-between" data-receipt-meta-row="true">
                                   <span>Sales Cashier:</span>
                                   <span>{selectedInv.cashierName}</span>
                                 </div>
-                                <div className="flex justify-between">
+                                <div className="flex justify-between" data-receipt-meta-row="true">
                                   <span>Timestamp:</span>
                                   <span>{selectedInv.date} {selectedInv.time}</span>
                                 </div>
                                 {selectedInv.customerName && (
-                                  <div className="flex justify-between border-t border-dashed border-slate-300 pt-1">
-                                    <span>Loyalty Customer:</span>
-                                    <span className="font-bold truncate max-w-[150px]">{selectedInv.customerName}</span>
+                                  <div className="flex justify-between border-t border-dashed border-slate-300 pt-1" data-receipt-meta-row="true">
+                                    <span>Customer:</span>
+                                    <span className="font-bold text-right break-words max-w-[180px]">{selectedInv.customerName}</span>
                                   </div>
                                 )}
                                 {selectedInv.customerPhone && (
-                                  <div className="flex justify-between">
+                                  <div className="flex justify-between" data-receipt-meta-row="true">
                                     <span>Mobile No:</span>
                                     <span className="font-bold">{selectedInv.customerPhone}</span>
                                   </div>
@@ -6666,8 +6852,8 @@ export default function App() {
 
                               {/* Items list with MRP, Rate & dedicated Qty column */}
                               <div className="border-t border-slate-300 py-2 space-y-1 text-[9px]">
-                                <div className="grid grid-cols-[3fr_1.4fr_1.4fr_1.1fr_1.6fr] gap-1 font-bold border-b border-slate-200 pb-1 text-slate-950">
-                                  <span className="truncate">Item Description</span>
+                                <div data-receipt-items-grid="true" className="grid grid-cols-[minmax(0,1fr)_44px_44px_22px_48px] gap-1 font-bold border-b border-slate-200 pb-1 text-slate-950">
+                                  <span>Item Description</span>
                                   <span className="text-right">MRP</span>
                                   <span className="text-right">Rate</span>
                                   <span className="text-center">Qty</span>
@@ -6676,9 +6862,9 @@ export default function App() {
                                 {selectedInv.items.map((it, idx) => {
                                   const itemMrp = it.mrp || (it.price > 0 ? Number((it.price * 1.15).toFixed(2)) : it.price);
                                   return (
-                                    <div key={idx} className="grid grid-cols-[3fr_1.4fr_1.4fr_1.1fr_1.6fr] gap-1 text-slate-800 items-center">
-                                      <div className="truncate font-sans">
-                                        <span className="font-semibold block truncate leading-tight">{it.name}</span>
+                                    <div key={idx} data-receipt-items-grid="true" data-receipt-item-row="true" className="grid grid-cols-[minmax(0,1fr)_44px_44px_22px_48px] gap-1 text-slate-800 items-start">
+                                      <div className="font-sans min-w-0">
+                                        <span className="font-semibold block break-words leading-tight">{it.name}</span>
                                       </div>
                                       <span className="text-right font-mono text-slate-700 text-[8.5px]">
                                         {activeTenant.currency || "₹"}{itemMrp.toFixed(2)}
@@ -6706,7 +6892,7 @@ export default function App() {
                                 const totalSavings = Math.max(0, totalMrp - selectedInv.grandTotal);
                                 if (totalSavings > 0) {
                                   return (
-                                    <div className="p-1.5 bg-emerald-50 border border-emerald-200 rounded text-emerald-800 text-[8.5px] font-bold flex justify-between items-center my-1 font-sans">
+                                    <div data-receipt-savings="true" className="p-1.5 bg-emerald-50 border border-emerald-200 rounded text-emerald-800 text-[8.5px] font-bold flex justify-between items-center my-1 font-sans">
                                       <span>🎉 You Saved on MRP:</span>
                                       <span className="font-mono font-extrabold">{activeTenant.currency || "₹"}{totalSavings.toFixed(2)} ({Math.round((totalSavings / totalMrp) * 100)}% OFF)</span>
                                     </div>
@@ -6717,8 +6903,8 @@ export default function App() {
 
                               {/* Calculations */}
                               <div className="border-t border-dashed border-slate-300 pt-2 space-y-0.5 text-[9.5px]">
-                                <div className="flex justify-between">
-                                  <span>Total MRP:</span>
+                                <div className="flex justify-between" data-receipt-math-row="true">
+                                  <span>Total MRP Value:</span>
                                   <span className="font-mono text-slate-700 font-medium">
                                     {activeTenant.currency || "₹"}
                                     {selectedInv.items.reduce((acc, it) => {
@@ -6727,37 +6913,37 @@ export default function App() {
                                     }, 0).toFixed(2)}
                                   </span>
                                 </div>
-                                <div className="flex justify-between">
-                                  <span>Basket Tax (GST):</span>
+                                <div className="flex justify-between" data-receipt-math-row="true">
+                                  <span>Basket Tax value:</span>
                                   <span>{activeTenant.currency || "₹"}{selectedInv.taxAmount.toFixed(2)}</span>
                                 </div>
-                                <div className="flex justify-between">
+                                <div className="flex justify-between" data-receipt-math-row="true">
                                   <span>Promo discount code:</span>
                                   <span>{selectedInv.couponCode ? `-${showInvoicePrintPercentApplied(selectedInv)}` : `${activeTenant.currency || "₹"}0.00`}</span>
                                 </div>
-                                <div className="flex justify-between text-[11px] font-black text-slate-950 border-t border-dashed border-slate-300 pt-1.5">
-                                  <span>TOTAL NET PAYABLE:</span>
+                                <div className="flex justify-between text-[11px] font-black text-slate-950 border-t border-dashed border-slate-300 pt-1.5" data-receipt-math-row="true">
+                                  <span>TOTAL PAYABLE:</span>
                                   <span>{activeTenant.currency || "₹"}{selectedInv.grandTotal.toFixed(2)}</span>
                                 </div>
                                 {selectedInv.paymentMode === PaymentMode.CASH && (
                                   <>
-                                    <div className="flex justify-between p-0.5 mt-1 bg-slate-100 rounded text-slate-700">
-                                      <span>Tendered Cash:</span>
+                                    <div className="flex justify-between p-0.5 mt-1 bg-slate-100 rounded text-slate-700" data-receipt-math-row="true">
+                                      <span>Cash Received:</span>
                                       <span>{activeTenant.currency || "₹"}{Number(selectedInv.cashReceived || selectedInv.grandTotal).toFixed(2)}</span>
                                     </div>
-                                    <div className="flex justify-between text-slate-700">
-                                      <span>Returned Change:</span>
+                                    <div className="flex justify-between text-slate-700" data-receipt-math-row="true">
+                                      <span>Change Returned:</span>
                                       <span>{activeTenant.currency || "₹"}{Number(selectedInv.changeReturned || 0).toFixed(2)}</span>
                                     </div>
                                   </>
                                 )}
-                                <div className="flex justify-between items-center pt-1">
-                                  <span>Tender Mode:</span>
+                                <div className="flex justify-between items-center pt-1" data-receipt-math-row="true">
+                                  <span>Payment Mode:</span>
                                   <span className="font-extrabold text-[8.5px] bg-slate-950 text-white px-1.5 py-0.2 rounded">{selectedInv.paymentMode}</span>
                                 </div>
                               </div>
 
-                              <div className="p-2 bg-slate-50 border border-slate-200 rounded text-[8.5px] font-sans leading-normal text-center text-slate-600 mt-4">
+                              <div data-receipt-footer="true" className="p-2 bg-slate-50 border border-slate-200 rounded text-[8.5px] font-sans leading-normal text-center text-slate-600 mt-4">
                                 {opsSettings.receiptFooter ? (
                                   opsSettings.receiptFooter
                                 ) : (
@@ -6821,6 +7007,39 @@ export default function App() {
 
                           {virtualPrintDone && (
                             <>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const selectedInv = invoices.find(inv => inv.id === selectedReprintInvoiceId);
+                                  if (!selectedInv) return;
+                                  handlePrintReceipt("virtual-receipt-roll-wrapper", selectedInv.id);
+                                }}
+                                className="px-3 py-1 bg-white hover:bg-slate-100 text-slate-950 text-[10px] font-extrabold uppercase rounded border border-slate-300 shadow-sm active:scale-95 transition-all flex items-center gap-1.5 cursor-pointer"
+                              >
+                                <Printer className="w-3.5 h-3.5 text-blue-600" />
+                                <span>Print Receipt</span>
+                              </button>
+
+                              <a
+                                href={printTabUrl}
+                                target="expertpos_print_station"
+                                onMouseDown={() => {
+                                  const selectedInv = invoices.find(inv => inv.id === selectedReprintInvoiceId);
+                                  if (selectedInv) preparePrintSnapshot("virtual-receipt-roll-wrapper", selectedInv.id);
+                                }}
+                                onClick={(e) => {
+                                  if (e.detail === 0) {
+                                    const selectedInv = invoices.find(inv => inv.id === selectedReprintInvoiceId);
+                                    if (selectedInv) preparePrintSnapshot("virtual-receipt-roll-wrapper", selectedInv.id);
+                                  }
+                                }}
+                                className="px-3 py-1 bg-emerald-600 hover:bg-emerald-500 text-white text-[10px] font-extrabold uppercase rounded border border-emerald-700 shadow-sm active:scale-95 transition-all flex items-center gap-1 cursor-pointer"
+                                title="Open direct printer tab if browser preview frame restricts print dialogs or USB pairing"
+                              >
+                                <ExternalLink className="w-3 h-3" />
+                                <span>Print Window</span>
+                              </a>
+
                               <button
                                 type="button"
                                 onClick={async () => {
@@ -7969,76 +8188,228 @@ Payment Mode:   ${selectedInv.paymentMode}
         </div>
       </div>
 
-      {/* RETAIL THERMAL INVOICE PRINT SIMULATION (MODAL LAYER) */}
+      {/* RETAIL THERMAL INVOICE DIRECT PRINT PREVIEW (MODAL LAYER) */}
       {showInvoicePrintPreview && (
-        <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/70 py-12 px-4 flex items-center justify-center no-print">
-          <div className="bg-white max-w-sm w-full p-6 h-auto max-h-[90vh] overflow-y-auto rounded-3xl border-4 border-slate-900 shadow-2xl space-y-4 ring-8 ring-slate-900/30">
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/70 py-8 px-4 flex items-center justify-center no-print">
+          <div className="bg-white max-w-md w-full p-5 h-auto max-h-[92vh] overflow-y-auto rounded-3xl border-4 border-slate-900 shadow-2xl space-y-4 ring-8 ring-slate-900/30">
             {/* Modal Heading */}
-            <div className="flex justify-between items-center pb-2 border-b border-dashed border-slate-300">
-              <span className="text-xs bg-emerald-50 text-emerald-700 font-bold px-2 py-0.5 rounded uppercase font-mono tracking-wider">
-                Print preview
-              </span>
-              <button
-                onClick={() => setShowInvoicePrintPreview(null)}
-                className="text-slate-400 hover:text-slate-700 font-bold text-sm cursor-pointer"
-              >
-                [ close window ]
-              </button>
-            </div>
-
-            {/* Target Printer Layout Selector */}
-            <div className="bg-slate-50 p-3 rounded-2xl border border-slate-200 space-y-2">
-              <label className="block text-[10px] font-extrabold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
-                <Printer className="w-3.5 h-3.5 text-blue-600" />
-                Select Printer Type / Page Layout
-              </label>
-              <div className="grid grid-cols-3 gap-1.5 text-[9px]">
+            <div className="flex items-center justify-between gap-2 pb-2.5 border-b border-dashed border-slate-300">
+              <div className="min-w-0">
+                <span className="text-xs bg-emerald-50 text-emerald-700 font-bold px-2 py-0.5 rounded uppercase font-mono tracking-wider">
+                  Direct Print Preview
+                </span>
+                <p className="text-[10px] text-slate-500 font-medium mt-1 truncate">
+                  Invoice {showInvoicePrintPreview.id} • {THERMAL_LAYOUT_SPECS[selectedPrinterLayout]?.label} ({THERMAL_LAYOUT_SPECS[selectedPrinterLayout]?.printableWidthMm}mm)
+                </p>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                {(printerConfig.connectionMode === "webusb" && !isFeatureAllowedByPolicy("usb")) ||
+                (printerConfig.connectionMode === "webserial" && !isFeatureAllowedByPolicy("serial")) ? (
+                  <a
+                    href={printTabUrl}
+                    target="expertpos_print_station"
+                    onMouseDown={() => preparePrintSnapshot("invoice-receipt-theme", showInvoicePrintPreview.id)}
+                    onClick={(e) => {
+                      if (e.detail === 0) preparePrintSnapshot("invoice-receipt-theme", showInvoicePrintPreview.id);
+                    }}
+                    className="px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-[11px] font-bold flex items-center gap-1.5 cursor-pointer shadow-sm"
+                  >
+                    <Printer className="w-3.5 h-3.5 text-emerald-400" />
+                    Print Now
+                  </a>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => handlePrintReceipt("invoice-receipt-theme", showInvoicePrintPreview.id)}
+                    className="px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-[11px] font-bold flex items-center gap-1.5 cursor-pointer shadow-sm"
+                  >
+                    <Printer className="w-3.5 h-3.5 text-emerald-400" />
+                    Print Now
+                  </button>
+                )}
                 <button
                   type="button"
-                  onClick={() => setSelectedPrinterLayout("standard-a4")}
-                  className={`py-1.5 px-1 rounded-xl border font-bold flex flex-col items-center justify-center transition-all cursor-pointer ${
-                    selectedPrinterLayout === "standard-a4"
-                      ? "bg-slate-900 text-white border-slate-900 shadow-sm"
-                      : "bg-white text-slate-600 border-slate-200 hover:bg-slate-100"
-                  }`}
+                  onClick={() => {
+                    setPrintSandboxNotice(false);
+                    setShowInvoicePrintPreview(null);
+                  }}
+                  className="text-slate-400 hover:text-slate-700 font-bold text-xs cursor-pointer px-1"
                 >
-                  <span className="text-sm mb-0.5">🖨️</span>
-                  <span>Office A4</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setSelectedPrinterLayout("thermal-80mm")}
-                  className={`py-1.5 px-1 rounded-xl border font-bold flex flex-col items-center justify-center transition-all cursor-pointer ${
-                    selectedPrinterLayout === "thermal-80mm"
-                      ? "bg-slate-900 text-white border-slate-900 shadow-sm"
-                      : "bg-white text-slate-600 border-slate-200 hover:bg-slate-100"
-                  }`}
-                >
-                  <span className="text-sm mb-0.5">🧾</span>
-                  <span>POS 80mm</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setSelectedPrinterLayout("thermal-58mm")}
-                  className={`py-1.5 px-1 rounded-xl border font-bold flex flex-col items-center justify-center transition-all cursor-pointer ${
-                    selectedPrinterLayout === "thermal-58mm"
-                      ? "bg-slate-900 text-white border-slate-900 shadow-sm"
-                      : "bg-white text-slate-600 border-slate-200 hover:bg-slate-100"
-                  }`}
-                >
-                  <span className="text-sm mb-0.5">🎟️</span>
-                  <span>POS 58mm</span>
+                  [ close ]
                 </button>
               </div>
-              <p className="text-[9px] text-slate-500 font-medium leading-tight text-center pt-0.5">
-                {selectedPrinterLayout === "standard-a4" 
-                  ? "✓ Formats beautifully for any normal Laser/Inkjet (A4 / Letter) desktop printer." 
-                  : selectedPrinterLayout === "thermal-80mm"
-                  ? "✓ Formats perfectly for standard 3-inch roll POS receipt printers."
-                  : "✓ Formats tightly for mini 2-inch roll handheld thermal printers."}
-              </p>
-              <div className="mt-1.5 p-2 bg-blue-50/80 rounded-xl border border-blue-200 text-[9px] font-medium leading-normal text-blue-900 text-left">
-                <strong className="text-blue-950">ℹ️ Hardware & Local Printing:</strong> Click <strong>"Spool Paper Print Receipt"</strong> to trigger printer spooling and download your printable PDF file. You can also click <strong>"Download Printable HTML Slip"</strong> to open and print in any external browser window!
+            </div>
+
+            {/* Target Printer Layout & Hardware Driver Selector */}
+            <div className="bg-slate-50 p-3 rounded-2xl border border-slate-200 space-y-2.5">
+              <div>
+                <label className="block text-[10px] font-extrabold uppercase tracking-wider text-slate-700 flex items-center gap-1.5 mb-1.5">
+                  <Printer className="w-3.5 h-3.5 text-blue-600" />
+                  Select Paper Width / Printer Format
+                </label>
+                <div className="grid grid-cols-5 gap-1 text-[9px]">
+                  {(
+                    [
+                      { id: "thermal-58mm", icon: "🎟️", label: "58mm" },
+                      { id: "thermal-76mm", icon: "🧻", label: "76mm" },
+                      { id: "thermal-80mm", icon: "🧾", label: "80mm" },
+                      { id: "thermal-112mm", icon: "📜", label: "112mm" },
+                      { id: "standard-a4", icon: "🖨️", label: "A4" }
+                    ] as { id: PrinterLayoutProfile; icon: string; label: string }[]
+                  ).map((item) => (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={() => setSelectedPrinterLayout(item.id)}
+                      className={`py-1.5 px-1 rounded-xl border font-bold flex flex-col items-center justify-center transition-all cursor-pointer ${
+                        selectedPrinterLayout === item.id
+                          ? "bg-slate-900 text-white border-slate-900 shadow-sm"
+                          : "bg-white text-slate-600 border-slate-200 hover:bg-slate-100"
+                      }`}
+                    >
+                      <span className="text-xs mb-0.5">{item.icon}</span>
+                      <span>{item.label}</span>
+                    </button>
+                  ))}
+                </div>
+                <p className="text-[9px] text-slate-500 font-medium leading-tight text-center pt-1">
+                  {THERMAL_LAYOUT_SPECS[selectedPrinterLayout]?.description}
+                </p>
+              </div>
+
+              <div className="border-t border-slate-200 pt-2">
+                <label className="block text-[9.5px] font-extrabold uppercase tracking-wider text-slate-600 mb-1.5">
+                  Thermal Printer Connection Mode
+                </label>
+                <div className="grid grid-cols-4 gap-1 text-[9px]">
+                  {(
+                    [
+                      { id: "system", label: "OS / USB Driver" },
+                      { id: "webusb", label: "Raw USB" },
+                      { id: "webserial", label: "Serial / BT" },
+                      { id: "network", label: "LAN IP:9100" }
+                    ] as { id: ThermalConnectionMode; label: string }[]
+                  ).map((conn) => (
+                    <button
+                      key={conn.id}
+                      type="button"
+                      onClick={() => {
+                        setPrintSandboxNotice(false);
+                        updatePrinterConfig({ connectionMode: conn.id });
+                      }}
+                      className={`py-1.5 px-1 rounded-lg border font-bold transition-all cursor-pointer truncate ${
+                        printerConfig.connectionMode === conn.id
+                          ? "bg-blue-600 text-white border-blue-700 shadow-xs"
+                          : "bg-white text-slate-600 border-slate-200 hover:bg-slate-100"
+                      }`}
+                    >
+                      {conn.label}
+                    </button>
+                  ))}
+                </div>
+
+                {printerConfig.connectionMode === "system" && (
+                  <p className="mt-1.5 text-[9px] text-slate-500 font-medium leading-snug">
+                    Works with all USB, Bluetooth, LAN &amp; Wi-Fi thermal printers installed on Windows/macOS/Android (Epson, TVS, Xprinter, Star, Rongta, HP).
+                  </p>
+                )}
+
+                {printerConfig.connectionMode === "webserial" && (
+                  <div className="mt-2 space-y-1.5 text-[10px]">
+                    <div className="flex items-center gap-2">
+                      <span className="font-bold text-slate-600">Baud:</span>
+                      <select
+                        value={printerConfig.serialBaudRate}
+                        onChange={(e) =>
+                          updatePrinterConfig({
+                            serialBaudRate: Number(e.target.value) as 9600 | 19200 | 38400 | 115200
+                          })
+                        }
+                        className="bg-white border border-slate-300 rounded px-1.5 py-1 text-[10px] font-mono font-bold text-slate-800"
+                      >
+                        <option value={9600}>9600</option>
+                        <option value={19200}>19200</option>
+                        <option value={38400}>38400</option>
+                        <option value={115200}>115200</option>
+                      </select>
+                      {isFeatureAllowedByPolicy("serial") ? (
+                        <button
+                          type="button"
+                          onClick={() => handlePrintReceipt("invoice-receipt-theme", showInvoicePrintPreview.id, true)}
+                          className="ml-auto px-2 py-1 rounded bg-slate-900 text-white font-bold text-[9.5px] cursor-pointer hover:bg-slate-800"
+                        >
+                          Pair / Change COM
+                        </button>
+                      ) : (
+                        <span className="ml-auto text-[9px] text-slate-500 font-medium">
+                          Click Print Now below to dispatch
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {printerConfig.connectionMode === "webusb" && (
+                  <div className="mt-2 space-y-1.5 text-[10px]">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-slate-600 font-medium truncate">
+                        {printerConfig.pairedDeviceLabel
+                          ? `Paired Printer: ${printerConfig.pairedDeviceLabel}`
+                          : "Supports Epson, Star, Xprinter, TVS, Rongta, Citizen"}
+                      </span>
+                      {isFeatureAllowedByPolicy("usb") && (
+                        <button
+                          type="button"
+                          onClick={() => handlePrintReceipt("invoice-receipt-theme", showInvoicePrintPreview.id, true)}
+                          className="px-2 py-1 rounded bg-slate-900 text-white font-bold text-[9.5px] shrink-0 cursor-pointer hover:bg-slate-800"
+                        >
+                          {printerConfig.pairedDeviceLabel ? "Change USB" : "Pair USB Printer"}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {printerConfig.connectionMode === "network" && (
+                  <div className="mt-2 flex items-center gap-1.5 text-[10px]">
+                    <input
+                      type="text"
+                      value={printerConfig.networkIp}
+                      onChange={(e) => updatePrinterConfig({ networkIp: e.target.value })}
+                      placeholder="192.168.1.200"
+                      className="flex-1 bg-white border border-slate-300 rounded px-2 py-1 font-mono text-[10px] text-slate-800"
+                    />
+                    <input
+                      type="number"
+                      value={printerConfig.networkPort}
+                      onChange={(e) => updatePrinterConfig({ networkPort: Number(e.target.value) || 9100 })}
+                      className="w-16 bg-white border border-slate-300 rounded px-1.5 py-1 font-mono text-[10px] text-slate-800"
+                    />
+                  </div>
+                )}
+
+                {printerConfig.connectionMode !== "system" && (
+                  <div className="mt-2 flex items-center gap-3 text-[9.5px] font-bold text-slate-600">
+                    <label className="flex items-center gap-1 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={printerConfig.autoCut}
+                        onChange={(e) => updatePrinterConfig({ autoCut: e.target.checked })}
+                        className="accent-blue-600"
+                      />
+                      Auto-Cut Paper
+                    </label>
+                    <label className="flex items-center gap-1 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={printerConfig.openCashDrawer}
+                        onChange={(e) => updatePrinterConfig({ openCashDrawer: e.target.checked })}
+                        className="accent-blue-600"
+                      />
+                      Open Cash Drawer
+                    </label>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -8050,23 +8421,24 @@ Payment Mode:   ${selectedInv.paymentMode}
                     <img 
                       src={activeTenant.companyLogo} 
                       alt={`${activeTenant.name} Logo`} 
+                      data-receipt-logo="true"
                       className="h-10 max-w-[150px] object-contain"
                     />
                   </div>
                 )}
-                <h4 className="font-display font-black text-sm tracking-tight text-slate-900">
+                <h4 data-receipt-store-name="true" className="font-display font-black text-sm tracking-tight text-slate-900">
                   {activeTenant.name}
                 </h4>
-                <p className="text-[9.5px] font-bold text-slate-600 uppercase tracking-wide">
+                <p data-receipt-header="true" className="text-[9.5px] font-bold text-slate-600 uppercase tracking-wide">
                   {opsSettings.receiptHeader || "OFFICIAL RETAIL CASH INVOICE"}
                 </p>
                 {activeTenant.businessLocation && 
                  activeTenant.businessLocation.trim().toLowerCase() !== activeTenant.name.trim().toLowerCase() && (
-                  <p className="text-[9.5px] text-slate-600 font-mono font-semibold">
+                  <p data-receipt-branch="true" className="text-[9.5px] text-slate-600 font-mono font-semibold">
                     Branch: {activeTenant.businessLocation}
                   </p>
                 )}
-                <p className="text-[10px] text-slate-500 font-mono leading-tight">
+                <p data-receipt-address="true" className="text-[10px] text-slate-500 font-mono leading-tight">
                   {(() => {
                     const parts = [activeTenant.address, activeTenant.city, activeTenant.state].filter(Boolean);
                     if (parts.length > 0) {
@@ -8078,47 +8450,36 @@ Payment Mode:   ${selectedInv.paymentMode}
                     return "Registered Store Location";
                   })()}
                 </p>
-                <p className="text-[9px] text-slate-400 font-mono">
+                <p data-receipt-contact="true" className="text-[9px] text-slate-400 font-mono">
                   Contact: {activeTenant.phone || currentBranch?.phone || "N/A"}
                 </p>
-                {(normalizeUserRole(currentRole) === UserRole.ADMIN || isSuperAdmin) && (
-                  <button
-                    type="button"
-                    onClick={() => setIsEditReceiptAddressModalOpen(true)}
-                    className="mt-1.5 px-2.5 py-1 bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 rounded-lg text-[10px] font-bold flex items-center gap-1 mx-auto cursor-pointer transition-colors shadow-xs"
-                    title="Edit receipt store name, address line, phone, and GSTIN (Admin / Super Admin)"
-                  >
-                    <Edit2 className="w-2.5 h-2.5 text-amber-700" />
-                    <span>Edit Receipt Address &amp; Store Details</span>
-                  </button>
-                )}
               </div>
 
               <div className="border-t border-dashed border-slate-300 pt-2 space-y-1">
-                <div className="flex justify-between">
+                <div className="flex justify-between" data-receipt-meta-row="true">
                   <span>Invoice ID:</span>
                   <span className="font-bold">{showInvoicePrintPreview.id}</span>
                 </div>
-                <div className="flex justify-between">
+                <div className="flex justify-between" data-receipt-meta-row="true">
                   <span>GSTIN Check:</span>
                   <span className="font-bold uppercase">{activeTenant.gstinRegNumber || (currentBranch?.id ? branches.find(b => b.id === currentBranch.id)?.gstin : "") || "07AAAAA1111A1Z1"}</span>
                 </div>
-                <div className="flex justify-between">
+                <div className="flex justify-between" data-receipt-meta-row="true">
                   <span>Sales Cashier:</span>
                   <span>{showInvoicePrintPreview.cashierName || currentCashierName}</span>
                 </div>
-                <div className="flex justify-between">
+                <div className="flex justify-between" data-receipt-meta-row="true">
                   <span>Timestamp:</span>
                   <span>{showInvoicePrintPreview.date} {showInvoicePrintPreview.time}</span>
                 </div>
                 {showInvoicePrintPreview.customerName && (
-                  <div className="flex justify-between border-t border-dashed border-slate-300 pt-1">
+                  <div className="flex justify-between border-t border-dashed border-slate-300 pt-1" data-receipt-meta-row="true">
                     <span>Customer:</span>
-                    <span className="font-bold truncate max-w-[150px]">{showInvoicePrintPreview.customerName}</span>
+                    <span className="font-bold text-right break-words max-w-[180px]">{showInvoicePrintPreview.customerName}</span>
                   </div>
                 )}
                 {showInvoicePrintPreview.customerPhone && (
-                  <div className="flex justify-between">
+                  <div className="flex justify-between" data-receipt-meta-row="true">
                     <span>Mobile No:</span>
                     <span className="font-bold">{showInvoicePrintPreview.customerPhone}</span>
                   </div>
@@ -8127,8 +8488,8 @@ Payment Mode:   ${selectedInv.paymentMode}
 
               {/* Items Table with MRP, Rate & dedicated Qty column */}
               <div className="border-t border-slate-300 pt-2 space-y-2">
-                <div className="grid grid-cols-[3fr_1.4fr_1.4fr_1.1fr_1.6fr] gap-1 font-bold border-b border-slate-300 pb-1 text-slate-900 text-[10px]">
-                  <span className="truncate">Item Description</span>
+                <div data-receipt-items-grid="true" className="grid grid-cols-[minmax(0,1fr)_44px_44px_22px_48px] gap-1 font-bold border-b border-slate-300 pb-1 text-slate-900 text-[10px]">
+                  <span>Item Description</span>
                   <span className="text-right">MRP</span>
                   <span className="text-right">Rate</span>
                   <span className="text-center">Qty</span>
@@ -8137,11 +8498,11 @@ Payment Mode:   ${selectedInv.paymentMode}
                 {showInvoicePrintPreview.items.map((it) => {
                   const itemMrp = it.mrp || (it.price > 0 ? Number((it.price * 1.15).toFixed(2)) : it.price);
                   return (
-                    <div key={it.productId} className="grid grid-cols-[3fr_1.4fr_1.4fr_1.1fr_1.6fr] gap-1 text-[10px] items-center">
-                      <div className="truncate font-sans">
-                        <span className="font-semibold block truncate leading-tight">{it.name}</span>
+                    <div key={it.productId} data-receipt-items-grid="true" data-receipt-item-row="true" className="grid grid-cols-[minmax(0,1fr)_44px_44px_22px_48px] gap-1 text-[10px] items-start">
+                      <div className="font-sans min-w-0">
+                        <span className="font-semibold block break-words leading-tight">{it.name}</span>
                       </div>
-                      <span className="text-right font-mono text-slate-700 text-[9.5px]">
+                      <span className="text-right font-mono text-slate-700 text-[9px]">
                         {activeTenant.currency || "₹"}{itemMrp.toFixed(2)}
                       </span>
                       <span className="text-right font-mono font-medium text-slate-700">
@@ -8167,7 +8528,7 @@ Payment Mode:   ${selectedInv.paymentMode}
                 const totalSavings = Math.max(0, totalMrp - showInvoicePrintPreview.grandTotal);
                 if (totalSavings > 0) {
                   return (
-                    <div className="p-1.5 bg-emerald-50 border border-emerald-200 rounded text-emerald-800 text-[9.5px] font-bold flex justify-between items-center my-1 font-sans">
+                    <div data-receipt-savings="true" className="p-1.5 bg-emerald-50 border border-emerald-200 rounded text-emerald-800 text-[9.5px] font-bold flex justify-between items-center my-1 font-sans">
                       <span className="flex items-center gap-1">🎉 You Saved on MRP:</span>
                       <span className="font-mono font-extrabold">{activeTenant.currency || "₹"}{totalSavings.toFixed(2)} ({Math.round((totalSavings / totalMrp) * 100)}% OFF)</span>
                     </div>
@@ -8178,7 +8539,7 @@ Payment Mode:   ${selectedInv.paymentMode}
 
               {/* Dynamic Math */}
               <div className="border-t border-dashed border-slate-300 pt-2 space-y-1">
-                <div className="flex justify-between">
+                <div className="flex justify-between" data-receipt-math-row="true">
                   <span>Total MRP Value:</span>
                   <span className="font-mono text-slate-700 font-medium">
                     {activeTenant.currency || "₹"}
@@ -8188,37 +8549,37 @@ Payment Mode:   ${selectedInv.paymentMode}
                     }, 0).toFixed(2)}
                   </span>
                 </div>
-                <div className="flex justify-between">
+                <div className="flex justify-between" data-receipt-math-row="true">
                   <span>Basket Tax value:</span>
                   <span>{activeTenant.currency || "₹"}{showInvoicePrintPreview.taxAmount.toFixed(2)}</span>
                 </div>
-                <div className="flex justify-between">
+                <div className="flex justify-between" data-receipt-math-row="true">
                   <span>Promo discount code:</span>
                   <span>{showInvoicePrintPreview.couponCode ? `-${showInvoicePrintPercentApplied(showInvoicePrintPreview)}` : `${activeTenant.currency || "₹"}0.00`}</span>
                 </div>
-                <div className="flex justify-between text-xs font-black text-slate-950 border-t border-dashed border-slate-300 pt-1.5">
+                <div className="flex justify-between text-xs font-black text-slate-950 border-t border-dashed border-slate-300 pt-1.5" data-receipt-math-row="true">
                   <span>TOTAL PAYABLE:</span>
                   <span>{activeTenant.currency || "₹"}{showInvoicePrintPreview.grandTotal.toFixed(2)}</span>
                 </div>
                 {showInvoicePrintPreview.paymentMode === PaymentMode.CASH && (
                   <>
-                    <div className="flex justify-between p-0.5 mt-1 bg-slate-100 rounded">
-                      <span>Paper Cash Tendered:</span>
+                    <div className="flex justify-between p-0.5 mt-1 bg-slate-100 rounded" data-receipt-math-row="true">
+                      <span>Cash Received:</span>
                       <span>{activeTenant.currency || "₹"}{Number(showInvoicePrintPreview.cashReceived).toFixed(2)}</span>
                     </div>
-                    <div className="flex justify-between">
-                      <span>Change Re-delivered:</span>
+                    <div className="flex justify-between" data-receipt-math-row="true">
+                      <span>Change Returned:</span>
                       <span>{activeTenant.currency || "₹"}{Number(showInvoicePrintPreview.changeReturned).toFixed(2)}</span>
                     </div>
                   </>
                 )}
-                <div className="flex justify-between">
+                <div className="flex justify-between" data-receipt-math-row="true">
                   <span>Payment Mode:</span>
                   <span className="font-bold font-sans text-[10px] bg-slate-900 text-white px-1.5 rounded">{showInvoicePrintPreview.paymentMode}</span>
                 </div>
               </div>
 
-              <div className="p-3 bg-slate-100 rounded text-[9px] font-sans leading-tight text-center text-slate-600 border border-slate-200">
+              <div data-receipt-footer="true" className="p-3 bg-slate-100 rounded text-[9px] font-sans leading-tight text-center text-slate-600 border border-slate-200">
                 {opsSettings.receiptFooter ? (
                   opsSettings.receiptFooter
                 ) : (
@@ -8229,93 +8590,74 @@ Payment Mode:   ${selectedInv.paymentMode}
               </div>
             </div>
 
-            {/* Print triggers */}
-            <div className="pt-2 space-y-2">
-              <button
-                type="button"
-                onClick={async () => {
-                  const invoiceId = showInvoicePrintPreview.id;
-                  const pdfFilename = `Receipt-${invoiceId}.pdf`;
-                  triggerNotification(`Spooling paper print job for ${selectedPrinterLayout === 'standard-a4' ? 'Standard A4 Printer' : 'Thermal POS Printer'}...`, "success");
-                  
-                  // Trigger both iframe hardware spooler and automatic PDF download guarantee
-                  const success = await printElementById("invoice-receipt-theme", selectedPrinterLayout, {
-                    invoiceId,
-                    filename: pdfFilename
-                  });
-
-                  if (success) {
-                    triggerNotification(`✓ Print spooler dispatched! Downloaded ${pdfFilename} to your device.`, "success");
-                  } else {
-                    // Fallback to standalone HTML slip
-                    downloadPrintableHtmlSlip("invoice-receipt-theme", `Receipt-${invoiceId}.html`, selectedPrinterLayout);
-                    triggerNotification(`Downloaded Printable Slip (Receipt-${invoiceId}.html). Open to print immediately!`, "success");
-                  }
-                }}
-                className="w-full py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-xs font-bold font-display tracking-wider uppercase transition-all flex items-center justify-center gap-2 cursor-pointer shadow-sm active:scale-[0.99]"
-              >
-                <Printer className="w-4 h-4 text-emerald-400" />
-                Spool Paper Print Receipt
-              </button>
-
-              <div className="grid grid-cols-2 gap-2">
+            {(normalizeUserRole(currentRole) === UserRole.ADMIN || isSuperAdmin) && (
+              <div className="flex justify-center">
                 <button
                   type="button"
-                  onClick={async () => {
-                    const invoiceId = showInvoicePrintPreview.id;
-                    const pdfFilename = `Receipt-${invoiceId}.pdf`;
-                    triggerNotification(`Compiling high-resolution PDF (${selectedPrinterLayout})...`, "success");
-                    const success = await saveElementAsPDF("invoice-receipt-theme", pdfFilename, selectedPrinterLayout);
-                    if (success) {
-                      triggerNotification(`✓ Saved PDF receipt (${pdfFilename})!`, "success");
-                    } else {
-                      downloadPrintableHtmlSlip("invoice-receipt-theme", `Receipt-${invoiceId}.html`, selectedPrinterLayout);
-                      triggerNotification(`Exported Printable Slip (Receipt-${invoiceId}.html).`, "success");
-                    }
-                  }}
-                  className="py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold font-display tracking-wider uppercase transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-sm active:scale-[0.99]"
+                  onClick={() => setIsEditReceiptAddressModalOpen(true)}
+                  className="px-2.5 py-1 bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 rounded-lg text-[10px] font-bold inline-flex items-center gap-1 cursor-pointer transition-colors shadow-xs"
+                  title="Edit receipt store name, address line, phone, and GSTIN (Admin / Super Admin)"
                 >
-                  <Download className="w-3.5 h-3.5 text-blue-100" />
-                  Save PDF
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    const invoiceId = showInvoicePrintPreview.id;
-                    const htmlFilename = `Receipt-${invoiceId}.html`;
-                    const ok = downloadPrintableHtmlSlip("invoice-receipt-theme", htmlFilename, selectedPrinterLayout);
-                    if (ok) {
-                      triggerNotification(`✓ Downloaded ${htmlFilename}! Double-click to print in browser.`, "success");
-                    }
-                  }}
-                  className="py-2.5 bg-amber-50 hover:bg-amber-100 border border-amber-300 text-amber-900 rounded-lg text-xs font-bold font-display tracking-wide uppercase transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-xs active:scale-[0.99]"
-                >
-                  <FileText className="w-3.5 h-3.5 text-amber-600" />
-                  HTML Slip
+                  <Edit2 className="w-2.5 h-2.5 text-amber-700" />
+                  <span>Edit Receipt Address &amp; Store Details</span>
                 </button>
               </div>
+            )}
 
-              <div className="border-t border-slate-200 pt-2 mt-2">
+            {/* Direct Print Trigger */}
+            <div className="pt-1 space-y-2">
+              {printSandboxNotice && (
+                <div className="p-2.5 bg-amber-50 border border-amber-300 rounded-xl text-[10px] text-amber-900 space-y-1.5">
+                  <p className="font-bold leading-snug">
+                    Preview iframe restricts direct printer dialogs. Open in a direct browser tab to print straight to your thermal printer:
+                  </p>
+                  <a
+                    href={printTabUrl}
+                    target="expertpos_print_station"
+                    onMouseDown={() => preparePrintSnapshot("invoice-receipt-theme", showInvoicePrintPreview.id)}
+                    onClick={(e) => {
+                      if (e.detail === 0) preparePrintSnapshot("invoice-receipt-theme", showInvoicePrintPreview.id);
+                    }}
+                    className="w-full py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-[11px] font-bold uppercase tracking-wide flex items-center justify-center gap-1.5 cursor-pointer shadow-sm"
+                  >
+                    <ExternalLink className="w-3.5 h-3.5" />
+                    Open Direct Print Window
+                  </a>
+                </div>
+              )}
+
+              {(printerConfig.connectionMode === "webusb" && !isFeatureAllowedByPolicy("usb")) ||
+              (printerConfig.connectionMode === "webserial" && !isFeatureAllowedByPolicy("serial")) ? (
+                <a
+                  href={printTabUrl}
+                  target="expertpos_print_station"
+                  onMouseDown={() => preparePrintSnapshot("invoice-receipt-theme", showInvoicePrintPreview.id)}
+                  onClick={(e) => {
+                    if (e.detail === 0) preparePrintSnapshot("invoice-receipt-theme", showInvoicePrintPreview.id);
+                  }}
+                  className="w-full py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold font-display tracking-wider uppercase transition-all flex items-center justify-center gap-2 cursor-pointer shadow-sm active:scale-[0.99]"
+                >
+                  <Printer className="w-4 h-4 text-emerald-400" />
+                  {printerConfig.connectionMode === "webusb"
+                    ? "Print Direct to USB Thermal"
+                    : "Print Direct to Serial / BT"}
+                </a>
+              ) : (
                 <button
                   type="button"
-                  onClick={() => {
-                    const billId = showInvoicePrintPreview.id;
-                    setShowInvoicePrintPreview(null);
-                    setSelectedReprintInvoiceId(billId);
-                    setActiveTab("saved-bills");
-                    setIsVirtualPrinting(false);
-                    setVirtualPrintDone(false);
-                    triggerNotification("Opened Virtual Printer Simulator! Click 'Virtual Print / Spool Paper' below.", "success");
-                  }}
-                  className="w-full py-2 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-800 hover:text-emerald-950 rounded-lg text-[10.5px] font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                  onClick={() => handlePrintReceipt("invoice-receipt-theme", showInvoicePrintPreview.id)}
+                  className="w-full py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold font-display tracking-wider uppercase transition-all flex items-center justify-center gap-2 cursor-pointer shadow-sm active:scale-[0.99]"
                 >
-                  <span>🔌 Open Virtual Printer Simulator</span>
+                  <Printer className="w-4 h-4 text-emerald-400" />
+                  {printerConfig.connectionMode === "system"
+                    ? "Print Receipt Now"
+                    : printerConfig.connectionMode === "webusb"
+                    ? "Print Direct to USB Thermal"
+                    : printerConfig.connectionMode === "webserial"
+                    ? "Print Direct to Serial / BT"
+                    : "Print Direct to LAN Thermal"}
                 </button>
-                <p className="text-[8.5px] text-slate-400 font-mono text-center mt-1 leading-normal">
-                  No hardware printer connected? Use our in-system skeuomorphic virtual spooler with mechanical sounds and paper feed effects!
-                </p>
-              </div>
+              )}
             </div>
           </div>
         </div>

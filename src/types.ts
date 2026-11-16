@@ -5,6 +5,8 @@
 
 import { jsPDF } from "jspdf";
 import html2canvas from "html2canvas";
+import { PrinterLayoutProfile, THERMAL_LAYOUT_SPECS, savePrintSnapshot } from "./utils/thermalPrinter";
+export type { PrinterLayoutProfile };
 
 export enum PaymentMode {
   CASH = "CASH",
@@ -508,132 +510,328 @@ export interface PrintOptions {
   autoDownloadPdf?: boolean;
 }
 
-export async function printElementById(
-  elementId: string, 
-  layoutProfile: "standard-a4" | "thermal-80mm" | "thermal-58mm" = "standard-a4",
-  options?: PrintOptions
-): Promise<boolean> {
-  // Wait/poll for the element to exist in the DOM (up to 1500ms, checking every 50ms)
-  let element = document.getElementById(elementId);
-  if (!element) {
-    for (let i = 0; i < 30; i++) {
-      await new Promise(resolve => setTimeout(resolve, 50));
-      element = document.getElementById(elementId);
-      if (element) break;
-    }
-  }
+export interface DirectPrintResult {
+  ok: boolean;
+  blockedBySandbox?: boolean;
+  reason?: string;
+}
 
-  if (!element) {
-    console.error(`Element with id ${elementId} not found.`);
-    return false;
-  }
-
+export function buildReceiptUtilityStyles(
+  layoutProfile: PrinterLayoutProfile,
+  scopePrefix = ""
+): string {
   const isA4 = layoutProfile === "standard-a4";
   const is58 = layoutProfile === "thermal-58mm";
-  const widthCss = is58 ? "58mm" : isA4 ? "210mm" : "80mm";
-  const paddingCss = isA4 ? "15mm" : is58 ? "2mm" : "4mm";
+  const is76 = layoutProfile === "thermal-76mm";
+  const is112 = layoutProfile === "thermal-112mm";
+
+  const gridColumnsCss = isA4
+    ? "minmax(0, 1fr) 72px 72px 42px 82px"
+    : is112
+    ? "minmax(0, 1fr) 58px 58px 26px 62px"
+    : is76
+    ? "minmax(0, 1fr) 42px 42px 20px 44px"
+    : is58
+    ? "minmax(0, 1fr) 31px 31px 14px 33px"
+    : "minmax(0, 1fr) 46px 46px 22px 48px";
+
+  const gridGapCss = is58 ? "2px" : is76 ? "3px" : isA4 ? "6px" : "4px";
+  const s = scopePrefix;
+  const inkColor = isA4 ? "#0f172a" : "#000000";
+  const subInkColor = isA4 ? "#334155" : "#000000";
+  const borderInk = isA4 ? "#cbd5e1" : "#000000";
+
+  return `
+    ${s}.text-center { text-align: center; }
+    ${s}.text-right { text-align: right; }
+    ${s}.text-left { text-align: left; }
+    ${s}.font-sans { font-family: ${isA4 ? 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif' : '"Courier New", Courier, monospace'}; }
+    ${s}.font-mono, ${s}.font-display { font-family: "Courier New", Courier, monospace; }
+    ${s}.font-bold { font-weight: 700; }
+    ${s}.font-semibold { font-weight: 600; }
+    ${s}.font-extrabold, ${s}.font-black { font-weight: 800; }
+    ${s}.uppercase { text-transform: uppercase; }
+    ${s}.truncate { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    ${s}.block { display: block; }
+    ${s}.leading-tight { line-height: 1.25; }
+    ${s}.leading-normal { line-height: 1.35; }
+    ${s}.flex { display: flex; }
+    ${s}.justify-center { justify-content: center; }
+    ${s}.justify-between { justify-content: space-between; gap: 4px; }
+    ${s}.items-center { align-items: center; }
+    ${s}.gap-1 { gap: 4px; }
+    ${s}.space-y-1 > * + * { margin-top: 3px; }
+    ${s}.space-y-2 > * + * { margin-top: 5px; }
+    ${s}.space-y-3 > * + * { margin-top: 7px; }
+    ${s}.space-y-0\\.5 > * + * { margin-top: 2px; }
+    ${s}.my-1 { margin-top: 4px; margin-bottom: 4px; }
+    ${s}.mt-1 { margin-top: 4px; }
+    ${s}.mt-4 { margin-top: 8px; }
+    ${s}.mb-1 { margin-bottom: 4px; }
+    ${s}.mb-4 { margin-bottom: 8px; }
+    ${s}.pt-1 { padding-top: 4px; }
+    ${s}.pt-1\\.5 { padding-top: 5px; }
+    ${s}.pt-2 { padding-top: 5px; }
+    ${s}.pb-1 { padding-bottom: 4px; }
+    ${s}.py-2 { padding-top: 5px; padding-bottom: 5px; }
+    ${s}.p-0\\.5 { padding: 2px; }
+    ${s}.p-1\\.5 { padding: 4px; }
+    ${s}.p-2 { padding: 5px; }
+    ${s}.p-3, ${s}.p-4, ${s}.p-5 { padding: 6px; }
+    ${s}.px-1\\.5 { padding-left: 5px; padding-right: 5px; }
+    ${s}.rounded { border-radius: 3px; }
+    ${s}.border { border: 1px solid ${borderInk}; }
+    ${s}.border-t { border-top: 1px solid ${borderInk}; }
+    ${s}.border-b { border-bottom: 1px solid ${borderInk}; }
+    ${s}.border-dashed { border-style: dashed; }
+    ${s}.border-slate-200, ${s}.border-slate-300, ${s}.border-emerald-200 { border-color: ${borderInk}; }
+    ${s}.bg-emerald-50 { background-color: ${isA4 ? "#ecfdf5" : "#ffffff"}; }
+    ${s}.bg-slate-50, ${s}.bg-slate-100 { background-color: ${isA4 ? "#f1f5f9" : "#ffffff"}; }
+    ${s}.bg-slate-900, ${s}.bg-slate-950 {
+      background-color: ${isA4 ? "#0f172a" : "#ffffff"} !important;
+      color: ${isA4 ? "#ffffff" : "#000000"} !important;
+      border: ${isA4 ? "none" : "1.5px solid #000000"} !important;
+      padding: 1px 5px !important;
+      font-weight: 800 !important;
+    }
+    ${s}.text-emerald-800 { color: ${isA4 ? "#065f46" : "#000000"}; }
+    ${s}.text-slate-400, ${s}.text-slate-500, ${s}.text-slate-600 { color: ${subInkColor} !important; }
+    ${s}.text-slate-700, ${s}.text-slate-800, ${s}.text-slate-900, ${s}.text-slate-950 { color: ${inkColor} !important; }
+    ${s}.text-xs { font-size: 1.06em; }
+    ${s}.text-sm { font-size: 1.18em; }
+    ${s}[data-receipt-logo="true"] { max-height: 36px; max-width: 140px; object-fit: contain; display: block; margin: 0 auto 4px auto; }
+    ${s}[data-receipt-meta-row="true"] {
+      display: flex !important;
+      justify-content: space-between !important;
+      align-items: flex-start !important;
+      gap: 6px !important;
+    }
+    ${s}[data-receipt-math-row="true"] {
+      display: flex !important;
+      justify-content: space-between !important;
+      align-items: center !important;
+      gap: 6px !important;
+    }
+    ${s}[data-receipt-meta-row="true"] span:first-child,
+    ${s}[data-receipt-math-row="true"] span:first-child {
+      flex-shrink: 0;
+    }
+    ${s}[data-receipt-meta-row="true"] span:last-child {
+      min-width: 0;
+      max-width: none !important;
+      white-space: normal !important;
+      overflow: visible !important;
+      text-overflow: clip !important;
+      text-align: right;
+      word-break: break-word;
+    }
+    ${s}[data-receipt-math-row="true"] span:last-child {
+      flex-shrink: 0;
+      text-align: right;
+      white-space: nowrap;
+    }
+    ${s}[data-receipt-items-grid="true"] {
+      display: grid !important;
+      grid-template-columns: ${gridColumnsCss} !important;
+      gap: ${gridGapCss} !important;
+      align-items: start !important;
+      width: 100% !important;
+    }
+    ${s}[data-receipt-items-grid="true"] > div:first-child,
+    ${s}[data-receipt-items-grid="true"] > div:first-child span,
+    ${s}[data-receipt-items-grid="true"] > span:first-child {
+      white-space: normal !important;
+      overflow: visible !important;
+      text-overflow: clip !important;
+      word-break: break-word;
+      text-align: left !important;
+    }
+    ${s}[data-receipt-items-grid="true"] > span:not(:first-child) {
+      white-space: nowrap !important;
+      text-align: right !important;
+      font-size: ${isA4 ? "1em" : is58 ? "0.86em" : "0.92em"} !important;
+    }
+    ${s}[data-receipt-items-grid="true"] > span:nth-child(4) {
+      text-align: center !important;
+    }
+    ${s}[data-receipt-savings="true"] {
+      display: flex !important;
+      justify-content: space-between !important;
+      align-items: center !important;
+      gap: 6px !important;
+      padding: 4px 6px !important;
+      background-color: ${isA4 ? "#ecfdf5" : "#ffffff"} !important;
+      border: 1px ${isA4 ? "solid #86efac" : "dashed #000000"} !important;
+      border-radius: 3px !important;
+      color: ${isA4 ? "#065f46" : "#000000"} !important;
+      font-weight: 700 !important;
+      margin: 5px 0 !important;
+    }
+    ${s}[data-receipt-footer="true"] {
+      padding: 5px !important;
+      background-color: ${isA4 ? "#f1f5f9" : "#ffffff"} !important;
+      border: 1px ${isA4 ? "solid #cbd5e1" : "dashed #000000"} !important;
+      border-radius: 3px !important;
+      text-align: center !important;
+      color: ${inkColor} !important;
+      margin-top: 6px !important;
+    }
+  `;
+}
+
+/**
+ * Synchronously triggers browser/OS print dialog inside the active click gesture
+ * using a dedicated @media print root so thermal drivers (58mm, 76mm, 80mm, 112mm, A4)
+ * receive exact roll dimensions without downloading PDFs or losing user-activation.
+ */
+export function printElementDirect(
+  elementId: string,
+  layoutProfile: PrinterLayoutProfile = "thermal-80mm"
+): DirectPrintResult {
+  const element = document.getElementById(elementId);
+  if (!element) {
+    return { ok: false, reason: `Element with id ${elementId} not found.` };
+  }
+
+  const spec = THERMAL_LAYOUT_SPECS[layoutProfile] || THERMAL_LAYOUT_SPECS["thermal-80mm"];
+  const isA4 = layoutProfile === "standard-a4";
+  const widthCss = isA4 ? "190mm" : "100%";
+  const maxWidthCss = isA4 ? "190mm" : `${spec.printableWidthMm}mm`;
+  const paddingCss = spec.paddingCss;
   const fontFamilyCss = isA4
     ? 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
-    : 'monospace, "Courier New", Courier';
-  const fontSizeCss = is58 ? "10px" : isA4 ? "12px" : "11px";
+    : '"Courier New", Courier, monospace';
+  const fontSizeCss = spec.fontSizeCss;
+  const pageSizeCss = isA4 ? "A4 portrait" : `${spec.rollWidthMm}mm auto`;
+  const receiptUtilityStyles = buildReceiptUtilityStyles(layoutProfile, "#pos-direct-print-root ");
 
-  // Clean copy of element HTML without interactive buttons
   const clone = element.cloneNode(true) as HTMLElement;
-  clone.querySelectorAll("button, .no-print, .action-buttons, [role='button']").forEach(el => el.remove());
+  clone.querySelectorAll("button, .no-print, .action-buttons, [role='button']").forEach((el) => el.remove());
 
-  // 1. Hardware iframe spooler execution
-  let iframePrinted = false;
   try {
-    const existingFrame = document.getElementById("pos-hardware-print-iframe");
-    if (existingFrame) existingFrame.remove();
+    document.getElementById("pos-direct-print-root")?.remove();
+    document.getElementById("pos-direct-print-style")?.remove();
 
-    const iframe = document.createElement("iframe");
-    iframe.id = "pos-hardware-print-iframe";
-    iframe.style.position = "fixed";
-    iframe.style.right = "0";
-    iframe.style.bottom = "0";
-    iframe.style.width = "0";
-    iframe.style.height = "0";
-    iframe.style.border = "none";
-    iframe.style.visibility = "hidden";
-    iframe.setAttribute("aria-hidden", "true");
-    document.body.appendChild(iframe);
-
-    const doc = iframe.contentWindow?.document;
-    if (doc) {
-      doc.open();
-      doc.write(`<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8">
-  <title>Receipt Spool - ${options?.invoiceId || elementId}</title>
-  <style>
-    @page {
-      size: ${isA4 ? "A4 portrait" : is58 ? "58mm auto" : "80mm auto"};
-      margin: 0;
-    }
-    * {
-      box-sizing: border-box;
-      -webkit-print-color-adjust: exact !important;
-      print-color-adjust: exact !important;
-    }
-    html, body {
-      background: #ffffff !important;
-      color: #000000 !important;
-      margin: 0 !important;
-      padding: ${paddingCss} !important;
-      width: ${widthCss} !important;
-      font-family: ${fontFamilyCss} !important;
-      font-size: ${fontSizeCss} !important;
-    }
-    .print-target-wrapper {
-      width: 100% !important;
-      max-width: 100% !important;
-    }
-    button, .no-print, .action-buttons, [role="button"] { display: none !important; }
-  </style>
-</head>
-<body>
-  <div class="print-target-wrapper">
-    ${clone.innerHTML}
-  </div>
-</body>
-</html>`);
-      doc.close();
-
-      await new Promise(resolve => setTimeout(resolve, 300));
-      try {
-        iframe.contentWindow?.focus();
-        iframe.contentWindow?.print();
-        iframePrinted = true;
-      } catch (e) {
-        console.warn("Direct iframe.print() was suppressed by browser security:", e);
-      } finally {
-        setTimeout(() => {
-          if (document.body.contains(iframe)) {
-            document.body.removeChild(iframe);
-          }
-        }, 3000);
+    const styleEl = document.createElement("style");
+    styleEl.id = "pos-direct-print-style";
+    styleEl.textContent = `
+      @media screen {
+        #pos-direct-print-root { display: none !important; }
       }
+      @media print {
+        @page {
+          size: ${pageSizeCss};
+          margin: 0;
+        }
+        html, body {
+          width: auto !important;
+          height: auto !important;
+          min-height: 0 !important;
+          overflow: visible !important;
+          background: #ffffff !important;
+          margin: 0 !important;
+          padding: 0 !important;
+        }
+        body > *:not(#pos-direct-print-root) { display: none !important; }
+        #pos-direct-print-root {
+          display: block !important;
+          width: ${widthCss} !important;
+          max-width: ${maxWidthCss} !important;
+          margin: ${isA4 ? "0 auto" : "0"} !important;
+          padding: ${paddingCss} !important;
+          background: #ffffff !important;
+          color: #000000 !important;
+          font-family: ${fontFamilyCss} !important;
+          font-size: ${fontSizeCss} !important;
+          line-height: 1.3 !important;
+        }
+        #pos-direct-print-root * {
+          box-sizing: border-box;
+          -webkit-print-color-adjust: exact !important;
+          print-color-adjust: exact !important;
+        }
+        #pos-direct-print-root button,
+        #pos-direct-print-root .no-print,
+        #pos-direct-print-root .action-buttons,
+        #pos-direct-print-root [role="button"] {
+          display: none !important;
+        }
+        ${receiptUtilityStyles}
+      }
+    `;
+
+    const portalEl = document.createElement("div");
+    portalEl.id = "pos-direct-print-root";
+    portalEl.innerHTML = clone.innerHTML;
+
+    document.head.appendChild(styleEl);
+    document.body.appendChild(portalEl);
+
+    let beforePrintFired = false;
+    const onBeforePrint = () => {
+      beforePrintFired = true;
+    };
+    const cleanupPortal = () => {
+      window.removeEventListener("beforeprint", onBeforePrint);
+      portalEl.remove();
+      styleEl.remove();
+    };
+
+    window.addEventListener("beforeprint", onBeforePrint, { once: true });
+    window.addEventListener("afterprint", cleanupPortal, { once: true });
+    setTimeout(cleanupPortal, 120000);
+
+    const startedAt = Date.now();
+    window.focus();
+    window.print();
+    const elapsed = Date.now() - startedAt;
+
+    // Always save a clean snapshot when running inside a nested preview iframe so a top-level print tab can print directly
+    const inNestedFrame = typeof window !== "undefined" && window.self !== window.top;
+    if (inNestedFrame) {
+      savePrintSnapshot({
+        html: clone.innerHTML,
+        layoutProfile,
+        createdAt: Date.now()
+      });
     }
-  } catch (err) {
-    console.warn("Iframe spooler init error:", err);
+
+    if (inNestedFrame && !beforePrintFired && elapsed < 15) {
+      return {
+        ok: false,
+        blockedBySandbox: true,
+        reason: "Embedded preview blocks browser print dialogs. Use 'Open Print Window' below to print directly in a browser tab."
+      };
+    }
+
+    return { ok: true };
+  } catch (err: any) {
+    return {
+      ok: false,
+      reason: err?.message || "Failed to invoke system print dialog."
+    };
+  }
+}
+
+export async function printElementById(
+  elementId: string,
+  layoutProfile: PrinterLayoutProfile = "standard-a4",
+  _options?: PrintOptions
+): Promise<boolean> {
+  // Execute synchronously first so browser user-activation is never lost
+  if (document.getElementById(elementId)) {
+    return printElementDirect(elementId, layoutProfile).ok;
   }
 
-  // 2. Guaranteed PDF receipt compilation & automatic download
-  // In iframe sandboxes (e.g. AI Studio preview), modal dialogs from window.print() are blocked silently.
-  // We ALWAYS compile and download the PDF so the user gets their tangible receipt document immediately!
-  const filename = options?.filename || 
-    (options?.invoiceId ? `Receipt-${options.invoiceId}.pdf` : `Receipt-${elementId}-${new Date().toISOString().slice(0, 10)}.pdf`);
-
-  let pdfSuccess = false;
-  try {
-    pdfSuccess = await saveElementAsPDF(elementId, filename, layoutProfile);
-  } catch (pdfErr) {
-    console.error("PDF generation error during spool:", pdfErr);
+  for (let i = 0; i < 30; i++) {
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    if (document.getElementById(elementId)) {
+      return printElementDirect(elementId, layoutProfile).ok;
+    }
   }
 
-  return iframePrinted || pdfSuccess;
+  console.error(`Element with id ${elementId} not found.`);
+  return false;
 }
 
 /**
@@ -643,7 +841,7 @@ export async function printElementById(
 export function downloadPrintableHtmlSlip(
   elementId: string,
   filename: string = "receipt-slip.html",
-  layoutProfile: "standard-a4" | "thermal-80mm" | "thermal-58mm" = "thermal-80mm"
+  layoutProfile: PrinterLayoutProfile = "thermal-80mm"
 ): boolean {
   const element = document.getElementById(elementId);
   if (!element) {
@@ -654,14 +852,15 @@ export function downloadPrintableHtmlSlip(
   const clone = element.cloneNode(true) as HTMLElement;
   clone.querySelectorAll("button, .no-print, .action-buttons, [role='button']").forEach(b => b.remove());
 
+  const spec = THERMAL_LAYOUT_SPECS[layoutProfile] || THERMAL_LAYOUT_SPECS["thermal-80mm"];
   const isA4 = layoutProfile === "standard-a4";
-  const is58 = layoutProfile === "thermal-58mm";
-  const widthCss = is58 ? "58mm" : isA4 ? "210mm" : "80mm";
-  const bodyPadding = isA4 ? "15mm" : is58 ? "2mm" : "4mm";
-  const fontFamily = isA4 
+  const widthCss = isA4 ? "210mm" : `${spec.printableWidthMm}mm`;
+  const bodyPadding = isA4 ? "12mm" : spec.paddingCss;
+  const fontFamily = isA4
     ? 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
-    : 'monospace, "Courier New", Courier';
-  const fontSize = is58 ? "10px" : isA4 ? "13px" : "11px";
+    : '"Courier New", Courier, monospace';
+  const fontSize = spec.fontSizeCss;
+  const receiptUtilityStyles = buildReceiptUtilityStyles(layoutProfile, "");
 
   const cleanFilename = filename.endsWith(".html") ? filename : `${filename}.html`;
 
@@ -673,7 +872,7 @@ export function downloadPrintableHtmlSlip(
   <title>${cleanFilename.replace(/\.html$/, "")}</title>
   <style>
     @page {
-      size: ${isA4 ? "A4 portrait" : is58 ? "58mm auto" : "80mm auto"};
+      size: ${isA4 ? "A4 portrait" : `${spec.rollWidthMm}mm auto`};
       margin: 0;
     }
     * {
@@ -687,9 +886,72 @@ export function downloadPrintableHtmlSlip(
       max-width: ${widthCss};
       font-family: ${fontFamily};
       font-size: ${fontSize};
-      color: #000;
+      color: #0f172a;
       background: #fff;
     }
+    .receipt-body {
+      border: 1px solid #e2e8f0;
+      border-radius: 10px;
+      padding: 12px;
+      background: #fffdf8;
+    }
+    .text-center { text-align: center; }
+    .text-right { text-align: right; }
+    .text-left { text-align: left; }
+    .font-sans { font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    .font-mono, .font-display { font-family: "Courier New", Courier, monospace; }
+    .font-bold { font-weight: 700; }
+    .font-semibold { font-weight: 600; }
+    .font-extrabold, .font-black { font-weight: 800; }
+    .uppercase { text-transform: uppercase; }
+    .truncate { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .block { display: block; }
+    .leading-tight { line-height: 1.25; }
+    .leading-normal { line-height: 1.4; }
+    .flex { display: flex; }
+    .justify-center { justify-content: center; }
+    .justify-between { justify-content: space-between; }
+    .items-center { align-items: center; }
+    .gap-1 { gap: 4px; }
+    .space-y-1 > * + * { margin-top: 4px; }
+    .space-y-2 > * + * { margin-top: 8px; }
+    .space-y-3 > * + * { margin-top: 10px; }
+    .space-y-0\\.5 > * + * { margin-top: 2px; }
+    .my-1 { margin-top: 4px; margin-bottom: 4px; }
+    .mt-1 { margin-top: 4px; }
+    .mt-4 { margin-top: 12px; }
+    .mb-1 { margin-bottom: 4px; }
+    .mb-4 { margin-bottom: 12px; }
+    .pt-1 { padding-top: 4px; }
+    .pt-1\\.5 { padding-top: 6px; }
+    .pt-2 { padding-top: 8px; }
+    .pb-1 { padding-bottom: 4px; }
+    .py-2 { padding-top: 8px; padding-bottom: 8px; }
+    .p-0\\.5 { padding: 2px; }
+    .p-1\\.5 { padding: 6px; }
+    .p-2 { padding: 8px; }
+    .p-3, .p-4, .p-5 { padding: 10px; }
+    .px-1\\.5 { padding-left: 6px; padding-right: 6px; }
+    .rounded { border-radius: 4px; }
+    .border { border: 1px solid #cbd5e1; }
+    .border-t { border-top: 1px solid #cbd5e1; }
+    .border-b { border-bottom: 1px solid #cbd5e1; }
+    .border-dashed { border-style: dashed; }
+    .border-slate-200 { border-color: #e2e8f0; }
+    .border-slate-300 { border-color: #cbd5e1; }
+    .border-emerald-200 { border-color: #a7f3d0; }
+    .bg-emerald-50 { background-color: #ecfdf5; }
+    .bg-slate-50 { background-color: #f8fafc; }
+    .bg-slate-100 { background-color: #f1f5f9; }
+    .bg-slate-900, .bg-slate-950 { background-color: #0f172a; }
+    .text-white { color: #ffffff; }
+    .text-emerald-800 { color: #065f46; }
+    .text-slate-400, .text-slate-500, .text-slate-600 { color: #475569; }
+    .text-slate-700, .text-slate-800, .text-slate-900, .text-slate-950 { color: #0f172a; }
+    .text-xs { font-size: 1.08em; }
+    .text-sm { font-size: 1.2em; }
+    [data-receipt-logo="true"] { max-height: 36px; max-width: 140px; object-fit: contain; display: block; margin: 0 auto 4px auto; }
+    ${receiptUtilityStyles}
     .print-control-bar {
       text-align: center;
       margin-bottom: 14px;
@@ -723,13 +985,17 @@ export function downloadPrintableHtmlSlip(
         padding: ${isA4 ? "10mm" : "1mm"};
         max-width: 100% !important;
       }
+      .receipt-body {
+        border: none;
+        padding: 0;
+        background: #fff;
+      }
     }
   </style>
 </head>
 <body>
   <div class="print-control-bar">
-    <button class="print-btn" onclick="window.print()">🖨️ Click Here to Print Receipt Now</button>
-    <div style="font-size: 11px; margin-top: 6px; opacity: 0.85;">Opens printer dialog automatically with your paper dimensions</div>
+    <button class="print-btn" onclick="window.print()">Print Receipt</button>
   </div>
   <div class="receipt-body">
     ${clone.innerHTML}
@@ -764,12 +1030,19 @@ export function downloadPrintableHtmlSlip(
 export async function saveElementAsPDF(
   elementId: string, 
   filename: string,
-  layoutProfile: "standard-a4" | "thermal-80mm" | "thermal-58mm" = "standard-a4"
+  layoutProfile: PrinterLayoutProfile = "standard-a4"
 ): Promise<boolean> {
   const element = document.getElementById(elementId);
   if (!element) {
     console.error(`Element with id ${elementId} not found.`);
     return false;
+  }
+
+  // For POS receipt elements, use the deterministic vector receipt compiler directly so
+  // downloaded PDFs match the checkout invoice's exact header, contact info, 5-column item grid,
+  // MRP savings highlight, totals, payment mode badge, and footer without Tailwind v4 oklch failures.
+  if (elementId === "invoice-receipt-theme" || elementId === "virtual-receipt-roll-wrapper") {
+    return generateVectorPDFFallback(element, elementId, filename, layoutProfile);
   }
 
   try {
@@ -795,72 +1068,23 @@ export async function saveElementAsPDF(
               el.style.borderRadius = "0";
               el.style.border = "none";
               el.style.boxShadow = "none";
-            } else if (layoutProfile === "thermal-80mm") {
-              el.style.width = "340px";
-              el.style.padding = "12px";
+            } else {
+              const widthPx =
+                layoutProfile === "thermal-58mm"
+                  ? "240px"
+                  : layoutProfile === "thermal-76mm"
+                  ? "315px"
+                  : layoutProfile === "thermal-112mm"
+                  ? "440px"
+                  : "340px";
+              el.style.width = widthPx;
+              el.style.padding = layoutProfile === "thermal-58mm" ? "4px" : "12px";
               el.style.boxSizing = "border-box";
               el.style.backgroundColor = "#ffffff";
               el.style.color = "#000000";
               el.style.borderRadius = "0";
               el.style.border = "none";
               el.style.boxShadow = "none";
-
-              const allText = el.querySelectorAll("*");
-              allText.forEach(node => {
-                try {
-                  const htmlNode = node as HTMLElement;
-                  if (htmlNode && htmlNode.style) {
-                    htmlNode.style.fontFamily = "monospace";
-                    htmlNode.style.fontSize = "12px";
-                  }
-                } catch (e) {
-                  // Ignore style application errors for non-stylable nodes
-                }
-              });
-              const headings = el.querySelectorAll("h4");
-              headings.forEach(node => {
-                try {
-                  const htmlNode = node as HTMLElement;
-                  if (htmlNode && htmlNode.style) {
-                    htmlNode.style.fontSize = "14px";
-                  }
-                } catch (e) {
-                  // Ignore style application errors
-                }
-              });
-            } else if (layoutProfile === "thermal-58mm") {
-              el.style.width = "240px";
-              el.style.padding = "4px";
-              el.style.boxSizing = "border-box";
-              el.style.backgroundColor = "#ffffff";
-              el.style.color = "#000000";
-              el.style.borderRadius = "0";
-              el.style.border = "none";
-              el.style.boxShadow = "none";
-
-              const allText = el.querySelectorAll("*");
-              allText.forEach(node => {
-                try {
-                  const htmlNode = node as HTMLElement;
-                  if (htmlNode && htmlNode.style) {
-                    htmlNode.style.fontFamily = "monospace";
-                    htmlNode.style.fontSize = "10px";
-                  }
-                } catch (e) {
-                  // Ignore style application errors
-                }
-              });
-              const headings = el.querySelectorAll("h4");
-              headings.forEach(node => {
-                try {
-                  const htmlNode = node as HTMLElement;
-                  if (htmlNode && htmlNode.style) {
-                    htmlNode.style.fontSize = "11px";
-                  }
-                } catch (e) {
-                  // Ignore style application errors
-                }
-              });
             }
           } catch (err) {
             console.warn("Safe override style adjustment error:", err);
@@ -885,212 +1109,418 @@ export async function saveElementAsPDF(
   }
 }
 
-// Highly sophisticated, sandboxed-safe offline high-fidelity vector PDF compiler
+// High-fidelity offline vector PDF compiler matching the checkout receipt layout identically
 function generateVectorPDFFallback(
   element: HTMLElement,
   elementId: string,
   filename: string,
-  layoutProfile: "standard-a4" | "thermal-80mm" | "thermal-58mm"
+  layoutProfile: PrinterLayoutProfile
 ): boolean {
   const cleanText = (str: string): string => {
     if (!str) return "";
-    // Replace Indian Rupee symbol with "Rs." so it doesn't corrupt subsequent character encodings in jsPDF standard fonts
+    // Replace Indian Rupee symbol with "Rs." and strip non-Latin-1 emojis so jsPDF standard fonts stay crisp
     let cleaned = str.replace(/₹/g, "Rs.");
-    // Normalize non-breaking spaces and other potential corrupting symbols
     cleaned = cleaned.replace(/\u00a0/g, " ");
+    cleaned = cleaned.replace(/[^\x20-\x7E\xA0-\xFF\n]/g, "").replace(/\s+/g, " ").trim();
     return cleaned;
   };
 
   try {
     if (elementId === "invoice-receipt-theme" || elementId === "virtual-receipt-roll-wrapper") {
-      const titleEl = element.querySelector("h4");
-      const storeTitle = titleEl ? titleEl.textContent?.replace(/[⭐*]/g, "").trim() : "RETAIL STORE RECEIPT";
+      const storeEl = element.querySelector("[data-receipt-store-name='true'], h4");
+      const storeTitle = storeEl ? storeEl.textContent?.replace(/[⭐*]/g, "").trim() : "RETAIL STORE RECEIPT";
+
+      const logoEl = element.querySelector("[data-receipt-logo='true']") as HTMLImageElement | null;
+      const logoSrc = logoEl?.src || "";
+      const hasDataUrlLogo = logoSrc.startsWith("data:image/png") || logoSrc.startsWith("data:image/jpeg") || logoSrc.startsWith("data:image/jpg");
+
+      const headerEl = element.querySelector("[data-receipt-header='true']");
+      const branchEl = element.querySelector("[data-receipt-branch='true']");
+      const addressEl = element.querySelector("[data-receipt-address='true']");
+      const contactEl = element.querySelector("[data-receipt-contact='true']");
 
       const subtitleEls = element.querySelectorAll("p");
-      const branchName = subtitleEls[0] ? subtitleEls[0].textContent?.trim() : "";
-      const branchAddress = subtitleEls[1] ? subtitleEls[1].textContent?.trim() : "";
-      const branchPhone = subtitleEls[2] ? subtitleEls[2].textContent?.trim() : "";
+      const receiptHeaderText = headerEl ? headerEl.textContent?.trim() || "" : (subtitleEls[0]?.textContent?.trim() || "");
+      const branchText = branchEl ? branchEl.textContent?.trim() || "" : "";
+      const addressText = addressEl ? addressEl.textContent?.trim() || "" : (subtitleEls[1]?.textContent?.trim() || "");
+      const contactText = contactEl ? contactEl.textContent?.trim() || "" : (subtitleEls[2]?.textContent?.trim() || "");
 
       const metaLines: { key: string; val: string }[] = [];
-      const divs = element.querySelectorAll("div");
-      divs.forEach(div => {
-        if (div.classList.contains("flex") && div.classList.contains("justify-between")) {
-          const spans = div.querySelectorAll("span");
-          if (spans.length === 2) {
-            const key = spans[0].textContent?.trim() || "";
-            const val = spans[1].textContent?.trim() || "";
-            if (
-              key.includes("Invoice ID") || 
-              key.includes("GSTIN") || 
-              key.includes("Cashier") || 
-              key.includes("Timestamp") || 
-              key.includes("Customer") || 
-              key.includes("Mobile")
-            ) {
-              metaLines.push({ key, val });
+      const metaRows = element.querySelectorAll("[data-receipt-meta-row='true']");
+      if (metaRows.length > 0) {
+        metaRows.forEach((row) => {
+          const spans = row.querySelectorAll("span");
+          if (spans.length >= 2) {
+            metaLines.push({
+              key: spans[0].textContent?.trim() || "",
+              val: spans[spans.length - 1].textContent?.trim() || "",
+            });
+          }
+        });
+      } else {
+        const divs = element.querySelectorAll("div");
+        divs.forEach(div => {
+          if (div.classList.contains("flex") && div.classList.contains("justify-between")) {
+            const spans = div.querySelectorAll("span");
+            if (spans.length === 2) {
+              const key = spans[0].textContent?.trim() || "";
+              const val = spans[1].textContent?.trim() || "";
+              if (
+                key.includes("Invoice ID") ||
+                key.includes("GSTIN") ||
+                key.includes("Cashier") ||
+                key.includes("Timestamp") ||
+                key.includes("Customer") ||
+                key.includes("Mobile")
+              ) {
+                metaLines.push({ key, val });
+              }
             }
           }
-        }
-      });
+        });
+      }
 
-      const items: { name: string; qty: string; price: string }[] = [];
-      const gridDivs = element.querySelectorAll("div.grid");
-      gridDivs.forEach((div, idx) => {
-        if (idx === 0) return; // skip header
-        const spans = div.querySelectorAll("span");
-        if (spans.length >= 5) {
-          items.push({
-            name: spans[0].textContent?.trim() || "",
-            qty: spans[3].textContent?.trim() || "",
-            price: spans[4].textContent?.trim() || ""
-          });
-        } else if (spans.length >= 3) {
-          items.push({
-            name: spans[0].textContent?.trim() || "",
-            qty: spans[1].textContent?.trim() || "",
-            price: spans[2].textContent?.trim() || ""
-          });
+      const items: { name: string; mrp: string; rate: string; qty: string; total: string }[] = [];
+      const itemRows = element.querySelectorAll("[data-receipt-item-row='true']");
+      if (itemRows.length > 0) {
+        itemRows.forEach((row) => {
+          const spans = row.querySelectorAll("span");
+          if (spans.length >= 5) {
+            items.push({
+              name: spans[0].textContent?.trim() || "",
+              mrp: spans[1].textContent?.trim() || "",
+              rate: spans[2].textContent?.trim() || "",
+              qty: spans[3].textContent?.trim() || "",
+              total: spans[4].textContent?.trim() || "",
+            });
+          }
+        });
+      } else {
+        const gridDivs = element.querySelectorAll("div.grid");
+        gridDivs.forEach((div, idx) => {
+          if (idx === 0) return;
+          const spans = div.querySelectorAll("span");
+          if (spans.length >= 5) {
+            items.push({
+              name: spans[0].textContent?.trim() || "",
+              mrp: spans[1].textContent?.trim() || "",
+              rate: spans[2].textContent?.trim() || "",
+              qty: spans[3].textContent?.trim() || "",
+              total: spans[4].textContent?.trim() || "",
+            });
+          } else if (spans.length >= 3) {
+            items.push({
+              name: spans[0].textContent?.trim() || "",
+              mrp: spans[2].textContent?.trim() || "",
+              rate: spans[2].textContent?.trim() || "",
+              qty: spans[1].textContent?.trim() || "",
+              total: spans[2].textContent?.trim() || "",
+            });
+          }
+        });
+      }
+
+      const savingsEl = element.querySelector("[data-receipt-savings='true']");
+      let savingsLabel = "";
+      let savingsValue = "";
+      if (savingsEl) {
+        const spans = savingsEl.querySelectorAll("span");
+        if (spans.length >= 2) {
+          savingsLabel = cleanText(spans[0].textContent?.trim() || "You Saved on MRP:");
+          savingsValue = cleanText(spans[1].textContent?.trim() || "");
         }
-      });
+      }
 
       const mathLines: { key: string; val: string }[] = [];
-      divs.forEach(div => {
-        if (div.classList.contains("flex") && div.classList.contains("justify-between")) {
-          const spans = div.querySelectorAll("span");
-          if (spans.length === 2) {
-            const key = spans[0].textContent?.trim() || "";
-            const val = spans[1].textContent?.trim() || "";
-            if (
-              key.includes("Tax") || 
-              key.includes("discount") || 
-              key.includes("TOTAL") || 
-              key.includes("PAYABLE") ||
-              key.includes("Payment Mode") ||
-              key.includes("Tender Mode") ||
-              key.includes("Cash") ||
-              key.includes("Change")
-            ) {
-              mathLines.push({ key, val });
+      const mathRows = element.querySelectorAll("[data-receipt-math-row='true']");
+      if (mathRows.length > 0) {
+        mathRows.forEach((row) => {
+          const spans = row.querySelectorAll("span");
+          if (spans.length >= 2) {
+            mathLines.push({
+              key: spans[0].textContent?.trim() || "",
+              val: spans[spans.length - 1].textContent?.trim() || "",
+            });
+          }
+        });
+      } else {
+        const divs = element.querySelectorAll("div");
+        divs.forEach(div => {
+          if (div.classList.contains("flex") && div.classList.contains("justify-between")) {
+            const spans = div.querySelectorAll("span");
+            if (spans.length === 2) {
+              const key = spans[0].textContent?.trim() || "";
+              const val = spans[1].textContent?.trim() || "";
+              if (
+                key.includes("Total MRP") ||
+                key.includes("Tax") ||
+                key.includes("discount") ||
+                key.includes("TOTAL") ||
+                key.includes("PAYABLE") ||
+                key.includes("Payment Mode") ||
+                key.includes("Tender Mode") ||
+                key.includes("Cash Received") ||
+                key.includes("Change Returned")
+              ) {
+                mathLines.push({ key, val });
+              }
             }
           }
-        }
-      });
+        });
+      }
+
+      const footerEl = element.querySelector("[data-receipt-footer='true'], .p-3.bg-slate-100, .p-2.bg-slate-50");
+      const footerMsg = footerEl ? cleanText(footerEl.textContent?.trim() || "") : "Thank you for shopping! Powered by Expert POS SaaS";
 
       const isA4 = layoutProfile === "standard-a4";
-      const pdfWidth = isA4 ? 595 : (layoutProfile === "thermal-58mm" ? 180 : 250); 
-      const approxHeight = isA4 ? 842 : (220 + (metaLines.length * 12) + (items.length * 15) + (mathLines.length * 12));
+      const is58 = layoutProfile === "thermal-58mm";
+      const is76 = layoutProfile === "thermal-76mm";
+      const is112 = layoutProfile === "thermal-112mm";
+      // Exact physical paper width in points with safe thermal printhead margins
+      const pdfWidth = isA4 ? 595 : is58 ? 164 : is76 ? 215 : is112 ? 317 : 226;
+      const padX = isA4 ? 40 : is58 ? 12 : is112 ? 18 : 14;
+      const rightX = pdfWidth - padX;
+      const mrpX = isA4 ? 365 : is58 ? 78 : is76 ? 107 : is112 ? 178 : 114;
+      const rateX = isA4 ? 435 : is58 ? 109 : is76 ? 146 : is112 ? 226 : 155;
+      const qtyX = isA4 ? 478 : is58 ? 117 : is76 ? 157 : is112 ? 242 : 166;
+      const totalX = rightX;
+      const descMaxWidth = isA4 ? 240 : is58 ? 34 : is76 ? 54 : is112 ? 105 : 60;
+
+      const lineH = isA4 ? 13 : is58 ? 8 : is76 ? 9 : is112 ? 11 : 9.5;
+      const itemFontSize = isA4 ? 8.8 : is58 ? 5.0 : is76 ? 5.8 : is112 ? 7.2 : 6.1;
+      const metaFontSize = isA4 ? 9 : is58 ? 5.8 : is76 ? 6.6 : is112 ? 8.0 : 7.0;
+      const fontFamily = isA4 ? "helvetica" : "courier";
+
+      // Pre-compute required height so roll receipts never clip
+      const measurePdf = new jsPDF({ orientation: "portrait", unit: "pt", format: [pdfWidth, 842] });
+      measurePdf.setFont(fontFamily, "normal");
+      measurePdf.setFontSize(itemFontSize);
+      const addrLinesCount = addressText ? measurePdf.splitTextToSize(cleanText(addressText), pdfWidth - padX * 2).length : 0;
+      const itemLinesTotal = items.reduce((acc, it) => {
+        const lines = measurePdf.splitTextToSize(cleanText(it.name), descMaxWidth);
+        return acc + Math.max(1, lines.length) * lineH + (isA4 ? 4 : 3);
+      }, 0);
+      const footerLinesCount = footerMsg ? measurePdf.splitTextToSize(footerMsg, pdfWidth - padX * 2 - 12).length : 0;
+
+      const estimatedHeight =
+        (isA4 ? 55 : 28) +
+        (hasDataUrlLogo ? (isA4 ? 42 : 28) : 0) +
+        (receiptHeaderText ? lineH : 0) +
+        (branchText ? lineH : 0) +
+        addrLinesCount * lineH +
+        (contactText ? lineH : 0) +
+        22 +
+        metaLines.length * (lineH + 1) +
+        30 +
+        itemLinesTotal +
+        (savingsLabel ? 26 : 0) +
+        22 +
+        mathLines.length * (lineH + 3) +
+        (footerLinesCount > 0 ? footerLinesCount * 9 + 24 : 0) +
+        26;
+
       const pdf = new jsPDF({
         orientation: "portrait",
         unit: "pt",
-        format: isA4 ? "a4" : [pdfWidth, approxHeight]
+        format: isA4 ? "a4" : [pdfWidth, Math.max(240, estimatedHeight)]
       });
 
-      const fontFamily = isA4 ? "helvetica" : "courier";
-      pdf.setFont(fontFamily, "bold");
-      pdf.setFontSize(isA4 ? 14 : 10);
-      let y = isA4 ? 35 : 20;
+      const drawDashedLine = (yPos: number) => {
+        pdf.setDrawColor(180, 190, 205);
+        pdf.setLineWidth(0.6);
+        (pdf as any).setLineDashPattern?.([3, 2], 0);
+        pdf.line(padX, yPos, rightX, yPos);
+        (pdf as any).setLineDashPattern?.([], 0);
+      };
 
-      const padX = isA4 ? 40 : 10;
-      const rightX = pdfWidth - padX;
-      const qtyX = isA4 ? pdfWidth - 140 : pdfWidth - 65;
-      const priceX = rightX;
+      let y = isA4 ? 36 : 18;
 
-      pdf.text(cleanText(storeTitle || "RETAIL CASH RECEIPT"), pdfWidth / 2, y, { align: "center" });
-      y += (isA4 ? 16 : 12);
-
-      pdf.setFont(fontFamily, "normal");
-      pdf.setFontSize(isA4 ? 9 : 8);
-      if (branchName) {
-        pdf.text(cleanText(branchName), pdfWidth / 2, y, { align: "center" });
-        y += (isA4 ? 12 : 10);
+      if (hasDataUrlLogo) {
+        try {
+          const imgFormat = logoSrc.startsWith("data:image/png") ? "PNG" : "JPEG";
+          const imgW = isA4 ? 44 : 26;
+          const imgH = isA4 ? 32 : 20;
+          pdf.addImage(logoSrc, imgFormat, (pdfWidth - imgW) / 2, y, imgW, imgH);
+          y += imgH + 5;
+        } catch {
+          // Ignore malformed image data URLs
+        }
       }
-      if (branchAddress) {
-        const splitAddress = pdf.splitTextToSize(cleanText(branchAddress), pdfWidth - (padX * 2));
+
+      pdf.setTextColor(15, 23, 42);
+      pdf.setFont(fontFamily, "bold");
+      pdf.setFontSize(isA4 ? 14 : is58 ? 8 : 9.5);
+      pdf.text(cleanText(storeTitle || "RETAIL STORE RECEIPT"), pdfWidth / 2, y, { align: "center" });
+      y += isA4 ? 15 : 11;
+
+      pdf.setFontSize(metaFontSize);
+      if (receiptHeaderText) {
+        pdf.setFont(fontFamily, "bold");
+        pdf.setTextColor(71, 85, 105);
+        pdf.text(cleanText(receiptHeaderText.toUpperCase()), pdfWidth / 2, y, { align: "center" });
+        y += lineH;
+      }
+      if (branchText) {
+        pdf.setFont(fontFamily, "bold");
+        pdf.setTextColor(71, 85, 105);
+        pdf.text(cleanText(branchText), pdfWidth / 2, y, { align: "center" });
+        y += lineH;
+      }
+      if (addressText) {
+        pdf.setFont(fontFamily, "normal");
+        pdf.setTextColor(100, 116, 139);
+        const splitAddress = pdf.splitTextToSize(cleanText(addressText), pdfWidth - padX * 2);
         splitAddress.forEach((line: string) => {
           pdf.text(line, pdfWidth / 2, y, { align: "center" });
-          y += (isA4 ? 12 : 10);
+          y += lineH;
         });
       }
-      if (branchPhone) {
-        pdf.text(cleanText(branchPhone), pdfWidth / 2, y, { align: "center" });
-        y += (isA4 ? 12 : 10);
+      if (contactText) {
+        pdf.setFont(fontFamily, "normal");
+        pdf.setTextColor(100, 116, 139);
+        pdf.text(cleanText(contactText), pdfWidth / 2, y, { align: "center" });
+        y += lineH;
       }
 
+      y += 4;
+      drawDashedLine(y);
+      y += 11;
+
+      pdf.setTextColor(30, 41, 59);
+      pdf.setFontSize(metaFontSize);
+      metaLines.forEach(m => {
+        const keyTxt = cleanText(m.key);
+        let valTxt = cleanText(m.val);
+        pdf.setFont(fontFamily, "normal");
+        const keyW = pdf.getTextWidth(keyTxt);
+        const maxValW = Math.max(40, (rightX - padX) - keyW - 8);
+        pdf.setFont(fontFamily, "bold");
+        while (valTxt.length > 4 && pdf.getTextWidth(valTxt) > maxValW) {
+          valTxt = valTxt.slice(0, -4) + "...";
+        }
+        pdf.setFont(fontFamily, "normal");
+        pdf.text(keyTxt, padX, y);
+        pdf.setFont(fontFamily, "bold");
+        pdf.text(valTxt, rightX, y, { align: "right" });
+        y += lineH + 1;
+      });
+
+      y += 3;
+      pdf.setDrawColor(180, 190, 205);
+      pdf.line(padX, y, rightX, y);
+      y += 10;
+
+      // 5-Column Item Header matching Checkout Invoice
+      pdf.setFont(fontFamily, "bold");
+      pdf.setTextColor(15, 23, 42);
+      pdf.setFontSize(itemFontSize);
+      pdf.text(is58 ? "Item" : "Item Description", padX, y);
+      pdf.text("MRP", mrpX, y, { align: "right" });
+      pdf.text("Rate", rateX, y, { align: "right" });
+      pdf.text("Qty", qtyX, y, { align: "center" });
+      pdf.text("Total", totalX, y, { align: "right" });
       y += 4;
       pdf.line(padX, y, rightX, y);
       y += 10;
 
-      metaLines.forEach(m => {
-        pdf.setFont(fontFamily, "normal");
-        pdf.text(cleanText(m.key), padX, y);
-        pdf.setFont(fontFamily, "bold");
-        pdf.text(cleanText(m.val), rightX, y, { align: "right" });
-        y += (isA4 ? 13 : 11);
-      });
-
-      y += 2;
-      pdf.line(padX, y, rightX, y);
-      y += 10;
-
-      pdf.setFont(fontFamily, "bold");
-      pdf.text("Description", padX, y);
-      pdf.text("Qty", qtyX, y, { align: "right" });
-      pdf.text("Price", priceX, y, { align: "right" });
-      y += 11;
-      pdf.line(padX, y, rightX, y);
-      y += 10;
-
-      pdf.setFont(fontFamily, "normal");
       items.forEach(it => {
-        const nameLines = pdf.splitTextToSize(cleanText(it.name), isA4 ? (pdfWidth - 220) : (pdfWidth - 90));
+        pdf.setFont(fontFamily, "normal");
+        pdf.setTextColor(30, 41, 59);
+        pdf.setFontSize(itemFontSize);
+        const nameLines = pdf.splitTextToSize(cleanText(it.name), descMaxWidth);
         const startY = y;
         nameLines.forEach((line: string) => {
           pdf.text(line, padX, y);
-          y += (isA4 ? 12 : 10);
+          y += lineH;
         });
-        
-        const finalY = Math.max(y - (isA4 ? 12 : 10), startY);
+
+        const rowAnchorY = startY;
+        pdf.text(cleanText(it.mrp), mrpX, rowAnchorY, { align: "right" });
+        pdf.text(cleanText(it.rate), rateX, rowAnchorY, { align: "right" });
         pdf.setFont(fontFamily, "bold");
-        pdf.text(cleanText(it.qty), qtyX, finalY, { align: "right" });
-        pdf.text(cleanText(it.price), priceX, finalY, { align: "right" });
-        pdf.setFont(fontFamily, "normal");
-        y = Math.max(y, finalY + (isA4 ? 13 : 11));
+        pdf.text(cleanText(it.qty), qtyX, rowAnchorY, { align: "center" });
+        pdf.text(cleanText(it.total), totalX, rowAnchorY, { align: "right" });
+        y = Math.max(y, rowAnchorY + lineH) + 2;
       });
 
+      // MRP Savings Highlight Box
+      if (savingsLabel && savingsValue) {
+        y += 3;
+        const boxH = isA4 ? 20 : 15;
+        const textY = y + (isA4 ? 3 : 0.5);
+        pdf.setFillColor(236, 253, 245);
+        pdf.setDrawColor(167, 243, 208);
+        pdf.roundedRect(padX, y - 10, rightX - padX, boxH, 3, 3, "FD");
+        pdf.setFont(fontFamily, "bold");
+        pdf.setFontSize(isA4 ? 8.5 : is58 ? 5.2 : 6.2);
+        pdf.setTextColor(6, 95, 70);
+        pdf.text(savingsLabel, padX + 5, textY);
+        pdf.text(savingsValue, rightX - 5, textY, { align: "right" });
+        y += boxH;
+      }
+
       y += 2;
-      pdf.line(padX, y, rightX, y);
+      drawDashedLine(y);
       y += 11;
 
       mathLines.forEach(m => {
-        if (m.key.includes("TOTAL PAYABLE") || m.key.includes("NET PAYABLE")) {
+        const isTotal = m.key.includes("TOTAL PAYABLE") || m.key.includes("TOTAL NET PAYABLE");
+        const isPaymentMode = m.key.includes("Payment Mode") || m.key.includes("Tender Mode");
+
+        if (isTotal) {
+          drawDashedLine(y - 6);
+          y += 3;
           pdf.setFont(fontFamily, "bold");
-          pdf.setFontSize(isA4 ? 12 : 10);
+          pdf.setFontSize(isA4 ? 11 : is58 ? 7.0 : 8.5);
+          pdf.setTextColor(15, 23, 42);
           pdf.text(cleanText(m.key), padX, y);
           pdf.text(cleanText(m.val), rightX, y, { align: "right" });
-          y += 14;
+          y += lineH + 4;
+        } else if (isPaymentMode) {
+          pdf.setFont(fontFamily, "normal");
+          pdf.setFontSize(metaFontSize);
+          pdf.setTextColor(30, 41, 59);
+          pdf.text(cleanText(m.key), padX, y);
+
+          const badgeText = cleanText(m.val);
+          pdf.setFont(fontFamily, "bold");
+          pdf.setFontSize(isA4 ? 8.2 : is58 ? 5.4 : 6.5);
+          const badgeW = pdf.getTextWidth(badgeText) + 8;
+          const badgeH = isA4 ? 13 : 10;
+          pdf.setFillColor(15, 23, 42);
+          pdf.roundedRect(rightX - badgeW, y - badgeH + 2.5, badgeW, badgeH, 2, 2, "F");
+          pdf.setTextColor(255, 255, 255);
+          pdf.text(badgeText, rightX - 4, y, { align: "right" });
+          pdf.setTextColor(30, 41, 59);
+          y += lineH + 2;
         } else {
           pdf.setFont(fontFamily, "normal");
-          pdf.setFontSize(isA4 ? 9 : 8);
+          pdf.setFontSize(metaFontSize);
+          pdf.setTextColor(51, 65, 85);
           pdf.text(cleanText(m.key), padX, y);
           pdf.text(cleanText(m.val), rightX, y, { align: "right" });
-          y += (isA4 ? 13 : 11);
+          y += lineH + 1;
         }
       });
 
-      y += 5;
-      pdf.setFont("courier", "italic");
-      pdf.setFontSize(7);
-      
-      const footerBox = element.querySelector(".p-3.bg-slate-100, .p-2.bg-slate-50");
-      const footerMsg = footerBox ? footerBox.textContent?.trim() : "Thank you for your business!";
       if (footerMsg) {
-        const splitFooter = pdf.splitTextToSize(cleanText(footerMsg), pdfWidth - 20);
+        y += 5;
+        pdf.setFont("helvetica", "normal");
+        pdf.setFontSize(isA4 ? 8 : is58 ? 5.2 : 6.2);
+        const splitFooter = pdf.splitTextToSize(footerMsg, pdfWidth - padX * 2 - 10);
+        const footerLineH = isA4 ? 10 : 8.5;
+        const boxH = splitFooter.length * footerLineH + 10;
+        pdf.setFillColor(241, 245, 249);
+        pdf.setDrawColor(226, 232, 240);
+        pdf.roundedRect(padX, y - 6, rightX - padX, boxH, 3, 3, "FD");
+        pdf.setTextColor(71, 85, 105);
+        let fy = y + 3;
         splitFooter.forEach((line: string) => {
-          pdf.text(line, pdfWidth / 2, y, { align: "center" });
-          y += 9;
+          pdf.text(line, pdfWidth / 2, fy, { align: "center" });
+          fy += footerLineH;
         });
       }
-      
+
       pdf.save(filename);
       return true;
     } 

@@ -1,6 +1,7 @@
 import express from "express";
 import path from "path";
 import fs from "fs";
+import net from "net";
 import dotenv from "dotenv";
 import { createServer as createViteServer } from "vite";
 import { mysqlDb } from "./server/mysqlDb.ts";
@@ -8,9 +9,17 @@ import { mysqlDb } from "./server/mysqlDb.ts";
 dotenv.config();
 
 const app = express();
-const PORT: number | string = process.env.PORT || 3000;
+const isProductionMode = process.env.NODE_ENV === "production";
+const PORT: number = isProductionMode ? Number(process.env.PORT) || 3000 : 3000;
 
 app.use(express.json({ limit: "15mb" }));
+app.use(express.text({ type: "text/plain", limit: "5mb" }));
+
+// Explicitly enable WebUSB / WebSerial permissions for direct POS thermal printers
+app.use((_req, res, next) => {
+  res.setHeader("Permissions-Policy", "usb=(self), serial=(self), bluetooth=(self)");
+  next();
+});
 
 // Health check endpoint for Hostinger & load balancers
 app.get(["/health", "/api/health"], (_req, res) => {
@@ -397,6 +406,128 @@ app.post("/api/cash-sessions", async (req, res) => {
   } catch (e: any) {
     res.status(500).json({ success: false, error: e?.message || "Failed to save cash session" });
   }
+});
+
+// RAW TCP Port 9100 Network/Wi-Fi Thermal Printer ESC/POS dispatch
+app.post("/api/print/escpos-network", async (req, res) => {
+  try {
+    const ip = String(req.body?.ip || "").trim();
+    const port = Number(req.body?.port || 9100);
+    const base64Data = String(req.body?.base64Data || "");
+
+    if (!ip || !/^[a-zA-Z0-9.:-]+$/.test(ip)) {
+      return res.status(400).json({ success: false, error: "Invalid printer IP/hostname." });
+    }
+    if (!Number.isInteger(port) || port < 1 || port > 65535) {
+      return res.status(400).json({ success: false, error: "Invalid printer TCP port (usually 9100)." });
+    }
+    if (!base64Data) {
+      return res.status(400).json({ success: false, error: "Empty ESC/POS print buffer." });
+    }
+
+    const buffer = Buffer.from(base64Data, "base64");
+
+    await new Promise<void>((resolve, reject) => {
+      const socket = new net.Socket();
+      let settled = false;
+      const done = (err?: Error) => {
+        if (settled) return;
+        settled = true;
+        try {
+          socket.destroy();
+        } catch {
+          // ignore
+        }
+        if (err) reject(err);
+        else resolve();
+      };
+
+      socket.setTimeout(3500);
+      socket.once("timeout", () => {
+        done(new Error(`Timed out connecting to ${ip}:${port}. If app is cloud-hosted, local LAN printers require System Driver, WebUSB, or Serial mode.`));
+      });
+      socket.once("error", (err) => {
+        done(new Error(`Unable to reach printer at ${ip}:${port} (${err.message}).`));
+      });
+
+      socket.connect(port, ip, () => {
+        socket.write(buffer, (writeErr) => {
+          if (writeErr) return done(writeErr);
+          socket.end();
+          done();
+        });
+      });
+    });
+
+    return res.json({ success: true, message: `Sent ${buffer.length} ESC/POS bytes to ${ip}:${port}` });
+  } catch (e: any) {
+    return res.status(502).json({
+      success: false,
+      error: e?.message || "Network thermal printer unreachable."
+    });
+  }
+});
+
+// Ephemeral cross-frame print receipt relay (bypasses browser iframe Storage Partitioning)
+interface ServerPrintSnapshot {
+  jobId: string;
+  html: string;
+  layoutProfile: string;
+  connectionMode?: string;
+  invoiceId?: string;
+  createdAt: number;
+}
+const printSnapshotStore = new Map<string, ServerPrintSnapshot>();
+const PRINT_SNAPSHOT_TTL_MS = 30 * 60 * 1000;
+
+function prunePrintSnapshots() {
+  const cutoff = Date.now() - PRINT_SNAPSHOT_TTL_MS;
+  for (const [k, v] of printSnapshotStore.entries()) {
+    if (v.createdAt < cutoff) printSnapshotStore.delete(k);
+  }
+  while (printSnapshotStore.size > 200) {
+    const oldestKey = printSnapshotStore.keys().next().value;
+    if (!oldestKey) break;
+    printSnapshotStore.delete(oldestKey);
+  }
+}
+
+app.post("/api/print/snapshot", (req, res) => {
+  try {
+    let body: any = req.body;
+    if (typeof body === "string") {
+      body = JSON.parse(body);
+    }
+    const html = String(body?.html || "");
+    if (!html) {
+      return res.status(400).json({ success: false, error: "Empty receipt HTML snapshot." });
+    }
+    const jobId = String(body?.jobId || `PJ-${Date.now()}`).slice(0, 120);
+    const entry: ServerPrintSnapshot = {
+      jobId,
+      html,
+      layoutProfile: String(body?.layoutProfile || "thermal-80mm"),
+      connectionMode: body?.connectionMode ? String(body.connectionMode) : undefined,
+      invoiceId: body?.invoiceId ? String(body.invoiceId) : undefined,
+      createdAt: Date.now()
+    };
+    prunePrintSnapshots();
+    printSnapshotStore.set(jobId, entry);
+    printSnapshotStore.set("latest", entry);
+    return res.json({ success: true, jobId });
+  } catch (e: any) {
+    return res.status(400).json({ success: false, error: e?.message || "Invalid print snapshot payload." });
+  }
+});
+
+app.get("/api/print/snapshot/:jobId", (req, res) => {
+  prunePrintSnapshots();
+  const jobId = String(req.params.jobId || "latest").slice(0, 120);
+  const entry = printSnapshotStore.get(jobId) || printSnapshotStore.get("latest");
+  if (!entry) {
+    return res.status(404).json({ success: false, error: "Print job not found or expired." });
+  }
+  return res.json({ success: true, snapshot: entry });
 });
 
 // Production & Development server setup

@@ -92,16 +92,39 @@ import {
   UserRole, 
   Tenant, 
   printElementById, 
+  printElementDirect,
+  PrinterLayoutProfile,
   saveElementAsPDF,
   BusinessSector,
   TenantFontFamily,
   TenantFontSizeScale,
   TenantTypography,
+  TenantSectorConfig,
   BUSINESS_SECTORS_CATALOG,
   TENANT_FONT_OPTIONS,
   TENANT_FONT_SIZE_OPTIONS
 } from "../types";
 import { ExpertAidLogo } from "./ExpertAidLogo";
+
+function formatSectorModulesSummary(modulesInput: any): string {
+  if (!modulesInput) return "POS, Inventory";
+  if (Array.isArray(modulesInput)) {
+    const items = modulesInput.filter(Boolean).map(String);
+    return items.length > 0 ? items.join(", ") : "POS, Inventory";
+  }
+  if (typeof modulesInput === "object") {
+    const enabledKeys = Object.entries(modulesInput)
+      .filter(([, enabled]) => Boolean(enabled))
+      .map(([key]) =>
+        key
+          .replace(/([A-Z])/g, " $1")
+          .replace(/^./, (ch) => ch.toUpperCase())
+          .trim()
+      );
+    return enabledKeys.length > 0 ? enabledKeys.join(", ") : "POS, Inventory";
+  }
+  return "POS, Inventory";
+}
 
 export interface AccessProfile {
   role: UserRole;
@@ -745,7 +768,7 @@ export default function SuperAdminConsole({
   const [invoiceSearchQuery, setInvoiceSearchQuery] = useState<string>("");
   const [invoiceFilterStatus, setInvoiceFilterStatus] = useState<string>("ALL");
   const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null);
-  const [selectedPrinterLayout, setSelectedPrinterLayout] = useState<"standard-a4" | "thermal-80mm" | "thermal-58mm">("standard-a4");
+  const [selectedPrinterLayout, setSelectedPrinterLayout] = useState<PrinterLayoutProfile>("standard-a4");
 
   // Payment Audit states
   const [paymentSearch, setPaymentSearch] = useState<string>("");
@@ -976,8 +999,8 @@ export default function SuperAdminConsole({
   const handleOnboardTenant = (e: React.FormEvent) => {
     e.preventDefault();
     const name = tenantName.trim();
-    // Generate subdomain automatically from client name since subdomain field was removed
-    const subdomain = name.toLowerCase().replace(/[^a-z0-9]/g, "").substring(0, 15) || `tenant${Date.now()}`;
+    const rawSubdomain = tenantSubdomain.trim().toLowerCase().replace(/[^a-z0-9-]/g, "");
+    const subdomain = rawSubdomain || name.toLowerCase().replace(/[^a-z0-9]/g, "").substring(0, 15) || `tenant${Date.now()}`;
     const email = tenantAdminEmail.trim().toLowerCase();
     const phone = tenantPhone.trim() || "+91 9900990099";
     const loginId = tenantAdminLoginId.trim().toLowerCase();
@@ -1003,7 +1026,19 @@ export default function SuperAdminConsole({
       return;
     }
 
-    const sectorConfig = BUSINESS_SECTORS_CATALOG[tenantBusinessSector] || BUSINESS_SECTORS_CATALOG.SUPERMARKET;
+    const sectorCatalog = BUSINESS_SECTORS_CATALOG[tenantBusinessSector] || BUSINESS_SECTORS_CATALOG.SUPERMARKET;
+    const normalizedSectorConfig: TenantSectorConfig = {
+      sector: tenantBusinessSector,
+      sectorName: sectorCatalog.label,
+      enabledModules: {
+        ...sectorCatalog.defaultModules,
+        ...(featureModulesEnabled as Partial<TenantSectorConfig["enabledModules"]>)
+      },
+      posMode: sectorCatalog.posMode,
+      defaultCategories: sectorCatalog.defaultCategories,
+      unitPresets: sectorCatalog.unitPresets,
+      quickActions: sectorCatalog.quickActions
+    };
     const generatedDomainUrl = `https://${subdomain}.expertbilling.in`;
     const newTenantId = `TENANT-${Date.now().toString().slice(-6)}`;
 
@@ -1014,7 +1049,7 @@ export default function SuperAdminConsole({
       domainUrl: generatedDomainUrl,
       domainStatus: "ACTIVE",
       businessSector: tenantBusinessSector,
-      sectorConfig: sectorConfig,
+      sectorConfig: normalizedSectorConfig,
       typography: {
         fontFamily: tenantFontFamily,
         fontSizeScale: tenantFontSizeScale,
@@ -1040,7 +1075,7 @@ export default function SuperAdminConsole({
       contractDurationMonths: tenantContractDuration,
       renewalStatus: "AUTO_RENEW",
       onboardingSetupStatus: "COMPLETED",
-      hardwareProvisioned: hardwareAllocated && hardwareAllocated.length > 0 ? hardwareAllocated : sectorConfig.recommendedHardware,
+      hardwareProvisioned: hardwareAllocated && hardwareAllocated.length > 0 ? hardwareAllocated : sectorCatalog.recommendedHardware,
       onboardingNotes: tenantNotes,
       clientVerificationStatus: "VERIFIED",
       gstinRegNumber: tenantGstin || "07EXPAID" + Math.floor(1000 + Math.random() * 9000) + "A1Z1",
@@ -1108,7 +1143,7 @@ export default function SuperAdminConsole({
     setShowOnboardingSuccessModal(newTenant);
     triggerNotification(`SaaS Slice for '${name}' saved to database with Admin Login ID: ${loginId}!`, "success");
 
-    // Reset Form
+    // Reset Form while keeping user on the same console view with updated client state
     setTenantName("");
     setTenantSubdomain("");
     setTenantAdminEmail("");
@@ -1119,6 +1154,7 @@ export default function SuperAdminConsole({
     setTenantGstin("");
     setTenantNotes("");
     setTenantLogo("");
+    setOnboardingWizardStep(1);
   };
 
   // Bulk Client Onboarding CSV Importer Handler
@@ -1275,6 +1311,15 @@ export default function SuperAdminConsole({
     const updatedList = tenantsList.map(t => {
       if (t.id === editingTenant.id) {
         const sectorMeta = BUSINESS_SECTORS_CATALOG[editTenantBusinessSector] || BUSINESS_SECTORS_CATALOG.SUPERMARKET;
+        const normalizedEditedSectorConfig: TenantSectorConfig = {
+          sector: editTenantBusinessSector,
+          sectorName: sectorMeta.label,
+          enabledModules: sectorMeta.defaultModules,
+          posMode: sectorMeta.posMode,
+          defaultCategories: sectorMeta.defaultCategories,
+          unitPresets: sectorMeta.unitPresets,
+          quickActions: sectorMeta.quickActions
+        };
         return {
           ...t,
           name: editTenantName.trim() || t.name,
@@ -1282,7 +1327,7 @@ export default function SuperAdminConsole({
           domainUrl: `https://${subdomain}.expertbilling.in`,
           domainStatus: "ACTIVE" as const,
           businessSector: editTenantBusinessSector,
-          sectorConfig: sectorMeta,
+          sectorConfig: normalizedEditedSectorConfig,
           typography: {
             fontFamily: editTenantFontFamily,
             fontSizeScale: editTenantFontSizeScale,
@@ -3294,7 +3339,17 @@ export default function SuperAdminConsole({
                   })}
                 </div>
 
-                <form onSubmit={handleOnboardTenant} className="space-y-6">
+                <form
+                  onSubmit={(e) => {
+                    if (onboardingWizardStep < 4) {
+                      e.preventDefault();
+                      setOnboardingWizardStep((onboardingWizardStep + 1) as any);
+                      return;
+                    }
+                    handleOnboardTenant(e);
+                  }}
+                  className="space-y-6"
+                >
                   
                   {/* STEP 1: BUSINESS IDENTITY & BRANDING */}
                   {onboardingWizardStep === 1 && (
@@ -3824,7 +3879,7 @@ export default function SuperAdminConsole({
                               Auto-Configured for {BUSINESS_SECTORS_CATALOG[tenantBusinessSector]?.label || "Selected"} Sector
                             </p>
                             <p className="text-[11px] text-slate-500">
-                              Default modules ({BUSINESS_SECTORS_CATALOG[tenantBusinessSector]?.defaultModules.join(", ")}) and hardware bundle were automatically set.
+                              Default modules ({formatSectorModulesSummary(BUSINESS_SECTORS_CATALOG[tenantBusinessSector]?.defaultModules)}) and hardware bundle were automatically set.
                             </p>
                           </div>
                         </div>
@@ -8714,55 +8769,35 @@ export default function SuperAdminConsole({
                 <Printer className="w-3.5 h-3.5 text-blue-600" />
                 Select Printer Type / Page Layout
               </label>
-              <div className="grid grid-cols-3 gap-2 text-[9px]">
-                <button
-                  type="button"
-                  onClick={() => setSelectedPrinterLayout("standard-a4")}
-                  className={`py-2 px-1 rounded-xl border font-bold flex flex-col items-center justify-center transition-all cursor-pointer ${
-                    selectedPrinterLayout === "standard-a4"
-                      ? "bg-slate-900 text-white border-slate-900 shadow-sm"
-                      : "bg-white text-slate-600 border-slate-200 hover:bg-slate-100"
-                  }`}
-                >
-                  <span className="text-sm mb-0.5">🖨️</span>
-                  <span>Office A4</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setSelectedPrinterLayout("thermal-80mm")}
-                  className={`py-2 px-1 rounded-xl border font-bold flex flex-col items-center justify-center transition-all cursor-pointer ${
-                    selectedPrinterLayout === "thermal-80mm"
-                      ? "bg-slate-900 text-white border-slate-900 shadow-sm"
-                      : "bg-white text-slate-600 border-slate-200 hover:bg-slate-100"
-                  }`}
-                >
-                  <span className="text-sm mb-0.5">🧾</span>
-                  <span>POS 80mm</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setSelectedPrinterLayout("thermal-58mm")}
-                  className={`py-2 px-1 rounded-xl border font-bold flex flex-col items-center justify-center transition-all cursor-pointer ${
-                    selectedPrinterLayout === "thermal-58mm"
-                      ? "bg-slate-900 text-white border-slate-900 shadow-sm"
-                      : "bg-white text-slate-600 border-slate-200 hover:bg-slate-100"
-                  }`}
-                >
-                  <span className="text-sm mb-0.5">🎟️</span>
-                  <span>POS 58mm</span>
-                </button>
+              <div className="grid grid-cols-5 gap-1.5 text-[9px]">
+                {(
+                  [
+                    { id: "standard-a4", icon: "🖨️", label: "Office A4" },
+                    { id: "thermal-58mm", icon: "🎟️", label: "58mm" },
+                    { id: "thermal-76mm", icon: "🧻", label: "76mm" },
+                    { id: "thermal-80mm", icon: "🧾", label: "80mm" },
+                    { id: "thermal-112mm", icon: "📜", label: "112mm" }
+                  ] as { id: PrinterLayoutProfile; icon: string; label: string }[]
+                ).map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => setSelectedPrinterLayout(item.id)}
+                    className={`py-2 px-1 rounded-xl border font-bold flex flex-col items-center justify-center transition-all cursor-pointer ${
+                      selectedPrinterLayout === item.id
+                        ? "bg-slate-900 text-white border-slate-900 shadow-sm"
+                        : "bg-white text-slate-600 border-slate-200 hover:bg-slate-100"
+                    }`}
+                  >
+                    <span className="text-sm mb-0.5">{item.icon}</span>
+                    <span>{item.label}</span>
+                  </button>
+                ))}
               </div>
               <p className="text-[9px] text-slate-500 font-medium leading-tight">
-                {selectedPrinterLayout === "standard-a4" 
-                  ? "✓ Optimizes padding & font spacing for high-quality printing on standard office/home A4 printers (Not thermal)." 
-                  : selectedPrinterLayout === "thermal-80mm"
-                  ? "✓ Formats receipt margins precisely for 3-inch roll POS thermal printers."
-                  : "✓ Formats receipt compact margins precisely for portable 2-inch mini thermal printers."}
-                {typeof window !== "undefined" && window.self !== window.top && (
-                  <span className="block mt-1 text-amber-600 font-bold">
-                    ℹ️ Sandbox Mode: Browser print popups are restricted in iframe previews. Clicking 'Print Invoice' automatically downloads a high-fidelity print-ready PDF formatted exactly to your selection! For physical paper printing, please click 'Open in New Tab' on the top right.
-                  </span>
-                )}
+                {selectedPrinterLayout === "standard-a4"
+                  ? "✓ Optimizes padding & font spacing for standard office/home A4 printers."
+                  : `✓ Formats receipt margins precisely for ${selectedPrinterLayout.replace("thermal-", "")} thermal POS printers.`}
               </p>
             </div>
 
@@ -8847,16 +8882,12 @@ export default function SuperAdminConsole({
                 Close Receipt
               </button>
               <button
-                onClick={async () => {
-                  const filename = `Invoice-${selectedInvoice.id}.pdf`;
-                  const success = await printElementById("superadmin-invoice-print", selectedPrinterLayout, {
-                    invoiceId: selectedInvoice.id,
-                    filename
-                  });
-                  if (success) {
-                    triggerNotification(`Invoice ${selectedInvoice.id} print job dispatched! PDF downloaded to your device.`, "success");
+                onClick={() => {
+                  const res = printElementDirect("superadmin-invoice-print", selectedPrinterLayout);
+                  if (res.ok) {
+                    triggerNotification(`Invoice ${selectedInvoice.id} sent to printer dialog.`, "success");
                   } else {
-                    triggerNotification("Failed to compile invoice copy.", "warning");
+                    triggerNotification(res.reason || "Could not open browser print dialog.", "warning");
                   }
                 }}
                 className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl font-bold text-xs shadow-md shadow-slate-900/10 flex items-center gap-1.5 cursor-pointer transition-all"
@@ -9190,7 +9221,7 @@ export default function SuperAdminConsole({
                 </p>
                 <ul className="list-disc list-inside text-[11px] space-y-1 text-slate-300">
                   <li>Provisioned isolated multi-tenant database slice and GSTIN record.</li>
-                  <li>Configured sector-specific feature modules ({showOnboardingSuccessModal.sectorConfig?.defaultModules?.join(", ") || "POS, Inventory"}).</li>
+                  <li>Configured sector-specific feature modules ({formatSectorModulesSummary(showOnboardingSuccessModal.sectorConfig?.enabledModules || (showOnboardingSuccessModal.sectorConfig as any)?.defaultModules)}).</li>
                   <li>Bound corporate portal address handle to global load balancer with TLS 1.3 wildcard SSL.</li>
                   <li>Applied custom client typography: {showOnboardingSuccessModal.typography?.fontFamily || "Inter"} ({showOnboardingSuccessModal.typography?.fontSizeScale || "standard"} scale).</li>
                   <li>Logged initial onboarding setup fee invoice (₹ {((showOnboardingSuccessModal.onboardingFeePaid ?? (showOnboardingSuccessModal as any).onboardingFee) || 0).toLocaleString()}).</li>
@@ -9210,7 +9241,11 @@ export default function SuperAdminConsole({
                     const cPlan = showOnboardingSuccessModal.tier || "GROWTH";
                     const cGstin = showOnboardingSuccessModal.gstinRegNumber || (showOnboardingSuccessModal as any).gstin || "";
                     const text = `EXPERT POS CLIENT ONBOARDING PACK\n--------------------------------\nClient Name: ${cName}\nBusiness Sector: ${cSector}\nDomain: https://${cDomain}.expertbilling.in (ACTIVE)\nTypography: ${cFont}\nAdmin Login: ${cUid}\nPassword: ${cPass}\nPlan: ${cPlan}\nGSTIN: ${cGstin}`;
-                    navigator.clipboard.writeText(text);
+                    try {
+                      navigator.clipboard?.writeText(text)?.catch(() => {});
+                    } catch {
+                      // ignore clipboard restrictions in embedded frames
+                    }
                     triggerNotification("Onboarding Welcome Credentials copied to clipboard!", "success");
                   }}
                   className="flex-1 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-extrabold flex items-center justify-center gap-2 transition-all cursor-pointer shadow-lg shadow-blue-500/20"
@@ -9300,15 +9335,7 @@ export default function SuperAdminConsole({
                 </button>
                 <button
                   type="button"
-                  onClick={() => {
-                    if (!bulkCsvInput.trim()) {
-                      triggerNotification("Please enter or paste CSV data.", "warning");
-                      return;
-                    }
-                    triggerNotification("Bulk onboarding executed successfully!", "success");
-                    setShowBulkImportModal(false);
-                    setBulkCsvInput("");
-                  }}
+                  onClick={handleBulkImportClients}
                   className="px-5 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-extrabold flex items-center gap-2 transition-all cursor-pointer shadow-md shadow-blue-500/20"
                 >
                   <Sparkles className="w-4 h-4 text-amber-300" />
