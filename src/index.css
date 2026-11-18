@@ -25,22 +25,27 @@
   --color-slate-900: #221f19;
 }
 
-/* Tenant Custom Font Families */
-.tenant-font-inter { font-family: "Inter", system-ui, -apple-system, sans-serif !important; }
-.tenant-font-outfit { font-family: "Outfit", system-ui, -apple-system, sans-serif !important; }
-.tenant-font-jakarta { font-family: "Plus Jakarta Sans", system-ui, -apple-system, sans-serif !important; }
-.tenant-font-roboto { font-family: "Roboto", system-ui, -apple-system, sans-serif !important; }
-.tenant-font-playfair { font-family: "Playfair Display", Georgia, serif !important; }
-.tenant-font-grotesk { font-family: "Space Grotesk", system-ui, -apple-system, sans-serif !important; }
-.tenant-font-mono { font-family: "JetBrains Mono", monospace !important; }
-.tenant-font-garamond { font-family: "EB Garamond", serif !important; }
-.tenant-font-system { font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif !important; }
+/* Tenant Custom Font Families (cascade through Tailwind font-sans / font-display) */
+.tenant-font-inter { --font-sans: "Inter", system-ui, -apple-system, sans-serif; font-family: "Inter", system-ui, -apple-system, sans-serif !important; }
+.tenant-font-outfit { --font-sans: "Outfit", system-ui, -apple-system, sans-serif; font-family: "Outfit", system-ui, -apple-system, sans-serif !important; }
+.tenant-font-jakarta { --font-sans: "Plus Jakarta Sans", system-ui, -apple-system, sans-serif; font-family: "Plus Jakarta Sans", system-ui, -apple-system, sans-serif !important; }
+.tenant-font-roboto { --font-sans: "Roboto", system-ui, -apple-system, sans-serif; font-family: "Roboto", system-ui, -apple-system, sans-serif !important; }
+.tenant-font-playfair { --font-sans: "Playfair Display", Georgia, serif; --font-display: "Playfair Display", Georgia, serif; font-family: "Playfair Display", Georgia, serif !important; }
+.tenant-font-grotesk { --font-sans: "Space Grotesk", system-ui, -apple-system, sans-serif; font-family: "Space Grotesk", system-ui, -apple-system, sans-serif !important; }
+.tenant-font-mono { --font-sans: "JetBrains Mono", monospace; font-family: "JetBrains Mono", monospace !important; }
+.tenant-font-garamond { --font-sans: "EB Garamond", serif; --font-display: "EB Garamond", serif; font-family: "EB Garamond", serif !important; }
+.tenant-font-system { --font-sans: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif !important; }
 
-/* Tenant Custom Font Scales */
+/* Tenant Custom Font Scales (also scales isolated specimen previews via zoom) */
 .tenant-scale-compact { font-size: 0.90rem; }
 .tenant-scale-standard { font-size: 1rem; }
 .tenant-scale-spacious { font-size: 1.08rem; }
 .tenant-scale-large { font-size: 1.20rem; }
+
+.typography-preview-box.tenant-scale-compact { zoom: 0.90; }
+.typography-preview-box.tenant-scale-standard { zoom: 1; }
+.typography-preview-box.tenant-scale-spacious { zoom: 1.08; }
+.typography-preview-box.tenant-scale-large { zoom: 1.18; }
 
 @layer base {
   body {
@@ -81,9 +86,14 @@
     border: none !important;
     background: white !important;
     color: black !important;
+    font-weight: 700 !important;
     box-shadow: none !important;
     padding: 0 !important;
     margin: 0 !important;
+  }
+
+  #invoice-receipt-theme *, #virtual-receipt-roll-wrapper *, #superadmin-invoice-print *, #standalone-receipt-body * {
+    font-weight: 700 !important;
   }
 
   /* Explicitly hide any other modal close buttons, action panels, or background details */

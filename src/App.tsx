@@ -109,6 +109,7 @@ import {
   ThermalConnectionMode,
   ThermalPrinterConfig,
   THERMAL_LAYOUT_SPECS,
+  DEFAULT_THERMAL_PRINTER_CONFIG,
   loadThermalPrinterConfig,
   saveThermalPrinterConfig,
   buildEscPosPayload,
@@ -120,7 +121,12 @@ import {
   hasPairedSerialPrinter,
   savePrintSnapshot,
   sendPrintSnapshotToServer,
-  buildStandalonePrintUrl
+  buildStandalonePrintUrl,
+  ReceiptFontStyle,
+  ReceiptFontSize,
+  RECEIPT_FONT_STYLE_OPTIONS,
+  RECEIPT_FONT_SIZE_OPTIONS,
+  getReceiptTypographySpec
 } from "./utils/thermalPrinter";
 
 import SuperAdminConsole, { AccessProfile } from "./components/SuperAdminConsole";
@@ -709,6 +715,27 @@ export default function App() {
 
   const isSuperAdmin = currentUserEmail.toLowerCase() === "superadmin@expertbilling.in" ||
                        currentUserEmail.toLowerCase() === "superadmin@expertpos.com";
+  const canConfigurePrintersAndFonts = isSuperAdmin || normalizeUserRole(currentRole) === UserRole.ADMIN;
+
+  // Apply tenant font size scale globally across workspace terminals when logged into a tenant
+  useEffect(() => {
+    const rootEl = document.documentElement;
+    if (!isLoggedIn || isSuperAdmin) {
+      rootEl.style.fontSize = "";
+      return;
+    }
+    const scale = activeTenant.typography?.fontSizeScale || "standard";
+    const pxMap: Record<TenantFontSizeScale, string> = {
+      compact: "14px",
+      standard: "16px",
+      spacious: "17.5px",
+      large: "19px"
+    };
+    rootEl.style.fontSize = pxMap[scale] || "16px";
+    return () => {
+      rootEl.style.fontSize = "";
+    };
+  }, [isLoggedIn, isSuperAdmin, activeTenant.typography?.fontSizeScale]);
 
   // Active POS cart states
   const [cartItems, setCartItems] = useState<InvoiceItem[]>([]);
@@ -733,17 +760,38 @@ export default function App() {
   const [showInvoicePrintPreview, setShowInvoicePrintPreview] = useState<Invoice | null>(null);
   const [printerConfig, setPrinterConfig] = useState<ThermalPrinterConfig>(() => loadThermalPrinterConfig());
   const selectedPrinterLayout = printerConfig.layoutProfile;
+  const receiptTypography = getReceiptTypographySpec(
+    selectedPrinterLayout,
+    printerConfig.receiptFontStyle,
+    printerConfig.receiptFontSize
+  );
   const setSelectedPrinterLayout = (layout: PrinterLayoutProfile) => {
+    if (!canConfigurePrintersAndFonts) return;
     setPrinterConfig((prev) => {
       const next = { ...prev, layoutProfile: layout };
       saveThermalPrinterConfig(next);
+      persistSettings({ thermalPrinterConfig: next });
       return next;
     });
   };
   const updatePrinterConfig = (patch: Partial<ThermalPrinterConfig>) => {
+    const isConfigMutation =
+      patch.layoutProfile !== undefined ||
+      patch.connectionMode !== undefined ||
+      patch.serialBaudRate !== undefined ||
+      patch.networkIp !== undefined ||
+      patch.networkPort !== undefined ||
+      patch.autoCut !== undefined ||
+      patch.openCashDrawer !== undefined ||
+      patch.receiptFontStyle !== undefined ||
+      patch.receiptFontSize !== undefined;
+    if (isConfigMutation && !canConfigurePrintersAndFonts) return;
     setPrinterConfig((prev) => {
       const next = { ...prev, ...patch };
       saveThermalPrinterConfig(next);
+      if (canConfigurePrintersAndFonts) {
+        persistSettings({ thermalPrinterConfig: next });
+      }
       return next;
     });
   };
@@ -995,6 +1043,14 @@ export default function App() {
           }
           if (s.labelPrinterConfig) {
             setLabelPrinterConfig(s.labelPrinterConfig);
+          }
+          if (s.thermalPrinterConfig) {
+            const hydratedThermal: ThermalPrinterConfig = {
+              ...DEFAULT_THERMAL_PRINTER_CONFIG,
+              ...s.thermalPrinterConfig
+            };
+            setPrinterConfig(hydratedThermal);
+            saveThermalPrinterConfig(hydratedThermal);
           }
           if (s.attractiveMode) {
             setAttractiveMode(s.attractiveMode);
@@ -1729,6 +1785,8 @@ export default function App() {
       html: clone.innerHTML,
       layoutProfile: printerConfig.layoutProfile,
       connectionMode: printerConfig.connectionMode,
+      receiptFontStyle: printerConfig.receiptFontStyle,
+      receiptFontSize: printerConfig.receiptFontSize,
       invoiceId,
       createdAt: Date.now()
     };
@@ -1746,7 +1804,7 @@ export default function App() {
     }, 50);
     return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [showInvoicePrintPreview, printerConfig.layoutProfile, printerConfig.connectionMode, activeTenant.name, opsSettings.receiptHeader, opsSettings.receiptFooter]);
+  }, [showInvoicePrintPreview, printerConfig.layoutProfile, printerConfig.connectionMode, printerConfig.receiptFontStyle, printerConfig.receiptFontSize, activeTenant.name, opsSettings.receiptHeader, opsSettings.receiptFooter]);
 
   useEffect(() => {
     if (!selectedReprintInvoiceId) return;
@@ -1755,7 +1813,7 @@ export default function App() {
     }, 60);
     return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedReprintInvoiceId, virtualPrintDone, printerConfig.layoutProfile, printerConfig.connectionMode]);
+  }, [selectedReprintInvoiceId, virtualPrintDone, printerConfig.layoutProfile, printerConfig.connectionMode, printerConfig.receiptFontStyle, printerConfig.receiptFontSize]);
 
   // Unified thermal & standard receipt print dispatcher (never downloads files on print)
   const handlePrintReceipt = (
@@ -1776,7 +1834,12 @@ export default function App() {
     // Keep system / fallback print calls strictly synchronous in the click gesture so window.print() stays allowed
     if (mode === "system" || usbBlockedOrMissing || serialBlockedOrMissing) {
       if (silentOnly) return;
-      const result = printElementDirect(elementId, layout);
+      const result = printElementDirect(
+        elementId,
+        layout,
+        printerConfig.receiptFontStyle,
+        printerConfig.receiptFontSize
+      );
       if (result.ok) {
         if (usbBlockedOrMissing || serialBlockedOrMissing) {
           triggerNotification(
@@ -1818,7 +1881,12 @@ export default function App() {
           triggerNotification(`✓ Printed directly via USB (${res.deviceLabel || "Thermal Printer"})!`, "success");
         } else if (res.fallbackToSystemPrint && !silentOnly) {
           triggerNotification(res.error || "Routing to OS / USB Printer Driver...", "warning");
-          const sysRes = printElementDirect(elementId, layout);
+          const sysRes = printElementDirect(
+            elementId,
+            layout,
+            printerConfig.receiptFontStyle,
+            printerConfig.receiptFontSize
+          );
           if (sysRes.blockedBySandbox) {
             setPrintSandboxNotice(true);
           }
@@ -1838,7 +1906,12 @@ export default function App() {
           triggerNotification(`✓ Printed directly via Serial/BT (${res.deviceLabel || "COM Printer"})!`, "success");
         } else if (res.fallbackToSystemPrint && !silentOnly) {
           triggerNotification(res.error || "Routing to OS Printer Driver...", "warning");
-          const sysRes = printElementDirect(elementId, layout);
+          const sysRes = printElementDirect(
+            elementId,
+            layout,
+            printerConfig.receiptFontStyle,
+            printerConfig.receiptFontSize
+          );
           if (sysRes.blockedBySandbox) {
             setPrintSandboxNotice(true);
           }
@@ -3786,6 +3859,14 @@ export default function App() {
             triggerNotification("Logged out of Super Admin Console successfully.", "success");
           }}
           onImpersonateClient={handleImpersonateClient}
+          printerConfig={printerConfig}
+          onUpdatePrinterConfig={updatePrinterConfig}
+          labelPrinterConfig={labelPrinterConfig}
+          onUpdateLabelPrinterConfig={(cfg) => {
+            if (!canConfigurePrintersAndFonts) return;
+            setLabelPrinterConfig(cfg);
+            persistSettings({ labelPrinterConfig: cfg });
+          }}
         />
       </div>
     );
@@ -6689,28 +6770,81 @@ export default function App() {
                     </div>
                   </div>
 
-                  {/* Formatting selectors */}
-                  <div className="grid grid-cols-4 gap-3">
-                    <div className="col-span-1 text-xs font-bold text-slate-500 flex items-center">
-                      Paper Width:
+                  {/* Formatting selectors (Exclusively Super Admin & Admin) */}
+                  {canConfigurePrintersAndFonts ? (
+                    <div className="space-y-2.5">
+                      <div className="grid grid-cols-4 gap-3">
+                        <div className="col-span-1 text-xs font-bold text-slate-600 flex items-center">
+                          Paper Width:
+                        </div>
+                        <div className="col-span-3 grid grid-cols-5 gap-1.5">
+                          {(["thermal-58mm", "thermal-76mm", "thermal-80mm", "thermal-112mm", "standard-a4"] as PrinterLayoutProfile[]).map((prof) => (
+                            <button
+                              key={prof}
+                              type="button"
+                              onClick={() => setSelectedPrinterLayout(prof)}
+                              className={`py-1.5 px-1 rounded-lg border font-bold text-[10px] flex items-center justify-center gap-1 transition-all cursor-pointer ${
+                                selectedPrinterLayout === prof
+                                  ? "bg-slate-900 text-white border-slate-900 shadow"
+                                  : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
+                              }`}
+                            >
+                              <span>{THERMAL_LAYOUT_SPECS[prof].shortLabel}</span>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-4 gap-3 items-center pt-1 border-t border-slate-100">
+                        <div className="col-span-1 text-xs font-bold text-slate-600">
+                          Receipt Font:
+                        </div>
+                        <div className="col-span-3 flex flex-wrap items-center gap-2">
+                          <select
+                            value={printerConfig.receiptFontStyle || "courier"}
+                            onChange={(e) =>
+                              updatePrinterConfig({ receiptFontStyle: e.target.value as ReceiptFontStyle })
+                            }
+                            className="flex-1 min-w-[160px] bg-white border border-slate-300 rounded-lg py-1.5 px-2.5 text-[11px] font-bold text-slate-900 outline-none focus:border-slate-900 cursor-pointer"
+                          >
+                            {RECEIPT_FONT_STYLE_OPTIONS.map((opt) => (
+                              <option key={opt.id} value={opt.id}>
+                                {opt.label}
+                              </option>
+                            ))}
+                          </select>
+                          <div className="grid grid-cols-4 gap-1 shrink-0">
+                            {RECEIPT_FONT_SIZE_OPTIONS.map((sz) => (
+                              <button
+                                key={sz.id}
+                                type="button"
+                                onClick={() => updatePrinterConfig({ receiptFontSize: sz.id as ReceiptFontSize })}
+                                title={sz.label}
+                                className={`px-2 py-1.5 rounded-lg border font-bold text-[10px] transition-all cursor-pointer ${
+                                  (printerConfig.receiptFontSize || "medium") === sz.id
+                                    ? "bg-slate-900 text-white border-slate-900 shadow-xs"
+                                    : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
+                                }`}
+                              >
+                                {sz.shortLabel}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
                     </div>
-                    <div className="col-span-3 grid grid-cols-5 gap-1.5">
-                      {(["thermal-58mm", "thermal-76mm", "thermal-80mm", "thermal-112mm", "standard-a4"] as PrinterLayoutProfile[]).map((prof) => (
-                        <button
-                          key={prof}
-                          type="button"
-                          onClick={() => setSelectedPrinterLayout(prof)}
-                          className={`py-1.5 px-1 rounded-lg border font-bold text-[10px] flex items-center justify-center gap-1 transition-all cursor-pointer ${
-                            selectedPrinterLayout === prof
-                              ? "bg-slate-900 text-white border-slate-900 shadow"
-                              : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
-                          }`}
-                        >
-                          <span>{THERMAL_LAYOUT_SPECS[prof].shortLabel}</span>
-                        </button>
-                      ))}
+                  ) : (
+                    <div className="flex items-center justify-between px-3 py-2 bg-slate-50 rounded-xl border border-slate-200 text-[11px] text-slate-700">
+                      <span className="flex items-center gap-1.5 font-bold">
+                        <Lock className="w-3.5 h-3.5 text-slate-500" />
+                        Configured Receipt Format:
+                      </span>
+                      <span className="font-mono font-bold text-slate-900">
+                        {THERMAL_LAYOUT_SPECS[selectedPrinterLayout]?.shortLabel || "80mm"} •{" "}
+                        {RECEIPT_FONT_STYLE_OPTIONS.find((f) => f.id === receiptTypography.fontStyle)?.label || "Courier"} ({receiptTypography.fontSize.toUpperCase()}) • Admin Managed
+                      </span>
                     </div>
-                  </div>
+                  )}
                 </div>
 
                 {/* Virtual Hardware Terminal Cabinet & Tape Roll */}
@@ -6749,7 +6883,7 @@ export default function App() {
                           >
                             {/* Inner receipt paper tape */}
                             <div 
-                              className={`bg-white text-slate-900 font-mono text-[10px] p-5 border-x-2 border-dashed border-slate-300 relative ${
+                              className={`bg-white text-slate-950 font-bold p-5 border-x-2 border-dashed border-slate-400 relative ${
                                 selectedPrinterLayout === "thermal-58mm"
                                   ? "w-[240px]"
                                   : selectedPrinterLayout === "thermal-76mm"
@@ -6761,6 +6895,9 @@ export default function App() {
                                   : "w-[330px]"
                               }`}
                               style={{ 
+                                fontFamily: receiptTypography.cssFamily,
+                                fontSize: receiptTypography.previewFontSizeCss,
+                                fontWeight: 700,
                                 backgroundImage: "linear-gradient(rgba(240,240,240,0.1) 1px, transparent 1px)",
                                 backgroundSize: "100% 20px"
                               }}
@@ -6768,7 +6905,7 @@ export default function App() {
                               {/* Thermal paper header teeth */}
                               <div className="absolute top-0 left-0 right-0 h-1 bg-[radial-gradient(circle,transparent_20%,#0f172a_21%)] bg-repeat-x bg-[length:6px_6px]" style={{ transform: "translateY(-4px)" }}></div>
                               
-                              <div className="text-center space-y-1 mb-4 font-sans">
+                              <div className="text-center space-y-1 mb-4 font-bold text-slate-950">
                                 {activeTenant.companyLogo && (
                                   <div className="flex justify-center mb-1">
                                     <img 
@@ -6779,19 +6916,19 @@ export default function App() {
                                     />
                                   </div>
                                 )}
-                                <h4 data-receipt-store-name="true" className="font-display font-black text-xs uppercase tracking-tight text-slate-950">
+                                <h4 data-receipt-store-name="true" className="font-black text-sm uppercase tracking-tight text-slate-950">
                                   {activeTenant.name}
                                 </h4>
-                                <p data-receipt-header="true" className="text-[9px] text-slate-600 font-mono font-bold">
+                                <p data-receipt-header="true" className="text-[0.9em] text-slate-950 font-bold">
                                   {opsSettings.receiptHeader || "OFFICIAL RETAIL CASH INVOICE"}
                                 </p>
                                 {activeTenant.businessLocation && 
                                  activeTenant.businessLocation.trim().toLowerCase() !== activeTenant.name.trim().toLowerCase() && (
-                                  <p data-receipt-branch="true" className="text-[9px] text-slate-600 font-mono font-semibold">
+                                  <p data-receipt-branch="true" className="text-[0.9em] text-slate-950 font-bold">
                                     Branch: {activeTenant.businessLocation}
                                   </p>
                                 )}
-                                <p data-receipt-address="true" className="text-[9.5px] text-slate-500 font-mono leading-tight">
+                                <p data-receipt-address="true" className="text-[0.9em] text-slate-950 font-bold leading-tight">
                                   {(() => {
                                     const parts = [activeTenant.address, activeTenant.city, activeTenant.state].filter(Boolean);
                                     if (parts.length > 0) {
@@ -6804,7 +6941,7 @@ export default function App() {
                                     return "Registered Store Location";
                                   })()}
                                 </p>
-                                <p data-receipt-contact="true" className="text-[8.5px] text-slate-400 font-mono">
+                                <p data-receipt-contact="true" className="text-[0.85em] text-slate-950 font-bold">
                                   Contact: {activeTenant.phone || branches.find(b => b.id === selectedInv.storeBranchId)?.phone || currentBranch?.phone || "N/A"}
                                 </p>
                                 {(normalizeUserRole(currentRole) === UserRole.ADMIN || isSuperAdmin) && (
@@ -6819,40 +6956,40 @@ export default function App() {
                                 )}
                               </div>
 
-                              <div className="border-t border-dashed border-slate-300 py-2 space-y-0.5 text-[9.5px]">
+                              <div className="border-t border-dashed border-slate-400 py-2 space-y-0.5 text-[0.92em] font-bold text-slate-950">
                                 <div className="flex justify-between" data-receipt-meta-row="true">
-                                  <span>Invoice ID:</span>
-                                  <span className="font-bold">{selectedInv.id}</span>
+                                  <span className="font-bold">Invoice ID:</span>
+                                  <span className="font-black">{selectedInv.id}</span>
                                 </div>
                                 <div className="flex justify-between" data-receipt-meta-row="true">
-                                  <span>GSTIN Check:</span>
-                                  <span className="font-bold uppercase">{activeTenant.gstinRegNumber || (selectedInv.storeBranchId ? branches.find(b => b.id === selectedInv.storeBranchId)?.gstin : "") || "07AAAAA1111A1Z1"}</span>
+                                  <span className="font-bold">GSTIN Check:</span>
+                                  <span className="font-black uppercase">{activeTenant.gstinRegNumber || (selectedInv.storeBranchId ? branches.find(b => b.id === selectedInv.storeBranchId)?.gstin : "") || "07AAAAA1111A1Z1"}</span>
                                 </div>
                                 <div className="flex justify-between" data-receipt-meta-row="true">
-                                  <span>Sales Cashier:</span>
-                                  <span>{selectedInv.cashierName}</span>
+                                  <span className="font-bold">Sales Cashier:</span>
+                                  <span className="font-bold">{selectedInv.cashierName}</span>
                                 </div>
                                 <div className="flex justify-between" data-receipt-meta-row="true">
-                                  <span>Timestamp:</span>
-                                  <span>{selectedInv.date} {selectedInv.time}</span>
+                                  <span className="font-bold">Timestamp:</span>
+                                  <span className="font-bold">{selectedInv.date} {selectedInv.time}</span>
                                 </div>
                                 {selectedInv.customerName && (
-                                  <div className="flex justify-between border-t border-dashed border-slate-300 pt-1" data-receipt-meta-row="true">
-                                    <span>Customer:</span>
-                                    <span className="font-bold text-right break-words max-w-[180px]">{selectedInv.customerName}</span>
+                                  <div className="flex justify-between border-t border-dashed border-slate-400 pt-1" data-receipt-meta-row="true">
+                                    <span className="font-bold">Customer:</span>
+                                    <span className="font-black text-right break-words max-w-[180px]">{selectedInv.customerName}</span>
                                   </div>
                                 )}
                                 {selectedInv.customerPhone && (
                                   <div className="flex justify-between" data-receipt-meta-row="true">
-                                    <span>Mobile No:</span>
-                                    <span className="font-bold">{selectedInv.customerPhone}</span>
+                                    <span className="font-bold">Mobile No:</span>
+                                    <span className="font-black">{selectedInv.customerPhone}</span>
                                   </div>
                                 )}
                               </div>
 
                               {/* Items list with MRP, Rate & dedicated Qty column */}
-                              <div className="border-t border-slate-300 py-2 space-y-1 text-[9px]">
-                                <div data-receipt-items-grid="true" className="grid grid-cols-[minmax(0,1fr)_44px_44px_22px_48px] gap-1 font-bold border-b border-slate-200 pb-1 text-slate-950">
+                              <div className="border-t border-slate-400 py-2 space-y-1 text-[0.9em] font-bold text-slate-950">
+                                <div data-receipt-items-grid="true" className="grid grid-cols-[minmax(0,1fr)_44px_44px_22px_48px] gap-1 font-black border-b border-slate-400 pb-1 text-slate-950">
                                   <span>Item Description</span>
                                   <span className="text-right">MRP</span>
                                   <span className="text-right">Rate</span>
@@ -6862,20 +6999,20 @@ export default function App() {
                                 {selectedInv.items.map((it, idx) => {
                                   const itemMrp = it.mrp || (it.price > 0 ? Number((it.price * 1.15).toFixed(2)) : it.price);
                                   return (
-                                    <div key={idx} data-receipt-items-grid="true" data-receipt-item-row="true" className="grid grid-cols-[minmax(0,1fr)_44px_44px_22px_48px] gap-1 text-slate-800 items-start">
-                                      <div className="font-sans min-w-0">
-                                        <span className="font-semibold block break-words leading-tight">{it.name}</span>
+                                    <div key={idx} data-receipt-items-grid="true" data-receipt-item-row="true" className="grid grid-cols-[minmax(0,1fr)_44px_44px_22px_48px] gap-1 text-slate-950 font-bold items-start">
+                                      <div className="min-w-0">
+                                        <span className="font-bold block break-words leading-tight text-slate-950">{it.name}</span>
                                       </div>
-                                      <span className="text-right font-mono text-slate-700 text-[8.5px]">
+                                      <span className="text-right font-bold text-slate-950 text-[0.88em]">
                                         {activeTenant.currency || "₹"}{itemMrp.toFixed(2)}
                                       </span>
-                                      <span className="text-right font-mono text-slate-700">
+                                      <span className="text-right font-bold text-slate-950">
                                         {activeTenant.currency || "₹"}{it.price.toFixed(2)}
                                       </span>
-                                      <span className="text-center font-mono font-bold text-slate-800 text-[8.5px]">
+                                      <span className="text-center font-black text-slate-950 text-[0.92em]">
                                         {it.quantity}
                                       </span>
-                                      <span className="text-right font-bold font-mono">
+                                      <span className="text-right font-black text-slate-950">
                                         {activeTenant.currency || "₹"}{(it.price * it.quantity).toFixed(2)}
                                       </span>
                                     </div>
@@ -6892,9 +7029,9 @@ export default function App() {
                                 const totalSavings = Math.max(0, totalMrp - selectedInv.grandTotal);
                                 if (totalSavings > 0) {
                                   return (
-                                    <div data-receipt-savings="true" className="p-1.5 bg-emerald-50 border border-emerald-200 rounded text-emerald-800 text-[8.5px] font-bold flex justify-between items-center my-1 font-sans">
+                                    <div data-receipt-savings="true" className="p-1.5 bg-emerald-50 border border-emerald-400 rounded text-emerald-950 text-[0.88em] font-black flex justify-between items-center my-1">
                                       <span>🎉 You Saved on MRP:</span>
-                                      <span className="font-mono font-extrabold">{activeTenant.currency || "₹"}{totalSavings.toFixed(2)} ({Math.round((totalSavings / totalMrp) * 100)}% OFF)</span>
+                                      <span className="font-black">{activeTenant.currency || "₹"}{totalSavings.toFixed(2)} ({Math.round((totalSavings / totalMrp) * 100)}% OFF)</span>
                                     </div>
                                   );
                                 }
@@ -6902,10 +7039,10 @@ export default function App() {
                               })()}
 
                               {/* Calculations */}
-                              <div className="border-t border-dashed border-slate-300 pt-2 space-y-0.5 text-[9.5px]">
+                              <div className="border-t border-dashed border-slate-400 pt-2 space-y-0.5 text-[0.92em] font-bold text-slate-950">
                                 <div className="flex justify-between" data-receipt-math-row="true">
-                                  <span>Total MRP Value:</span>
-                                  <span className="font-mono text-slate-700 font-medium">
+                                  <span className="font-bold">Total MRP Value:</span>
+                                  <span className="text-slate-950 font-bold">
                                     {activeTenant.currency || "₹"}
                                     {selectedInv.items.reduce((acc, it) => {
                                       const itemMrp = it.mrp || (it.price > 0 ? Number((it.price * 1.15).toFixed(2)) : it.price);
@@ -6914,36 +7051,36 @@ export default function App() {
                                   </span>
                                 </div>
                                 <div className="flex justify-between" data-receipt-math-row="true">
-                                  <span>Basket Tax value:</span>
-                                  <span>{activeTenant.currency || "₹"}{selectedInv.taxAmount.toFixed(2)}</span>
+                                  <span className="font-bold">Basket Tax value:</span>
+                                  <span className="font-bold">{activeTenant.currency || "₹"}{selectedInv.taxAmount.toFixed(2)}</span>
                                 </div>
                                 <div className="flex justify-between" data-receipt-math-row="true">
-                                  <span>Promo discount code:</span>
-                                  <span>{selectedInv.couponCode ? `-${showInvoicePrintPercentApplied(selectedInv)}` : `${activeTenant.currency || "₹"}0.00`}</span>
+                                  <span className="font-bold">Promo discount code:</span>
+                                  <span className="font-bold">{selectedInv.couponCode ? `-${showInvoicePrintPercentApplied(selectedInv)}` : `${activeTenant.currency || "₹"}0.00`}</span>
                                 </div>
-                                <div className="flex justify-between text-[11px] font-black text-slate-950 border-t border-dashed border-slate-300 pt-1.5" data-receipt-math-row="true">
+                                <div className="flex justify-between text-[1.12em] font-black text-slate-950 border-t border-dashed border-slate-400 pt-1.5" data-receipt-math-row="true">
                                   <span>TOTAL PAYABLE:</span>
                                   <span>{activeTenant.currency || "₹"}{selectedInv.grandTotal.toFixed(2)}</span>
                                 </div>
                                 {selectedInv.paymentMode === PaymentMode.CASH && (
                                   <>
-                                    <div className="flex justify-between p-0.5 mt-1 bg-slate-100 rounded text-slate-700" data-receipt-math-row="true">
+                                    <div className="flex justify-between p-0.5 mt-1 bg-slate-100 rounded text-slate-950 font-bold" data-receipt-math-row="true">
                                       <span>Cash Received:</span>
                                       <span>{activeTenant.currency || "₹"}{Number(selectedInv.cashReceived || selectedInv.grandTotal).toFixed(2)}</span>
                                     </div>
-                                    <div className="flex justify-between text-slate-700" data-receipt-math-row="true">
+                                    <div className="flex justify-between text-slate-950 font-bold" data-receipt-math-row="true">
                                       <span>Change Returned:</span>
                                       <span>{activeTenant.currency || "₹"}{Number(selectedInv.changeReturned || 0).toFixed(2)}</span>
                                     </div>
                                   </>
                                 )}
                                 <div className="flex justify-between items-center pt-1" data-receipt-math-row="true">
-                                  <span>Payment Mode:</span>
-                                  <span className="font-extrabold text-[8.5px] bg-slate-950 text-white px-1.5 py-0.2 rounded">{selectedInv.paymentMode}</span>
+                                  <span className="font-bold">Payment Mode:</span>
+                                  <span className="font-black text-[0.88em] bg-slate-950 text-white px-1.5 py-0.2 rounded">{selectedInv.paymentMode}</span>
                                 </div>
                               </div>
 
-                              <div data-receipt-footer="true" className="p-2 bg-slate-50 border border-slate-200 rounded text-[8.5px] font-sans leading-normal text-center text-slate-600 mt-4">
+                              <div data-receipt-footer="true" className="p-2 bg-slate-50 border border-slate-400 rounded text-[0.88em] font-bold leading-normal text-center text-slate-950 mt-4">
                                 {opsSettings.receiptFooter ? (
                                   opsSettings.receiptFooter
                                 ) : (
@@ -8103,6 +8240,14 @@ Payment Mode:   ${selectedInv.paymentMode}
                   const cred = credentialsList.find(c => c.email.toLowerCase() === profile.email.toLowerCase()) || (profile as any);
                   handleQuickLogin(cred);
                 }}
+                printerConfig={printerConfig}
+                onUpdatePrinterConfig={updatePrinterConfig}
+                labelPrinterConfig={labelPrinterConfig}
+                onUpdateLabelPrinterConfig={(cfg) => {
+                  if (!canConfigurePrintersAndFonts) return;
+                  setLabelPrinterConfig(cfg);
+                  persistSettings({ labelPrinterConfig: cfg });
+                }}
               />
             </div>
           )}
@@ -8157,8 +8302,11 @@ Payment Mode:   ${selectedInv.paymentMode}
                     setSoundEnabled(newOps.enableSound);
                   }
                 }}
+                printerConfig={printerConfig}
+                onUpdatePrinterConfig={updatePrinterConfig}
                 labelPrinterConfig={labelPrinterConfig}
                 onUpdateLabelPrinterConfig={(cfg) => {
+                  if (!canConfigurePrintersAndFonts) return;
                   setLabelPrinterConfig(cfg);
                   persistSettings({ labelPrinterConfig: cfg });
                 }}
@@ -8240,182 +8388,250 @@ Payment Mode:   ${selectedInv.paymentMode}
               </div>
             </div>
 
-            {/* Target Printer Layout & Hardware Driver Selector */}
-            <div className="bg-slate-50 p-3 rounded-2xl border border-slate-200 space-y-2.5">
-              <div>
-                <label className="block text-[10px] font-extrabold uppercase tracking-wider text-slate-700 flex items-center gap-1.5 mb-1.5">
-                  <Printer className="w-3.5 h-3.5 text-blue-600" />
-                  Select Paper Width / Printer Format
-                </label>
-                <div className="grid grid-cols-5 gap-1 text-[9px]">
-                  {(
-                    [
-                      { id: "thermal-58mm", icon: "🎟️", label: "58mm" },
-                      { id: "thermal-76mm", icon: "🧻", label: "76mm" },
-                      { id: "thermal-80mm", icon: "🧾", label: "80mm" },
-                      { id: "thermal-112mm", icon: "📜", label: "112mm" },
-                      { id: "standard-a4", icon: "🖨️", label: "A4" }
-                    ] as { id: PrinterLayoutProfile; icon: string; label: string }[]
-                  ).map((item) => (
-                    <button
-                      key={item.id}
-                      type="button"
-                      onClick={() => setSelectedPrinterLayout(item.id)}
-                      className={`py-1.5 px-1 rounded-xl border font-bold flex flex-col items-center justify-center transition-all cursor-pointer ${
-                        selectedPrinterLayout === item.id
-                          ? "bg-slate-900 text-white border-slate-900 shadow-sm"
-                          : "bg-white text-slate-600 border-slate-200 hover:bg-slate-100"
-                      }`}
-                    >
-                      <span className="text-xs mb-0.5">{item.icon}</span>
-                      <span>{item.label}</span>
-                    </button>
-                  ))}
-                </div>
-                <p className="text-[9px] text-slate-500 font-medium leading-tight text-center pt-1">
-                  {THERMAL_LAYOUT_SPECS[selectedPrinterLayout]?.description}
-                </p>
-              </div>
-
-              <div className="border-t border-slate-200 pt-2">
-                <label className="block text-[9.5px] font-extrabold uppercase tracking-wider text-slate-600 mb-1.5">
-                  Thermal Printer Connection Mode
-                </label>
-                <div className="grid grid-cols-4 gap-1 text-[9px]">
-                  {(
-                    [
-                      { id: "system", label: "OS / USB Driver" },
-                      { id: "webusb", label: "Raw USB" },
-                      { id: "webserial", label: "Serial / BT" },
-                      { id: "network", label: "LAN IP:9100" }
-                    ] as { id: ThermalConnectionMode; label: string }[]
-                  ).map((conn) => (
-                    <button
-                      key={conn.id}
-                      type="button"
-                      onClick={() => {
-                        setPrintSandboxNotice(false);
-                        updatePrinterConfig({ connectionMode: conn.id });
-                      }}
-                      className={`py-1.5 px-1 rounded-lg border font-bold transition-all cursor-pointer truncate ${
-                        printerConfig.connectionMode === conn.id
-                          ? "bg-blue-600 text-white border-blue-700 shadow-xs"
-                          : "bg-white text-slate-600 border-slate-200 hover:bg-slate-100"
-                      }`}
-                    >
-                      {conn.label}
-                    </button>
-                  ))}
-                </div>
-
-                {printerConfig.connectionMode === "system" && (
-                  <p className="mt-1.5 text-[9px] text-slate-500 font-medium leading-snug">
-                    Works with all USB, Bluetooth, LAN &amp; Wi-Fi thermal printers installed on Windows/macOS/Android (Epson, TVS, Xprinter, Star, Rongta, HP).
-                  </p>
-                )}
-
-                {printerConfig.connectionMode === "webserial" && (
-                  <div className="mt-2 space-y-1.5 text-[10px]">
-                    <div className="flex items-center gap-2">
-                      <span className="font-bold text-slate-600">Baud:</span>
-                      <select
-                        value={printerConfig.serialBaudRate}
-                        onChange={(e) =>
-                          updatePrinterConfig({
-                            serialBaudRate: Number(e.target.value) as 9600 | 19200 | 38400 | 115200
-                          })
-                        }
-                        className="bg-white border border-slate-300 rounded px-1.5 py-1 text-[10px] font-mono font-bold text-slate-800"
+            {/* Target Printer Layout & Hardware Driver Selector (Exclusively Super Admin & Admin) */}
+            {canConfigurePrintersAndFonts ? (
+              <div className="bg-slate-50 p-3 rounded-2xl border border-slate-200 space-y-2.5">
+                <div>
+                  <label className="block text-[10px] font-extrabold uppercase tracking-wider text-slate-700 flex items-center gap-1.5 mb-1.5">
+                    <Printer className="w-3.5 h-3.5 text-blue-600" />
+                    Select Paper Width / Printer Format
+                  </label>
+                  <div className="grid grid-cols-5 gap-1 text-[9px]">
+                    {(
+                      [
+                        { id: "thermal-58mm", icon: "🎟️", label: "58mm" },
+                        { id: "thermal-76mm", icon: "🧻", label: "76mm" },
+                        { id: "thermal-80mm", icon: "🧾", label: "80mm" },
+                        { id: "thermal-112mm", icon: "📜", label: "112mm" },
+                        { id: "standard-a4", icon: "🖨️", label: "A4" }
+                      ] as { id: PrinterLayoutProfile; icon: string; label: string }[]
+                    ).map((item) => (
+                      <button
+                        key={item.id}
+                        type="button"
+                        onClick={() => setSelectedPrinterLayout(item.id)}
+                        className={`py-1.5 px-1 rounded-xl border font-bold flex flex-col items-center justify-center transition-all cursor-pointer ${
+                          selectedPrinterLayout === item.id
+                            ? "bg-slate-900 text-white border-slate-900 shadow-sm"
+                            : "bg-white text-slate-600 border-slate-200 hover:bg-slate-100"
+                        }`}
                       >
-                        <option value={9600}>9600</option>
-                        <option value={19200}>19200</option>
-                        <option value={38400}>38400</option>
-                        <option value={115200}>115200</option>
-                      </select>
-                      {isFeatureAllowedByPolicy("serial") ? (
-                        <button
-                          type="button"
-                          onClick={() => handlePrintReceipt("invoice-receipt-theme", showInvoicePrintPreview.id, true)}
-                          className="ml-auto px-2 py-1 rounded bg-slate-900 text-white font-bold text-[9.5px] cursor-pointer hover:bg-slate-800"
+                        <span className="text-xs mb-0.5">{item.icon}</span>
+                        <span>{item.label}</span>
+                      </button>
+                    ))}
+                  </div>
+                  <p className="text-[9px] text-slate-500 font-medium leading-tight text-center pt-1">
+                    {THERMAL_LAYOUT_SPECS[selectedPrinterLayout]?.description}
+                  </p>
+                </div>
+
+                <div className="border-t border-slate-200 pt-2">
+                  <label className="block text-[9.5px] font-extrabold uppercase tracking-wider text-slate-600 mb-1.5">
+                    Thermal Printer Connection Mode
+                  </label>
+                  <div className="grid grid-cols-4 gap-1 text-[9px]">
+                    {(
+                      [
+                        { id: "system", label: "OS / USB Driver" },
+                        { id: "webusb", label: "Raw USB" },
+                        { id: "webserial", label: "Serial / BT" },
+                        { id: "network", label: "LAN IP:9100" }
+                      ] as { id: ThermalConnectionMode; label: string }[]
+                    ).map((conn) => (
+                      <button
+                        key={conn.id}
+                        type="button"
+                        onClick={() => {
+                          setPrintSandboxNotice(false);
+                          updatePrinterConfig({ connectionMode: conn.id });
+                        }}
+                        className={`py-1.5 px-1 rounded-lg border font-bold transition-all cursor-pointer truncate ${
+                          printerConfig.connectionMode === conn.id
+                            ? "bg-blue-600 text-white border-blue-700 shadow-xs"
+                            : "bg-white text-slate-600 border-slate-200 hover:bg-slate-100"
+                        }`}
+                      >
+                        {conn.label}
+                      </button>
+                    ))}
+                  </div>
+
+                  {printerConfig.connectionMode === "system" && (
+                    <p className="mt-1.5 text-[9px] text-slate-500 font-medium leading-snug">
+                      Works with all USB, Bluetooth, LAN &amp; Wi-Fi thermal printers installed on Windows/macOS/Android (Epson, TVS, Xprinter, Star, Rongta, HP).
+                    </p>
+                  )}
+
+                  {printerConfig.connectionMode === "webserial" && (
+                    <div className="mt-2 space-y-1.5 text-[10px]">
+                      <div className="flex items-center gap-2">
+                        <span className="font-bold text-slate-600">Baud:</span>
+                        <select
+                          value={printerConfig.serialBaudRate}
+                          onChange={(e) =>
+                            updatePrinterConfig({
+                              serialBaudRate: Number(e.target.value) as 9600 | 19200 | 38400 | 115200
+                            })
+                          }
+                          className="bg-white border border-slate-300 rounded px-1.5 py-1 text-[10px] font-mono font-bold text-slate-800"
                         >
-                          Pair / Change COM
-                        </button>
-                      ) : (
-                        <span className="ml-auto text-[9px] text-slate-500 font-medium">
-                          Click Print Now below to dispatch
+                          <option value={9600}>9600</option>
+                          <option value={19200}>19200</option>
+                          <option value={38400}>38400</option>
+                          <option value={115200}>115200</option>
+                        </select>
+                        {isFeatureAllowedByPolicy("serial") ? (
+                          <button
+                            type="button"
+                            onClick={() => handlePrintReceipt("invoice-receipt-theme", showInvoicePrintPreview.id, true)}
+                            className="ml-auto px-2 py-1 rounded bg-slate-900 text-white font-bold text-[9.5px] cursor-pointer hover:bg-slate-800"
+                          >
+                            Pair / Change COM
+                          </button>
+                        ) : (
+                          <span className="ml-auto text-[9px] text-slate-500 font-medium">
+                            Click Print Now below to dispatch
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {printerConfig.connectionMode === "webusb" && (
+                    <div className="mt-2 space-y-1.5 text-[10px]">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-slate-600 font-medium truncate">
+                          {printerConfig.pairedDeviceLabel
+                            ? `Paired Printer: ${printerConfig.pairedDeviceLabel}`
+                            : "Supports Epson, Star, Xprinter, TVS, Rongta, Citizen"}
                         </span>
-                      )}
+                        {isFeatureAllowedByPolicy("usb") && (
+                          <button
+                            type="button"
+                            onClick={() => handlePrintReceipt("invoice-receipt-theme", showInvoicePrintPreview.id, true)}
+                            className="px-2 py-1 rounded bg-slate-900 text-white font-bold text-[9.5px] shrink-0 cursor-pointer hover:bg-slate-800"
+                          >
+                            {printerConfig.pairedDeviceLabel ? "Change USB" : "Pair USB Printer"}
+                          </button>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                )}
+                  )}
 
-                {printerConfig.connectionMode === "webusb" && (
-                  <div className="mt-2 space-y-1.5 text-[10px]">
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="text-slate-600 font-medium truncate">
-                        {printerConfig.pairedDeviceLabel
-                          ? `Paired Printer: ${printerConfig.pairedDeviceLabel}`
-                          : "Supports Epson, Star, Xprinter, TVS, Rongta, Citizen"}
-                      </span>
-                      {isFeatureAllowedByPolicy("usb") && (
+                  {printerConfig.connectionMode === "network" && (
+                    <div className="mt-2 flex items-center gap-1.5 text-[10px]">
+                      <input
+                        type="text"
+                        value={printerConfig.networkIp}
+                        onChange={(e) => updatePrinterConfig({ networkIp: e.target.value })}
+                        placeholder="192.168.1.200"
+                        className="flex-1 bg-white border border-slate-300 rounded px-2 py-1 font-mono text-[10px] text-slate-800"
+                      />
+                      <input
+                        type="number"
+                        value={printerConfig.networkPort}
+                        onChange={(e) => updatePrinterConfig({ networkPort: Number(e.target.value) || 9100 })}
+                        className="w-16 bg-white border border-slate-300 rounded px-1.5 py-1 font-mono text-[10px] text-slate-800"
+                      />
+                    </div>
+                  )}
+
+                  {printerConfig.connectionMode !== "system" && (
+                    <div className="mt-2 flex items-center gap-3 text-[9.5px] font-bold text-slate-600">
+                      <label className="flex items-center gap-1 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={printerConfig.autoCut}
+                          onChange={(e) => updatePrinterConfig({ autoCut: e.target.checked })}
+                          className="accent-blue-600"
+                        />
+                        Auto-Cut Paper
+                      </label>
+                      <label className="flex items-center gap-1 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={printerConfig.openCashDrawer}
+                          onChange={(e) => updatePrinterConfig({ openCashDrawer: e.target.checked })}
+                          className="accent-blue-600"
+                        />
+                        Open Cash Drawer
+                      </label>
+                    </div>
+                  )}
+                </div>
+
+                {/* Receipt Font Style & Font Size (Exclusively Super Admin & Admin) */}
+                <div className="border-t border-slate-200 pt-2 space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <label className="block text-[9.5px] font-extrabold uppercase tracking-wider text-slate-700">
+                      Receipt Font Style &amp; Size (Bold Print)
+                    </label>
+                    <span className="text-[9px] font-mono font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200">
+                      Bold Weight
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <select
+                      value={printerConfig.receiptFontStyle || "courier"}
+                      onChange={(e) =>
+                        updatePrinterConfig({ receiptFontStyle: e.target.value as ReceiptFontStyle })
+                      }
+                      className="flex-1 min-w-0 bg-white border border-slate-300 rounded-lg py-1 px-2 text-[10px] font-bold text-slate-900 outline-none focus:border-blue-600 cursor-pointer"
+                    >
+                      {RECEIPT_FONT_STYLE_OPTIONS.map((opt) => (
+                        <option key={opt.id} value={opt.id}>
+                          {opt.label}
+                        </option>
+                      ))}
+                    </select>
+                    <div className="grid grid-cols-4 gap-1 shrink-0">
+                      {RECEIPT_FONT_SIZE_OPTIONS.map((sz) => (
                         <button
+                          key={sz.id}
                           type="button"
-                          onClick={() => handlePrintReceipt("invoice-receipt-theme", showInvoicePrintPreview.id, true)}
-                          className="px-2 py-1 rounded bg-slate-900 text-white font-bold text-[9.5px] shrink-0 cursor-pointer hover:bg-slate-800"
+                          onClick={() => updatePrinterConfig({ receiptFontSize: sz.id as ReceiptFontSize })}
+                          title={sz.label}
+                          className={`px-2 py-1 rounded-lg border font-bold text-[10px] transition-all cursor-pointer ${
+                            (printerConfig.receiptFontSize || "medium") === sz.id
+                              ? "bg-slate-900 text-white border-slate-900 shadow-xs"
+                              : "bg-white text-slate-700 border-slate-200 hover:bg-slate-100"
+                          }`}
                         >
-                          {printerConfig.pairedDeviceLabel ? "Change USB" : "Pair USB Printer"}
+                          {sz.shortLabel}
                         </button>
-                      )}
+                      ))}
                     </div>
                   </div>
-                )}
-
-                {printerConfig.connectionMode === "network" && (
-                  <div className="mt-2 flex items-center gap-1.5 text-[10px]">
-                    <input
-                      type="text"
-                      value={printerConfig.networkIp}
-                      onChange={(e) => updatePrinterConfig({ networkIp: e.target.value })}
-                      placeholder="192.168.1.200"
-                      className="flex-1 bg-white border border-slate-300 rounded px-2 py-1 font-mono text-[10px] text-slate-800"
-                    />
-                    <input
-                      type="number"
-                      value={printerConfig.networkPort}
-                      onChange={(e) => updatePrinterConfig({ networkPort: Number(e.target.value) || 9100 })}
-                      className="w-16 bg-white border border-slate-300 rounded px-1.5 py-1 font-mono text-[10px] text-slate-800"
-                    />
-                  </div>
-                )}
-
-                {printerConfig.connectionMode !== "system" && (
-                  <div className="mt-2 flex items-center gap-3 text-[9.5px] font-bold text-slate-600">
-                    <label className="flex items-center gap-1 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={printerConfig.autoCut}
-                        onChange={(e) => updatePrinterConfig({ autoCut: e.target.checked })}
-                        className="accent-blue-600"
-                      />
-                      Auto-Cut Paper
-                    </label>
-                    <label className="flex items-center gap-1 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={printerConfig.openCashDrawer}
-                        onChange={(e) => updatePrinterConfig({ openCashDrawer: e.target.checked })}
-                        className="accent-blue-600"
-                      />
-                      Open Cash Drawer
-                    </label>
-                  </div>
-                )}
+                </div>
               </div>
-            </div>
+            ) : (
+              <div className="bg-slate-50 px-3 py-2 rounded-xl border border-slate-200 flex items-center justify-between text-[10px] text-slate-700">
+                <span className="flex items-center gap-1.5 font-bold">
+                  <Lock className="w-3 h-3 text-slate-500" />
+                  Configured Printer:
+                </span>
+                <span className="font-mono font-bold text-slate-900">
+                  {THERMAL_LAYOUT_SPECS[selectedPrinterLayout]?.shortLabel || "80mm"} •{" "}
+                  {printerConfig.connectionMode === "system"
+                    ? "OS Driver"
+                    : printerConfig.connectionMode.toUpperCase()} •{" "}
+                  {RECEIPT_FONT_STYLE_OPTIONS.find((f) => f.id === receiptTypography.fontStyle)?.label || "Courier"} ({receiptTypography.fontSize.toUpperCase()})
+                </span>
+              </div>
+            )}
 
             {/* Thermal Receipt Body */}
-            <div className="bg-amber-50/20 p-4 rounded-xl border border-slate-200 font-mono text-[11px] text-slate-800 space-y-3" id="invoice-receipt-theme">
-              <div className="text-center font-sans space-y-1">
+            <div
+              className="bg-amber-50/20 p-4 rounded-xl border border-slate-300 font-bold text-slate-950 space-y-3"
+              id="invoice-receipt-theme"
+              style={{
+                fontFamily: receiptTypography.cssFamily,
+                fontSize: receiptTypography.previewFontSizeCss,
+                fontWeight: 700
+              }}
+            >
+              <div className="text-center space-y-1 font-bold text-slate-950">
                 {activeTenant.companyLogo && (
                   <div className="flex justify-center mb-1">
                     <img 
@@ -8426,19 +8642,19 @@ Payment Mode:   ${selectedInv.paymentMode}
                     />
                   </div>
                 )}
-                <h4 data-receipt-store-name="true" className="font-display font-black text-sm tracking-tight text-slate-900">
+                <h4 data-receipt-store-name="true" className="font-black text-[1.25em] tracking-tight text-slate-950">
                   {activeTenant.name}
                 </h4>
-                <p data-receipt-header="true" className="text-[9.5px] font-bold text-slate-600 uppercase tracking-wide">
+                <p data-receipt-header="true" className="text-[0.9em] font-bold text-slate-950 uppercase tracking-wide">
                   {opsSettings.receiptHeader || "OFFICIAL RETAIL CASH INVOICE"}
                 </p>
                 {activeTenant.businessLocation && 
                  activeTenant.businessLocation.trim().toLowerCase() !== activeTenant.name.trim().toLowerCase() && (
-                  <p data-receipt-branch="true" className="text-[9.5px] text-slate-600 font-mono font-semibold">
+                  <p data-receipt-branch="true" className="text-[0.9em] text-slate-950 font-bold">
                     Branch: {activeTenant.businessLocation}
                   </p>
                 )}
-                <p data-receipt-address="true" className="text-[10px] text-slate-500 font-mono leading-tight">
+                <p data-receipt-address="true" className="text-[0.9em] text-slate-950 font-bold leading-tight">
                   {(() => {
                     const parts = [activeTenant.address, activeTenant.city, activeTenant.state].filter(Boolean);
                     if (parts.length > 0) {
@@ -8450,45 +8666,45 @@ Payment Mode:   ${selectedInv.paymentMode}
                     return "Registered Store Location";
                   })()}
                 </p>
-                <p data-receipt-contact="true" className="text-[9px] text-slate-400 font-mono">
+                <p data-receipt-contact="true" className="text-[0.85em] text-slate-950 font-bold">
                   Contact: {activeTenant.phone || currentBranch?.phone || "N/A"}
                 </p>
               </div>
 
-              <div className="border-t border-dashed border-slate-300 pt-2 space-y-1">
+              <div className="border-t border-dashed border-slate-400 pt-2 space-y-1 font-bold text-slate-950">
                 <div className="flex justify-between" data-receipt-meta-row="true">
-                  <span>Invoice ID:</span>
-                  <span className="font-bold">{showInvoicePrintPreview.id}</span>
+                  <span className="font-bold">Invoice ID:</span>
+                  <span className="font-black">{showInvoicePrintPreview.id}</span>
                 </div>
                 <div className="flex justify-between" data-receipt-meta-row="true">
-                  <span>GSTIN Check:</span>
-                  <span className="font-bold uppercase">{activeTenant.gstinRegNumber || (currentBranch?.id ? branches.find(b => b.id === currentBranch.id)?.gstin : "") || "07AAAAA1111A1Z1"}</span>
+                  <span className="font-bold">GSTIN Check:</span>
+                  <span className="font-black uppercase">{activeTenant.gstinRegNumber || (currentBranch?.id ? branches.find(b => b.id === currentBranch.id)?.gstin : "") || "07AAAAA1111A1Z1"}</span>
                 </div>
                 <div className="flex justify-between" data-receipt-meta-row="true">
-                  <span>Sales Cashier:</span>
-                  <span>{showInvoicePrintPreview.cashierName || currentCashierName}</span>
+                  <span className="font-bold">Sales Cashier:</span>
+                  <span className="font-bold">{showInvoicePrintPreview.cashierName || currentCashierName}</span>
                 </div>
                 <div className="flex justify-between" data-receipt-meta-row="true">
-                  <span>Timestamp:</span>
-                  <span>{showInvoicePrintPreview.date} {showInvoicePrintPreview.time}</span>
+                  <span className="font-bold">Timestamp:</span>
+                  <span className="font-bold">{showInvoicePrintPreview.date} {showInvoicePrintPreview.time}</span>
                 </div>
                 {showInvoicePrintPreview.customerName && (
-                  <div className="flex justify-between border-t border-dashed border-slate-300 pt-1" data-receipt-meta-row="true">
-                    <span>Customer:</span>
-                    <span className="font-bold text-right break-words max-w-[180px]">{showInvoicePrintPreview.customerName}</span>
+                  <div className="flex justify-between border-t border-dashed border-slate-400 pt-1" data-receipt-meta-row="true">
+                    <span className="font-bold">Customer:</span>
+                    <span className="font-black text-right break-words max-w-[180px]">{showInvoicePrintPreview.customerName}</span>
                   </div>
                 )}
                 {showInvoicePrintPreview.customerPhone && (
                   <div className="flex justify-between" data-receipt-meta-row="true">
-                    <span>Mobile No:</span>
-                    <span className="font-bold">{showInvoicePrintPreview.customerPhone}</span>
+                    <span className="font-bold">Mobile No:</span>
+                    <span className="font-black">{showInvoicePrintPreview.customerPhone}</span>
                   </div>
                 )}
               </div>
 
               {/* Items Table with MRP, Rate & dedicated Qty column */}
-              <div className="border-t border-slate-300 pt-2 space-y-2">
-                <div data-receipt-items-grid="true" className="grid grid-cols-[minmax(0,1fr)_44px_44px_22px_48px] gap-1 font-bold border-b border-slate-300 pb-1 text-slate-900 text-[10px]">
+              <div className="border-t border-slate-400 pt-2 space-y-2 font-bold text-slate-950">
+                <div data-receipt-items-grid="true" className="grid grid-cols-[minmax(0,1fr)_44px_44px_22px_48px] gap-1 font-black border-b border-slate-400 pb-1 text-slate-950 text-[0.92em]">
                   <span>Item Description</span>
                   <span className="text-right">MRP</span>
                   <span className="text-right">Rate</span>
@@ -8498,20 +8714,20 @@ Payment Mode:   ${selectedInv.paymentMode}
                 {showInvoicePrintPreview.items.map((it) => {
                   const itemMrp = it.mrp || (it.price > 0 ? Number((it.price * 1.15).toFixed(2)) : it.price);
                   return (
-                    <div key={it.productId} data-receipt-items-grid="true" data-receipt-item-row="true" className="grid grid-cols-[minmax(0,1fr)_44px_44px_22px_48px] gap-1 text-[10px] items-start">
-                      <div className="font-sans min-w-0">
-                        <span className="font-semibold block break-words leading-tight">{it.name}</span>
+                    <div key={it.productId} data-receipt-items-grid="true" data-receipt-item-row="true" className="grid grid-cols-[minmax(0,1fr)_44px_44px_22px_48px] gap-1 text-[0.92em] font-bold text-slate-950 items-start">
+                      <div className="min-w-0">
+                        <span className="font-bold block break-words leading-tight text-slate-950">{it.name}</span>
                       </div>
-                      <span className="text-right font-mono text-slate-700 text-[9px]">
+                      <span className="text-right font-bold text-slate-950 text-[0.88em]">
                         {activeTenant.currency || "₹"}{itemMrp.toFixed(2)}
                       </span>
-                      <span className="text-right font-mono font-medium text-slate-700">
+                      <span className="text-right font-bold text-slate-950">
                         {activeTenant.currency || "₹"}{it.price.toFixed(2)}
                       </span>
-                      <span className="text-center font-mono font-bold text-slate-800 text-[9.5px]">
+                      <span className="text-center font-black text-slate-950 text-[0.95em]">
                         {it.quantity}
                       </span>
-                      <span className="text-right font-bold font-mono text-slate-900">
+                      <span className="text-right font-black text-slate-950">
                         {activeTenant.currency || "₹"}{(it.price * it.quantity).toFixed(2)}
                       </span>
                     </div>
@@ -8528,9 +8744,9 @@ Payment Mode:   ${selectedInv.paymentMode}
                 const totalSavings = Math.max(0, totalMrp - showInvoicePrintPreview.grandTotal);
                 if (totalSavings > 0) {
                   return (
-                    <div data-receipt-savings="true" className="p-1.5 bg-emerald-50 border border-emerald-200 rounded text-emerald-800 text-[9.5px] font-bold flex justify-between items-center my-1 font-sans">
+                    <div data-receipt-savings="true" className="p-1.5 bg-emerald-50 border border-emerald-400 rounded text-emerald-950 text-[0.9em] font-black flex justify-between items-center my-1">
                       <span className="flex items-center gap-1">🎉 You Saved on MRP:</span>
-                      <span className="font-mono font-extrabold">{activeTenant.currency || "₹"}{totalSavings.toFixed(2)} ({Math.round((totalSavings / totalMrp) * 100)}% OFF)</span>
+                      <span className="font-black">{activeTenant.currency || "₹"}{totalSavings.toFixed(2)} ({Math.round((totalSavings / totalMrp) * 100)}% OFF)</span>
                     </div>
                   );
                 }
@@ -8538,10 +8754,10 @@ Payment Mode:   ${selectedInv.paymentMode}
               })()}
 
               {/* Dynamic Math */}
-              <div className="border-t border-dashed border-slate-300 pt-2 space-y-1">
+              <div className="border-t border-dashed border-slate-400 pt-2 space-y-1 font-bold text-slate-950">
                 <div className="flex justify-between" data-receipt-math-row="true">
-                  <span>Total MRP Value:</span>
-                  <span className="font-mono text-slate-700 font-medium">
+                  <span className="font-bold">Total MRP Value:</span>
+                  <span className="text-slate-950 font-bold">
                     {activeTenant.currency || "₹"}
                     {showInvoicePrintPreview.items.reduce((acc, it) => {
                       const itemMrp = it.mrp || (it.price > 0 ? Number((it.price * 1.15).toFixed(2)) : it.price);
@@ -8550,36 +8766,36 @@ Payment Mode:   ${selectedInv.paymentMode}
                   </span>
                 </div>
                 <div className="flex justify-between" data-receipt-math-row="true">
-                  <span>Basket Tax value:</span>
-                  <span>{activeTenant.currency || "₹"}{showInvoicePrintPreview.taxAmount.toFixed(2)}</span>
+                  <span className="font-bold">Basket Tax value:</span>
+                  <span className="font-bold">{activeTenant.currency || "₹"}{showInvoicePrintPreview.taxAmount.toFixed(2)}</span>
                 </div>
                 <div className="flex justify-between" data-receipt-math-row="true">
-                  <span>Promo discount code:</span>
-                  <span>{showInvoicePrintPreview.couponCode ? `-${showInvoicePrintPercentApplied(showInvoicePrintPreview)}` : `${activeTenant.currency || "₹"}0.00`}</span>
+                  <span className="font-bold">Promo discount code:</span>
+                  <span className="font-bold">{showInvoicePrintPreview.couponCode ? `-${showInvoicePrintPercentApplied(showInvoicePrintPreview)}` : `${activeTenant.currency || "₹"}0.00`}</span>
                 </div>
-                <div className="flex justify-between text-xs font-black text-slate-950 border-t border-dashed border-slate-300 pt-1.5" data-receipt-math-row="true">
+                <div className="flex justify-between text-[1.15em] font-black text-slate-950 border-t border-dashed border-slate-400 pt-1.5" data-receipt-math-row="true">
                   <span>TOTAL PAYABLE:</span>
                   <span>{activeTenant.currency || "₹"}{showInvoicePrintPreview.grandTotal.toFixed(2)}</span>
                 </div>
                 {showInvoicePrintPreview.paymentMode === PaymentMode.CASH && (
                   <>
-                    <div className="flex justify-between p-0.5 mt-1 bg-slate-100 rounded" data-receipt-math-row="true">
+                    <div className="flex justify-between p-0.5 mt-1 bg-slate-100 rounded text-slate-950 font-bold" data-receipt-math-row="true">
                       <span>Cash Received:</span>
                       <span>{activeTenant.currency || "₹"}{Number(showInvoicePrintPreview.cashReceived).toFixed(2)}</span>
                     </div>
-                    <div className="flex justify-between" data-receipt-math-row="true">
+                    <div className="flex justify-between text-slate-950 font-bold" data-receipt-math-row="true">
                       <span>Change Returned:</span>
                       <span>{activeTenant.currency || "₹"}{Number(showInvoicePrintPreview.changeReturned).toFixed(2)}</span>
                     </div>
                   </>
                 )}
                 <div className="flex justify-between" data-receipt-math-row="true">
-                  <span>Payment Mode:</span>
-                  <span className="font-bold font-sans text-[10px] bg-slate-900 text-white px-1.5 rounded">{showInvoicePrintPreview.paymentMode}</span>
+                  <span className="font-bold">Payment Mode:</span>
+                  <span className="font-black text-[0.9em] bg-slate-950 text-white px-1.5 rounded">{showInvoicePrintPreview.paymentMode}</span>
                 </div>
               </div>
 
-              <div data-receipt-footer="true" className="p-3 bg-slate-100 rounded text-[9px] font-sans leading-tight text-center text-slate-600 border border-slate-200">
+              <div data-receipt-footer="true" className="p-3 bg-slate-100 rounded text-[0.88em] font-bold leading-tight text-center text-slate-950 border border-slate-400">
                 {opsSettings.receiptFooter ? (
                   opsSettings.receiptFooter
                 ) : (
@@ -8671,6 +8887,13 @@ Payment Mode:   ${selectedInv.paymentMode}
         initialSelectedProduct={labelModalProduct}
         storeName={activeTenant.name}
         currencySymbol={activeTenant.currency || "₹"}
+        canConfigureLabelPrinter={canConfigurePrintersAndFonts}
+        labelPrinterConfig={labelPrinterConfig}
+        onUpdateLabelPrinterConfig={(cfg) => {
+          if (!canConfigurePrintersAndFonts) return;
+          setLabelPrinterConfig(cfg);
+          persistSettings({ labelPrinterConfig: cfg });
+        }}
       />
 
       {/* PRE-PRINTED BARCODE SCANNER & RAPID INGESTION MODAL */}

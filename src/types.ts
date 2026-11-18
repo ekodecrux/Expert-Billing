@@ -5,8 +5,15 @@
 
 import { jsPDF } from "jspdf";
 import html2canvas from "html2canvas";
-import { PrinterLayoutProfile, THERMAL_LAYOUT_SPECS, savePrintSnapshot } from "./utils/thermalPrinter";
-export type { PrinterLayoutProfile };
+import {
+  PrinterLayoutProfile,
+  ReceiptFontStyle,
+  ReceiptFontSize,
+  THERMAL_LAYOUT_SPECS,
+  getReceiptTypographySpec,
+  savePrintSnapshot
+} from "./utils/thermalPrinter";
+export type { PrinterLayoutProfile, ReceiptFontStyle, ReceiptFontSize };
 
 export enum PaymentMode {
   CASH = "CASH",
@@ -518,12 +525,15 @@ export interface DirectPrintResult {
 
 export function buildReceiptUtilityStyles(
   layoutProfile: PrinterLayoutProfile,
-  scopePrefix = ""
+  scopePrefix = "",
+  receiptFontStyle?: ReceiptFontStyle,
+  receiptFontSize?: ReceiptFontSize
 ): string {
   const isA4 = layoutProfile === "standard-a4";
   const is58 = layoutProfile === "thermal-58mm";
   const is76 = layoutProfile === "thermal-76mm";
   const is112 = layoutProfile === "thermal-112mm";
+  const typo = getReceiptTypographySpec(layoutProfile, receiptFontStyle, receiptFontSize);
 
   const gridColumnsCss = isA4
     ? "minmax(0, 1fr) 72px 72px 42px 82px"
@@ -538,18 +548,23 @@ export function buildReceiptUtilityStyles(
   const gridGapCss = is58 ? "2px" : is76 ? "3px" : isA4 ? "6px" : "4px";
   const s = scopePrefix;
   const inkColor = isA4 ? "#0f172a" : "#000000";
-  const subInkColor = isA4 ? "#334155" : "#000000";
-  const borderInk = isA4 ? "#cbd5e1" : "#000000";
+  const subInkColor = isA4 ? "#0f172a" : "#000000";
+  const borderInk = isA4 ? "#94a3b8" : "#000000";
 
   return `
     ${s}.text-center { text-align: center; }
     ${s}.text-right { text-align: right; }
     ${s}.text-left { text-align: left; }
-    ${s}.font-sans { font-family: ${isA4 ? 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif' : '"Courier New", Courier, monospace'}; }
-    ${s}.font-mono, ${s}.font-display { font-family: "Courier New", Courier, monospace; }
-    ${s}.font-bold { font-weight: 700; }
-    ${s}.font-semibold { font-weight: 600; }
-    ${s}.font-extrabold, ${s}.font-black { font-weight: 800; }
+    ${s}p, ${s}span, ${s}div, ${s}td, ${s}th, ${s}strong {
+      font-family: ${typo.cssFamily} !important;
+      font-weight: 700 !important;
+    }
+    ${s}.font-sans, ${s}.font-mono, ${s}.font-display {
+      font-family: ${typo.cssFamily} !important;
+      font-weight: 700 !important;
+    }
+    ${s}.font-normal, ${s}.font-medium, ${s}.font-semibold, ${s}.font-bold { font-weight: 700 !important; }
+    ${s}.font-extrabold, ${s}.font-black, ${s}h4, ${s}[data-receipt-store-name="true"] { font-weight: 900 !important; }
     ${s}.uppercase { text-transform: uppercase; }
     ${s}.truncate { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     ${s}.block { display: block; }
@@ -686,7 +701,9 @@ export function buildReceiptUtilityStyles(
  */
 export function printElementDirect(
   elementId: string,
-  layoutProfile: PrinterLayoutProfile = "thermal-80mm"
+  layoutProfile: PrinterLayoutProfile = "thermal-80mm",
+  receiptFontStyle?: ReceiptFontStyle,
+  receiptFontSize?: ReceiptFontSize
 ): DirectPrintResult {
   const element = document.getElementById(elementId);
   if (!element) {
@@ -694,16 +711,20 @@ export function printElementDirect(
   }
 
   const spec = THERMAL_LAYOUT_SPECS[layoutProfile] || THERMAL_LAYOUT_SPECS["thermal-80mm"];
+  const typo = getReceiptTypographySpec(layoutProfile, receiptFontStyle, receiptFontSize);
   const isA4 = layoutProfile === "standard-a4";
   const widthCss = isA4 ? "190mm" : "100%";
   const maxWidthCss = isA4 ? "190mm" : `${spec.printableWidthMm}mm`;
   const paddingCss = spec.paddingCss;
-  const fontFamilyCss = isA4
-    ? 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
-    : '"Courier New", Courier, monospace';
-  const fontSizeCss = spec.fontSizeCss;
+  const fontFamilyCss = typo.cssFamily;
+  const fontSizeCss = typo.printFontSizeCss;
   const pageSizeCss = isA4 ? "A4 portrait" : `${spec.rollWidthMm}mm auto`;
-  const receiptUtilityStyles = buildReceiptUtilityStyles(layoutProfile, "#pos-direct-print-root ");
+  const receiptUtilityStyles = buildReceiptUtilityStyles(
+    layoutProfile,
+    "#pos-direct-print-root ",
+    typo.fontStyle,
+    typo.fontSize
+  );
 
   const clone = element.cloneNode(true) as HTMLElement;
   clone.querySelectorAll("button, .no-print, .action-buttons, [role='button']").forEach((el) => el.remove());
@@ -743,10 +764,12 @@ export function printElementDirect(
           color: #000000 !important;
           font-family: ${fontFamilyCss} !important;
           font-size: ${fontSizeCss} !important;
+          font-weight: 700 !important;
           line-height: 1.3 !important;
         }
         #pos-direct-print-root * {
           box-sizing: border-box;
+          font-weight: 700 !important;
           -webkit-print-color-adjust: exact !important;
           print-color-adjust: exact !important;
         }
@@ -792,6 +815,8 @@ export function printElementDirect(
       savePrintSnapshot({
         html: clone.innerHTML,
         layoutProfile,
+        receiptFontStyle: typo.fontStyle,
+        receiptFontSize: typo.fontSize,
         createdAt: Date.now()
       });
     }
@@ -1293,7 +1318,7 @@ function generateVectorPDFFallback(
 
       // Pre-compute required height so roll receipts never clip
       const measurePdf = new jsPDF({ orientation: "portrait", unit: "pt", format: [pdfWidth, 842] });
-      measurePdf.setFont(fontFamily, "normal");
+      measurePdf.setFont(fontFamily, "bold");
       measurePdf.setFontSize(itemFontSize);
       const addrLinesCount = addressText ? measurePdf.splitTextToSize(cleanText(addressText), pdfWidth - padX * 2).length : 0;
       const itemLinesTotal = items.reduce((acc, it) => {
@@ -1326,8 +1351,8 @@ function generateVectorPDFFallback(
       });
 
       const drawDashedLine = (yPos: number) => {
-        pdf.setDrawColor(180, 190, 205);
-        pdf.setLineWidth(0.6);
+        pdf.setDrawColor(100, 116, 139);
+        pdf.setLineWidth(0.75);
         (pdf as any).setLineDashPattern?.([3, 2], 0);
         pdf.line(padX, yPos, rightX, yPos);
         (pdf as any).setLineDashPattern?.([], 0);
@@ -1347,7 +1372,7 @@ function generateVectorPDFFallback(
         }
       }
 
-      pdf.setTextColor(15, 23, 42);
+      pdf.setTextColor(0, 0, 0);
       pdf.setFont(fontFamily, "bold");
       pdf.setFontSize(isA4 ? 14 : is58 ? 8 : 9.5);
       pdf.text(cleanText(storeTitle || "RETAIL STORE RECEIPT"), pdfWidth / 2, y, { align: "center" });
@@ -1356,19 +1381,19 @@ function generateVectorPDFFallback(
       pdf.setFontSize(metaFontSize);
       if (receiptHeaderText) {
         pdf.setFont(fontFamily, "bold");
-        pdf.setTextColor(71, 85, 105);
+        pdf.setTextColor(0, 0, 0);
         pdf.text(cleanText(receiptHeaderText.toUpperCase()), pdfWidth / 2, y, { align: "center" });
         y += lineH;
       }
       if (branchText) {
         pdf.setFont(fontFamily, "bold");
-        pdf.setTextColor(71, 85, 105);
+        pdf.setTextColor(0, 0, 0);
         pdf.text(cleanText(branchText), pdfWidth / 2, y, { align: "center" });
         y += lineH;
       }
       if (addressText) {
-        pdf.setFont(fontFamily, "normal");
-        pdf.setTextColor(100, 116, 139);
+        pdf.setFont(fontFamily, "bold");
+        pdf.setTextColor(15, 23, 42);
         const splitAddress = pdf.splitTextToSize(cleanText(addressText), pdfWidth - padX * 2);
         splitAddress.forEach((line: string) => {
           pdf.text(line, pdfWidth / 2, y, { align: "center" });
@@ -1376,8 +1401,8 @@ function generateVectorPDFFallback(
         });
       }
       if (contactText) {
-        pdf.setFont(fontFamily, "normal");
-        pdf.setTextColor(100, 116, 139);
+        pdf.setFont(fontFamily, "bold");
+        pdf.setTextColor(15, 23, 42);
         pdf.text(cleanText(contactText), pdfWidth / 2, y, { align: "center" });
         y += lineH;
       }
@@ -1386,33 +1411,30 @@ function generateVectorPDFFallback(
       drawDashedLine(y);
       y += 11;
 
-      pdf.setTextColor(30, 41, 59);
+      pdf.setTextColor(0, 0, 0);
       pdf.setFontSize(metaFontSize);
       metaLines.forEach(m => {
         const keyTxt = cleanText(m.key);
         let valTxt = cleanText(m.val);
-        pdf.setFont(fontFamily, "normal");
+        pdf.setFont(fontFamily, "bold");
         const keyW = pdf.getTextWidth(keyTxt);
         const maxValW = Math.max(40, (rightX - padX) - keyW - 8);
-        pdf.setFont(fontFamily, "bold");
         while (valTxt.length > 4 && pdf.getTextWidth(valTxt) > maxValW) {
           valTxt = valTxt.slice(0, -4) + "...";
         }
-        pdf.setFont(fontFamily, "normal");
         pdf.text(keyTxt, padX, y);
-        pdf.setFont(fontFamily, "bold");
         pdf.text(valTxt, rightX, y, { align: "right" });
         y += lineH + 1;
       });
 
       y += 3;
-      pdf.setDrawColor(180, 190, 205);
+      pdf.setDrawColor(100, 116, 139);
       pdf.line(padX, y, rightX, y);
       y += 10;
 
       // 5-Column Item Header matching Checkout Invoice
       pdf.setFont(fontFamily, "bold");
-      pdf.setTextColor(15, 23, 42);
+      pdf.setTextColor(0, 0, 0);
       pdf.setFontSize(itemFontSize);
       pdf.text(is58 ? "Item" : "Item Description", padX, y);
       pdf.text("MRP", mrpX, y, { align: "right" });
@@ -1424,8 +1446,8 @@ function generateVectorPDFFallback(
       y += 10;
 
       items.forEach(it => {
-        pdf.setFont(fontFamily, "normal");
-        pdf.setTextColor(30, 41, 59);
+        pdf.setFont(fontFamily, "bold");
+        pdf.setTextColor(0, 0, 0);
         pdf.setFontSize(itemFontSize);
         const nameLines = pdf.splitTextToSize(cleanText(it.name), descMaxWidth);
         const startY = y;
@@ -1437,7 +1459,6 @@ function generateVectorPDFFallback(
         const rowAnchorY = startY;
         pdf.text(cleanText(it.mrp), mrpX, rowAnchorY, { align: "right" });
         pdf.text(cleanText(it.rate), rateX, rowAnchorY, { align: "right" });
-        pdf.setFont(fontFamily, "bold");
         pdf.text(cleanText(it.qty), qtyX, rowAnchorY, { align: "center" });
         pdf.text(cleanText(it.total), totalX, rowAnchorY, { align: "right" });
         y = Math.max(y, rowAnchorY + lineH) + 2;
@@ -1472,18 +1493,17 @@ function generateVectorPDFFallback(
           y += 3;
           pdf.setFont(fontFamily, "bold");
           pdf.setFontSize(isA4 ? 11 : is58 ? 7.0 : 8.5);
-          pdf.setTextColor(15, 23, 42);
+          pdf.setTextColor(0, 0, 0);
           pdf.text(cleanText(m.key), padX, y);
           pdf.text(cleanText(m.val), rightX, y, { align: "right" });
           y += lineH + 4;
         } else if (isPaymentMode) {
-          pdf.setFont(fontFamily, "normal");
+          pdf.setFont(fontFamily, "bold");
           pdf.setFontSize(metaFontSize);
-          pdf.setTextColor(30, 41, 59);
+          pdf.setTextColor(0, 0, 0);
           pdf.text(cleanText(m.key), padX, y);
 
           const badgeText = cleanText(m.val);
-          pdf.setFont(fontFamily, "bold");
           pdf.setFontSize(isA4 ? 8.2 : is58 ? 5.4 : 6.5);
           const badgeW = pdf.getTextWidth(badgeText) + 8;
           const badgeH = isA4 ? 13 : 10;
@@ -1491,12 +1511,12 @@ function generateVectorPDFFallback(
           pdf.roundedRect(rightX - badgeW, y - badgeH + 2.5, badgeW, badgeH, 2, 2, "F");
           pdf.setTextColor(255, 255, 255);
           pdf.text(badgeText, rightX - 4, y, { align: "right" });
-          pdf.setTextColor(30, 41, 59);
+          pdf.setTextColor(0, 0, 0);
           y += lineH + 2;
         } else {
-          pdf.setFont(fontFamily, "normal");
+          pdf.setFont(fontFamily, "bold");
           pdf.setFontSize(metaFontSize);
-          pdf.setTextColor(51, 65, 85);
+          pdf.setTextColor(0, 0, 0);
           pdf.text(cleanText(m.key), padX, y);
           pdf.text(cleanText(m.val), rightX, y, { align: "right" });
           y += lineH + 1;
@@ -1505,15 +1525,15 @@ function generateVectorPDFFallback(
 
       if (footerMsg) {
         y += 5;
-        pdf.setFont("helvetica", "normal");
+        pdf.setFont("helvetica", "bold");
         pdf.setFontSize(isA4 ? 8 : is58 ? 5.2 : 6.2);
         const splitFooter = pdf.splitTextToSize(footerMsg, pdfWidth - padX * 2 - 10);
         const footerLineH = isA4 ? 10 : 8.5;
         const boxH = splitFooter.length * footerLineH + 10;
         pdf.setFillColor(241, 245, 249);
-        pdf.setDrawColor(226, 232, 240);
+        pdf.setDrawColor(148, 163, 184);
         pdf.roundedRect(padX, y - 6, rightX - padX, boxH, 3, 3, "FD");
-        pdf.setTextColor(71, 85, 105);
+        pdf.setTextColor(15, 23, 42);
         let fy = y + 3;
         splitFooter.forEach((line: string) => {
           pdf.text(line, pdfWidth / 2, fy, { align: "center" });

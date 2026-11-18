@@ -86,7 +86,8 @@ import {
   ShoppingCart,
   Pill,
   Scissors,
-  Type
+  Type,
+  Tag
 } from "lucide-react";
 import { 
   UserRole, 
@@ -102,8 +103,21 @@ import {
   TenantSectorConfig,
   BUSINESS_SECTORS_CATALOG,
   TENANT_FONT_OPTIONS,
-  TENANT_FONT_SIZE_OPTIONS
+  TENANT_FONT_SIZE_OPTIONS,
+  LabelPrinterConfig
 } from "../types";
+import { LABEL_SIZE_PRESETS, printThermalLabelsDirect } from "../utils/labelPrinterEngine";
+import {
+  ThermalPrinterConfig,
+  THERMAL_LAYOUT_SPECS,
+  ThermalConnectionMode,
+  DEFAULT_THERMAL_PRINTER_CONFIG,
+  ReceiptFontStyle,
+  ReceiptFontSize,
+  RECEIPT_FONT_STYLE_OPTIONS,
+  RECEIPT_FONT_SIZE_OPTIONS,
+  getReceiptTypographySpec
+} from "../utils/thermalPrinter";
 import { ExpertAidLogo } from "./ExpertAidLogo";
 
 function formatSectorModulesSummary(modulesInput: any): string {
@@ -215,6 +229,10 @@ interface SuperAdminConsoleProps {
   onLogout?: () => void;
   onImpersonateClient?: (email: string) => void;
   onSwitchProfile?: (profile: AccessProfile) => void;
+  printerConfig?: ThermalPrinterConfig;
+  onUpdatePrinterConfig?: (patch: Partial<ThermalPrinterConfig>) => void;
+  labelPrinterConfig?: LabelPrinterConfig;
+  onUpdateLabelPrinterConfig?: (config: LabelPrinterConfig) => void;
 }
 
 export default function SuperAdminConsole({
@@ -227,7 +245,11 @@ export default function SuperAdminConsole({
   onSelectTenant,
   onLogout,
   onImpersonateClient,
-  onSwitchProfile
+  onSwitchProfile,
+  printerConfig: propPrinterConfig,
+  onUpdatePrinterConfig,
+  labelPrinterConfig: propLabelPrinterConfig,
+  onUpdateLabelPrinterConfig
 }: SuperAdminConsoleProps) {
   // Navigation
   const [activeMenuTab, setActiveMenuTab] = useState<string>("dashboard");
@@ -769,6 +791,106 @@ export default function SuperAdminConsole({
   const [invoiceFilterStatus, setInvoiceFilterStatus] = useState<string>("ALL");
   const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null);
   const [selectedPrinterLayout, setSelectedPrinterLayout] = useState<PrinterLayoutProfile>("standard-a4");
+
+  const normalizeSuperLabelConfig = (cfg?: LabelPrinterConfig): LabelPrinterConfig => {
+    const modelMap: Record<string, string> = {
+      tsc_te244: "tsc-tspl",
+      zebra_zd220: "zebra-zpl",
+      tvs_lp46: "tvs-lp46",
+      xprinter: "xprinter-xp",
+      epson_tm: "epson-tm"
+    };
+    const presetMap: Record<string, string> = {
+      "50x25_1col": "roll-50x25",
+      "38x25_2col": "dual-roll-38x25",
+      "50x30_1col": "roll-50x30",
+      "100x50_1col": "roll-100x50",
+      "100x150_1col": "roll-100x150"
+    };
+    const base: LabelPrinterConfig = cfg || {
+      printerModel: "tsc-tspl",
+      printerName: "TSC TE244 Thermal Barcode Printer",
+      presetId: "roll-50x25",
+      connectionType: "browser",
+      networkIp: "192.168.1.100",
+      networkPort: "9100",
+      dpi: 203,
+      darkness: 10,
+      gapMm: 2,
+      sensorType: "gap"
+    };
+    return {
+      ...base,
+      printerModel: modelMap[base.printerModel] || base.printerModel || "tsc-tspl",
+      presetId: presetMap[base.presetId] || base.presetId || "roll-50x25",
+      connectionType: base.connectionType || "browser"
+    };
+  };
+
+  const [thermalPrinterDraft, setThermalPrinterDraft] = useState<ThermalPrinterConfig>(
+    propPrinterConfig || { ...DEFAULT_THERMAL_PRINTER_CONFIG }
+  );
+  const [labelPrinterDraft, setLabelPrinterDraft] = useState<LabelPrinterConfig>(() =>
+    normalizeSuperLabelConfig(propLabelPrinterConfig)
+  );
+
+  useEffect(() => {
+    if (propPrinterConfig) {
+      setThermalPrinterDraft(propPrinterConfig);
+    }
+  }, [propPrinterConfig]);
+
+  useEffect(() => {
+    if (propLabelPrinterConfig) {
+      setLabelPrinterDraft(normalizeSuperLabelConfig(propLabelPrinterConfig));
+    }
+  }, [propLabelPrinterConfig]);
+
+  const handleSaveSuperAdminThermalPrinter = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (onUpdatePrinterConfig) {
+      onUpdatePrinterConfig(thermalPrinterDraft);
+    }
+    triggerNotification(
+      `Thermal Receipt Printer configured (${THERMAL_LAYOUT_SPECS[thermalPrinterDraft.layoutProfile]?.label || thermalPrinterDraft.layoutProfile} • ${thermalPrinterDraft.connectionMode.toUpperCase()})!`,
+      "success"
+    );
+  };
+
+  const handleSaveSuperAdminLabelPrinter = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (onUpdateLabelPrinterConfig) {
+      onUpdateLabelPrinterConfig(labelPrinterDraft);
+    }
+    triggerNotification(
+      `Label Printer Hardware ("${labelPrinterDraft.printerName}") configuration saved across workspace!`,
+      "success"
+    );
+  };
+
+  const handleTestPrintSuperAdminLabel = () => {
+    const preset = LABEL_SIZE_PRESETS.find((p) => p.id === labelPrinterDraft.presetId) || LABEL_SIZE_PRESETS[0];
+    const testHtml = `
+      <div class="label-print-page" style="padding: 2.5mm; border: 1px dashed #000; text-align: center; height: 100%;">
+        <div style="font-size: 10px; font-weight: 900; border-bottom: 1px solid #000; padding-bottom: 1mm; text-transform: uppercase;">
+          ${labelPrinterDraft.printerName}
+        </div>
+        <div style="font-size: 8px; margin: 1.5mm 0; font-family: monospace;">
+          Size: ${preset.name} | DPI: ${labelPrinterDraft.dpi} | Dark: ${labelPrinterDraft.darkness}/15
+        </div>
+        <div style="margin: 1.5mm auto; width: 85%; font-size: 9px; font-family: monospace; border: 1px solid #000; padding: 1.5mm; font-weight: bold;">
+          ||||||||||||||||||||||||||||||||||||||||
+          <br/>
+          CALIB-OK-2026
+        </div>
+        <div style="font-size: 7.5px; font-family: monospace; border-top: 1px solid #000; padding-top: 1mm;">
+          INTERFACE: ${labelPrinterDraft.connectionType.toUpperCase()} | SENSOR: ${(labelPrinterDraft.sensorType || "gap").toUpperCase()}
+        </div>
+      </div>
+    `;
+    printThermalLabelsDirect(testHtml, preset, "Super Admin Label Printer Calibration Test");
+    triggerNotification(`Dispatched calibration test label (${preset.name}) to ${labelPrinterDraft.printerName}.`, "success");
+  };
 
   // Payment Audit states
   const [paymentSearch, setPaymentSearch] = useState<string>("");
@@ -6562,39 +6684,450 @@ export default function SuperAdminConsole({
                 </div>
               )}
 
-              {/* Sub-tab 6: POS PREFERENCES */}
+              {/* Sub-tab 6: POS PREFERENCES (THERMAL & LABEL PRINTER CONFIGURATION - SUPER ADMIN EXCLUSIVE) */}
               {activeSystemSettingsSubTab === "pos" && (
-                <div className="space-y-5 max-w-2xl">
-                  <h3 className="text-sm font-bold text-slate-900">POS Hardware & Printing Preferences</h3>
-                  <div className="space-y-3 bg-slate-50 p-5 rounded-2xl border border-slate-200">
-                    <div className="flex items-center justify-between py-2 border-b border-slate-200/60">
-                      <div>
-                        <p className="text-xs font-bold text-slate-800">Thermal Receipt Size</p>
-                        <p className="text-[10px] text-slate-400">Standard 80mm roll width with auto paper cut</p>
-                      </div>
-                      <span className="text-xs font-bold font-mono text-purple-700 bg-purple-50 px-3 py-1 rounded-lg border border-purple-200">
-                        80mm Thermal
-                      </span>
+                <div className="space-y-6 max-w-3xl">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-slate-200">
+                    <div>
+                      <h3 className="text-sm font-extrabold text-slate-900 flex items-center gap-2">
+                        <Printer className="w-4 h-4 text-purple-600" />
+                        Thermal Receipt &amp; Label Printer Hardware Configuration
+                      </h3>
+                      <p className="text-xs text-slate-500 mt-0.5">
+                        Configure thermal receipt roll sizing, printer connection protocol, and barcode label printer defaults (Super Admin &amp; Admin only).
+                      </p>
                     </div>
-                    <div className="flex items-center justify-between py-2 border-b border-slate-200/60">
-                      <div>
-                        <p className="text-xs font-bold text-slate-800">Barcode Format</p>
-                        <p className="text-[10px] text-slate-400">EAN-13, UPC-A, Code 128 Auto Detection</p>
-                      </div>
-                      <span className="text-xs font-bold font-mono text-emerald-700 bg-emerald-50 px-3 py-1 rounded-lg border border-emerald-200">
-                        Auto Multi-Format
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between py-2">
-                      <div>
-                        <p className="text-xs font-bold text-slate-800">Sound Audio Feedback</p>
-                        <p className="text-[10px] text-slate-400">Audio chime on barcode scan and completed payment</p>
-                      </div>
-                      <span className="text-xs font-bold font-mono text-blue-700 bg-blue-50 px-3 py-1 rounded-lg border border-blue-200">
-                        Enabled
-                      </span>
-                    </div>
+                    <span className="text-[10px] font-mono font-bold text-purple-700 bg-purple-50 px-2.5 py-1 rounded-full border border-purple-200 self-start sm:self-auto">
+                      Super Admin Hardware Control
+                    </span>
                   </div>
+
+                  {/* Card 1: Thermal Receipt Printer Configuration */}
+                  <form onSubmit={handleSaveSuperAdminThermalPrinter} className="space-y-4 bg-slate-50 p-5 rounded-2xl border border-slate-200">
+                    <div className="flex items-center justify-between">
+                      <h4 className="text-xs font-black text-slate-900 uppercase tracking-wider flex items-center gap-1.5 font-mono">
+                        <Printer className="w-4 h-4 text-blue-600" /> 1. Thermal Receipt Printer Configuration
+                      </h4>
+                      <span className="text-[10px] font-mono font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded-full border border-blue-200">
+                        {THERMAL_LAYOUT_SPECS[thermalPrinterDraft.layoutProfile]?.shortLabel || "80mm"} • {thermalPrinterDraft.connectionMode.toUpperCase()}
+                      </span>
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] text-slate-700 font-bold uppercase tracking-wider mb-1.5">
+                        Receipt Paper Width / Printer Format
+                      </label>
+                      <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+                        {(
+                          [
+                            { id: "thermal-58mm", label: "58mm Roll" },
+                            { id: "thermal-76mm", label: "76mm Roll" },
+                            { id: "thermal-80mm", label: "80mm Roll" },
+                            { id: "thermal-112mm", label: "112mm Wide" },
+                            { id: "standard-a4", label: "Office A4" }
+                          ] as { id: PrinterLayoutProfile; label: string }[]
+                        ).map((item) => (
+                          <button
+                            key={item.id}
+                            type="button"
+                            onClick={() => setThermalPrinterDraft({ ...thermalPrinterDraft, layoutProfile: item.id })}
+                            className={`py-2 px-2 rounded-xl border font-bold text-[11px] transition-all cursor-pointer ${
+                              thermalPrinterDraft.layoutProfile === item.id
+                                ? "bg-slate-900 text-white border-slate-900 shadow-sm"
+                                : "bg-white text-slate-700 border-slate-300 hover:bg-slate-100"
+                            }`}
+                          >
+                            {item.label}
+                          </button>
+                        ))}
+                      </div>
+                      <p className="text-[10px] text-slate-500 mt-1.5">
+                        {THERMAL_LAYOUT_SPECS[thermalPrinterDraft.layoutProfile]?.description}
+                      </p>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-[11px] text-slate-700 font-bold uppercase tracking-wider mb-1">
+                          Connection Mode
+                        </label>
+                        <select
+                          value={thermalPrinterDraft.connectionMode}
+                          onChange={(e) =>
+                            setThermalPrinterDraft({
+                              ...thermalPrinterDraft,
+                              connectionMode: e.target.value as ThermalConnectionMode
+                            })
+                          }
+                          className="w-full bg-white border border-slate-300 rounded-xl py-2 px-3 text-xs font-semibold text-slate-900 outline-none focus:border-purple-600 cursor-pointer"
+                        >
+                          <option value="system">OS / USB Printer Driver (Recommended)</option>
+                          <option value="webusb">Direct Raw USB (ESC/POS)</option>
+                          <option value="webserial">Serial / Bluetooth COM Port</option>
+                          <option value="network">LAN / Wi-Fi TCP Socket (Port 9100)</option>
+                        </select>
+                      </div>
+
+                      {thermalPrinterDraft.connectionMode === "webserial" && (
+                        <div>
+                          <label className="block text-[11px] text-slate-700 font-bold uppercase tracking-wider mb-1">
+                            Serial Baud Rate
+                          </label>
+                          <select
+                            value={thermalPrinterDraft.serialBaudRate}
+                            onChange={(e) =>
+                              setThermalPrinterDraft({
+                                ...thermalPrinterDraft,
+                                serialBaudRate: Number(e.target.value) as 9600 | 19200 | 38400 | 115200
+                              })
+                            }
+                            className="w-full bg-white border border-slate-300 rounded-xl py-2 px-3 text-xs font-mono font-bold text-slate-900 outline-none focus:border-purple-600 cursor-pointer"
+                          >
+                            <option value={9600}>9600 bps (Standard)</option>
+                            <option value={19200}>19200 bps</option>
+                            <option value={38400}>38400 bps</option>
+                            <option value={115200}>115200 bps (High Speed)</option>
+                          </select>
+                        </div>
+                      )}
+
+                      {thermalPrinterDraft.connectionMode === "network" && (
+                        <div className="grid grid-cols-3 gap-2">
+                          <div className="col-span-2">
+                            <label className="block text-[11px] text-slate-700 font-bold uppercase tracking-wider mb-1">
+                              Printer LAN IP
+                            </label>
+                            <input
+                              type="text"
+                              value={thermalPrinterDraft.networkIp}
+                              onChange={(e) =>
+                                setThermalPrinterDraft({ ...thermalPrinterDraft, networkIp: e.target.value })
+                              }
+                              placeholder="192.168.1.200"
+                              className="w-full bg-white border border-slate-300 rounded-xl py-2 px-3 text-xs font-mono font-bold text-slate-900"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-[11px] text-slate-700 font-bold uppercase tracking-wider mb-1">
+                              Port
+                            </label>
+                            <input
+                              type="number"
+                              value={thermalPrinterDraft.networkPort}
+                              onChange={(e) =>
+                                setThermalPrinterDraft({
+                                  ...thermalPrinterDraft,
+                                  networkPort: Number(e.target.value) || 9100
+                                })
+                              }
+                              className="w-full bg-white border border-slate-300 rounded-xl py-2 px-3 text-xs font-mono font-bold text-slate-900"
+                            />
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Receipt Font Style & Font Size (Super Admin & Admin Only) */}
+                    <div className="pt-3 border-t border-slate-200 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <label className="block text-[11px] text-slate-800 font-bold uppercase tracking-wider">
+                          Receipt Font Style &amp; Font Size (Bold Print Weight)
+                        </label>
+                        <span className="text-[10px] font-mono font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                          All Text Printed Bold
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-[10px] text-slate-600 font-bold uppercase tracking-wider mb-1">
+                            Receipt Font Style
+                          </label>
+                          <select
+                            value={thermalPrinterDraft.receiptFontStyle || "courier"}
+                            onChange={(e) =>
+                              setThermalPrinterDraft({
+                                ...thermalPrinterDraft,
+                                receiptFontStyle: e.target.value as ReceiptFontStyle
+                              })
+                            }
+                            className="w-full bg-white border border-slate-300 rounded-xl py-2 px-3 text-xs font-bold text-slate-900 outline-none focus:border-purple-600 cursor-pointer"
+                          >
+                            {RECEIPT_FONT_STYLE_OPTIONS.map((opt) => (
+                              <option key={opt.id} value={opt.id}>
+                                {opt.label} ({opt.description})
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-[10px] text-slate-600 font-bold uppercase tracking-wider mb-1">
+                            Receipt Font Size
+                          </label>
+                          <div className="grid grid-cols-4 gap-1.5">
+                            {RECEIPT_FONT_SIZE_OPTIONS.map((sz) => (
+                              <button
+                                key={sz.id}
+                                type="button"
+                                onClick={() =>
+                                  setThermalPrinterDraft({
+                                    ...thermalPrinterDraft,
+                                    receiptFontSize: sz.id as ReceiptFontSize
+                                  })
+                                }
+                                className={`py-2 px-1.5 rounded-xl border font-bold text-[11px] transition-all cursor-pointer ${
+                                  (thermalPrinterDraft.receiptFontSize || "medium") === sz.id
+                                    ? "bg-slate-900 text-white border-slate-900 shadow-sm"
+                                    : "bg-white text-slate-700 border-slate-300 hover:bg-slate-100"
+                                }`}
+                              >
+                                {sz.shortLabel}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                      {(() => {
+                        const previewTypo = getReceiptTypographySpec(
+                          thermalPrinterDraft.layoutProfile,
+                          thermalPrinterDraft.receiptFontStyle,
+                          thermalPrinterDraft.receiptFontSize
+                        );
+                        return (
+                          <div
+                            className="bg-white border border-dashed border-slate-300 rounded-xl px-3.5 py-2.5 text-slate-950 font-bold flex flex-wrap items-center justify-between gap-2"
+                            style={{
+                              fontFamily: previewTypo.cssFamily,
+                              fontSize: previewTypo.previewFontSizeCss,
+                              fontWeight: 700
+                            }}
+                          >
+                            <span className="font-black uppercase">SAMPLE THERMAL RECEIPT</span>
+                            <span className="font-bold">2x Organic Basmati • ₹460.00</span>
+                          </div>
+                        );
+                      })()}
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-6 pt-1 text-xs font-bold text-slate-700">
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={thermalPrinterDraft.autoCut}
+                          onChange={(e) =>
+                            setThermalPrinterDraft({ ...thermalPrinterDraft, autoCut: e.target.checked })
+                          }
+                          className="w-4 h-4 accent-purple-600 rounded"
+                        />
+                        <span>Auto-Cut Paper After Print</span>
+                      </label>
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={thermalPrinterDraft.openCashDrawer}
+                          onChange={(e) =>
+                            setThermalPrinterDraft({ ...thermalPrinterDraft, openCashDrawer: e.target.checked })
+                          }
+                          className="w-4 h-4 accent-purple-600 rounded"
+                        />
+                        <span>Trigger Cash Drawer Kick</span>
+                      </label>
+                    </div>
+
+                    <div className="flex justify-end pt-2 border-t border-slate-200">
+                      <button
+                        type="submit"
+                        className="bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs py-2 px-5 rounded-xl shadow-md transition-all flex items-center gap-2 cursor-pointer uppercase tracking-wider"
+                      >
+                        <Save className="w-4 h-4 shrink-0" />
+                        Save Thermal Printer Settings
+                      </button>
+                    </div>
+                  </form>
+
+                  {/* Card 2: Label Printer Hardware Configuration */}
+                  <form onSubmit={handleSaveSuperAdminLabelPrinter} className="space-y-4 bg-slate-50 p-5 rounded-2xl border border-slate-200">
+                    <div className="flex items-center justify-between">
+                      <h4 className="text-xs font-black text-slate-900 uppercase tracking-wider flex items-center gap-1.5 font-mono">
+                        <Tag className="w-4 h-4 text-purple-600" /> 2. Label Printer &amp; Barcode Hardware Configuration
+                      </h4>
+                      <span className="text-[10px] font-mono font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                        {labelPrinterDraft.dpi} DPI
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-[11px] text-slate-700 font-bold uppercase tracking-wider mb-1">
+                          Default Label Printer Model
+                        </label>
+                        <select
+                          value={labelPrinterDraft.printerModel}
+                          onChange={(e) => {
+                            const model = e.target.value;
+                            let defaultName = "Zebra ZD220 Direct Thermal Printer";
+                            if (model === "tsc-tspl") defaultName = "TSC TE244 Thermal Barcode Printer";
+                            if (model === "tvs-lp46") defaultName = "TVS LP 46 Neo Label Printer";
+                            if (model === "xprinter-xp") defaultName = "Xprinter XP-420B Shipping & Shelf Label Printer";
+                            if (model === "citizen-cl") defaultName = "Citizen CL-S621 / CL-E300 Label Printer";
+                            if (model === "epson-tm") defaultName = "Epson TM-L90 Thermal Label & Receipt Printer";
+                            if (model === "rollo-usb") defaultName = "Rollo Commercial High-Speed Printer";
+                            if (model === "dymo-lw") defaultName = "Dymo LabelWriter 450 Turbo";
+                            if (model === "laser-a4") defaultName = "Standard Laser / Inkjet A4 Sheets";
+                            setLabelPrinterDraft({
+                              ...labelPrinterDraft,
+                              printerModel: model,
+                              printerName: defaultName
+                            });
+                          }}
+                          className="w-full bg-white border border-slate-300 rounded-xl py-2 px-3 text-xs font-semibold text-slate-900 outline-none focus:border-purple-600 cursor-pointer"
+                        >
+                          <option value="zebra-zpl">Zebra ZD220 / ZD230 / ZD420 (ZPL II)</option>
+                          <option value="tsc-tspl">TSC TE244 / TTP-244 Pro / DA210 (TSPL)</option>
+                          <option value="tvs-lp46">TVS Electronics LP 46 Neo / Lite (TSPL)</option>
+                          <option value="xprinter-xp">Xprinter XP-420B / XP-365B (TSPL)</option>
+                          <option value="citizen-cl">Citizen CL-S621 / CL-E300 (ZPL)</option>
+                          <option value="epson-tm">Epson TM-L90 / TM-L100 (ESC/POS Label)</option>
+                          <option value="rollo-usb">Rollo Commercial High-Speed Printer</option>
+                          <option value="dymo-lw">Dymo LabelWriter 450 / 550</option>
+                          <option value="laser-a4">Standard Laser / Inkjet Printer (A4 Sheets)</option>
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block text-[11px] text-slate-700 font-bold uppercase tracking-wider mb-1">
+                          Printer Friendly Display Name
+                        </label>
+                        <input
+                          type="text"
+                          required
+                          value={labelPrinterDraft.printerName}
+                          onChange={(e) => setLabelPrinterDraft({ ...labelPrinterDraft, printerName: e.target.value })}
+                          className="w-full bg-white border border-slate-300 rounded-xl py-2 px-3 text-xs font-semibold text-slate-900 outline-none focus:border-purple-600 font-mono"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-[11px] text-slate-700 font-bold uppercase tracking-wider mb-1">
+                          Default Label Size Preset
+                        </label>
+                        <select
+                          value={labelPrinterDraft.presetId}
+                          onChange={(e) => setLabelPrinterDraft({ ...labelPrinterDraft, presetId: e.target.value })}
+                          className="w-full bg-white border border-slate-300 rounded-xl py-2 px-3 text-xs font-bold text-slate-900 outline-none focus:border-purple-600 cursor-pointer"
+                        >
+                          <optgroup label="Direct Thermal Roll Presets">
+                            <option value="roll-50x25">50 × 25 mm (2" × 1") - Standard Shelf Tag</option>
+                            <option value="roll-38x25">38 × 25 mm (1.5" × 1") - Compact Item Sticker</option>
+                            <option value="roll-50x30">50 × 30 mm - Grocery &amp; Deli Roll</option>
+                            <option value="roll-75x50">75 × 50 mm (3" × 2") - Apparel Tag</option>
+                            <option value="roll-100x50">100 × 50 mm (4" × 2") - Shelf Talker / Bin Tag</option>
+                            <option value="roll-100x150">100 × 150 mm (4" × 6") - Shipping &amp; Pallet</option>
+                            <option value="dual-roll-38x25">2-Up Dual Roll (2 × 38×25 mm)</option>
+                            <option value="jewelry-32x19">Jewelry Tag (32 × 19 mm Dumbbell)</option>
+                          </optgroup>
+                          <optgroup label="Office Laser/Inkjet A4 Sheets">
+                            <option value="a4-sheet-24">A4 Sheet: 24 Labels (70 × 37 mm)</option>
+                            <option value="a4-sheet-40">A4 Sheet: 40 Labels (52.5 × 29.7 mm)</option>
+                            <option value="a4-sheet-65">A4 Sheet: 65 Labels (38.1 × 21.2 mm)</option>
+                          </optgroup>
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block text-[11px] text-slate-700 font-bold uppercase tracking-wider mb-1">
+                          Connection Interface / Protocol
+                        </label>
+                        <select
+                          value={labelPrinterDraft.connectionType}
+                          onChange={(e) => setLabelPrinterDraft({ ...labelPrinterDraft, connectionType: e.target.value })}
+                          className="w-full bg-white border border-slate-300 rounded-xl py-2 px-3 text-xs font-semibold text-slate-900 outline-none focus:border-purple-600 cursor-pointer"
+                        >
+                          <option value="browser">Browser Direct Thermal (Zero-Margin CSS @page)</option>
+                          <option value="tcp">Raw Network TCP Socket (Port 9100)</option>
+                          <option value="usb">USB Virtual COM / Direct Spool</option>
+                          <option value="bluetooth">Bluetooth SPP / Wireless</option>
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block text-[11px] text-slate-700 font-bold uppercase tracking-wider mb-1">
+                          Print Resolution (DPI)
+                        </label>
+                        <select
+                          value={labelPrinterDraft.dpi}
+                          onChange={(e) => setLabelPrinterDraft({ ...labelPrinterDraft, dpi: Number(e.target.value) })}
+                          className="w-full bg-white border border-slate-300 rounded-xl py-2 px-3 text-xs font-semibold text-slate-900 outline-none focus:border-purple-600 cursor-pointer"
+                        >
+                          <option value={203}>203 DPI (Standard Thermal 8 dots/mm)</option>
+                          <option value={300}>300 DPI (High-Definition 12 dots/mm)</option>
+                          <option value={600}>600 DPI (Ultra Fine 24 dots/mm)</option>
+                        </select>
+                      </div>
+
+                      <div>
+                        <div className="flex justify-between items-center mb-1">
+                          <label className="text-[11px] text-slate-700 font-bold uppercase tracking-wider">
+                            Thermal Darkness / Density
+                          </label>
+                          <span className="text-xs font-mono font-bold text-purple-600">{labelPrinterDraft.darkness} / 15</span>
+                        </div>
+                        <input
+                          type="range"
+                          min={1}
+                          max={15}
+                          value={labelPrinterDraft.darkness}
+                          onChange={(e) =>
+                            setLabelPrinterDraft({ ...labelPrinterDraft, darkness: parseInt(e.target.value, 10) || 10 })
+                          }
+                          className="w-full accent-purple-600 bg-slate-200 cursor-pointer"
+                        />
+                      </div>
+                    </div>
+
+                    {labelPrinterDraft.connectionType === "tcp" && (
+                      <div className="grid grid-cols-2 gap-3 p-3 bg-purple-50/60 rounded-xl border border-purple-200">
+                        <div>
+                          <label className="text-[10px] font-bold text-purple-900 block mb-1">Printer IP Address</label>
+                          <input
+                            type="text"
+                            value={labelPrinterDraft.networkIp}
+                            onChange={(e) => setLabelPrinterDraft({ ...labelPrinterDraft, networkIp: e.target.value })}
+                            className="w-full bg-white border border-purple-300 rounded-lg px-2.5 py-1 text-xs font-mono font-bold"
+                            placeholder="192.168.1.200"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[10px] font-bold text-purple-900 block mb-1">Raw Port</label>
+                          <input
+                            type="text"
+                            value={labelPrinterDraft.networkPort}
+                            onChange={(e) => setLabelPrinterDraft({ ...labelPrinterDraft, networkPort: e.target.value })}
+                            className="w-full bg-white border border-purple-300 rounded-lg px-2.5 py-1 text-xs font-mono font-bold"
+                            placeholder="9100"
+                          />
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-200">
+                      <button
+                        type="button"
+                        onClick={handleTestPrintSuperAdminLabel}
+                        className="bg-slate-200 hover:bg-slate-300 text-slate-800 font-bold text-xs py-2 px-4 rounded-xl transition-all flex items-center gap-1.5 cursor-pointer uppercase tracking-wider font-mono"
+                      >
+                        <Zap className="w-3.5 h-3.5 text-purple-600" />
+                        Print Alignment Test Label
+                      </button>
+
+                      <button
+                        type="submit"
+                        className="bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs py-2 px-5 rounded-xl shadow-md transition-all flex items-center gap-2 cursor-pointer uppercase tracking-wider"
+                      >
+                        <Save className="w-4 h-4 shrink-0" />
+                        Save Label Hardware Settings
+                      </button>
+                    </div>
+                  </form>
                 </div>
               )}
 
@@ -7416,6 +7949,103 @@ export default function SuperAdminConsole({
                     </button>
                   </div>
 
+                  {/* RECEIPT FONT STYLE & SIZE (BOLD PRINT OUTPUT) */}
+                  {(() => {
+                    const receiptTypo = getReceiptTypographySpec(
+                      thermalPrinterDraft.layoutProfile,
+                      thermalPrinterDraft.receiptFontStyle,
+                      thermalPrinterDraft.receiptFontSize
+                    );
+                    return (
+                      <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-5 space-y-4">
+                        <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                          <div>
+                            <h4 className="text-xs font-black uppercase text-slate-900 tracking-wider flex items-center gap-1.5">
+                              <Receipt className="w-4 h-4 text-blue-600" />
+                              3. Receipt Font Style &amp; Font Size (Bold Receipt Output)
+                            </h4>
+                            <p className="text-[11px] text-slate-500">
+                              Controls thermal &amp; A4 receipt font style and scale. All receipt text always prints bold for clear thermal legibility.
+                            </p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              onUpdatePrinterConfig?.({
+                                receiptFontStyle: thermalPrinterDraft.receiptFontStyle || "courier",
+                                receiptFontSize: thermalPrinterDraft.receiptFontSize || "medium"
+                              });
+                              triggerNotification("Receipt font style and size saved!", "success");
+                            }}
+                            className="px-3.5 py-1.5 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-xl flex items-center gap-1.5 cursor-pointer shrink-0"
+                          >
+                            <Save className="w-3.5 h-3.5" />
+                            <span>Save Receipt Font</span>
+                          </button>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                          <div>
+                            <label className="block text-[10px] text-slate-600 font-bold uppercase tracking-wider mb-1">
+                              Receipt Font Style
+                            </label>
+                            <select
+                              value={thermalPrinterDraft.receiptFontStyle || "courier"}
+                              onChange={(e) => {
+                                const nextStyle = e.target.value as ReceiptFontStyle;
+                                setThermalPrinterDraft({ ...thermalPrinterDraft, receiptFontStyle: nextStyle });
+                                onUpdatePrinterConfig?.({ receiptFontStyle: nextStyle });
+                              }}
+                              className="w-full bg-white border border-slate-300 rounded-xl py-2 px-3 text-xs font-bold text-slate-900 outline-none focus:border-purple-600 cursor-pointer"
+                            >
+                              {RECEIPT_FONT_STYLE_OPTIONS.map((opt) => (
+                                <option key={opt.id} value={opt.id}>
+                                  {opt.label} — {opt.description}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                          <div>
+                            <label className="block text-[10px] text-slate-600 font-bold uppercase tracking-wider mb-1">
+                              Receipt Font Size
+                            </label>
+                            <div className="grid grid-cols-4 gap-1.5">
+                              {RECEIPT_FONT_SIZE_OPTIONS.map((sz) => (
+                                <button
+                                  key={sz.id}
+                                  type="button"
+                                  onClick={() => {
+                                    setThermalPrinterDraft({ ...thermalPrinterDraft, receiptFontSize: sz.id });
+                                    onUpdatePrinterConfig?.({ receiptFontSize: sz.id });
+                                  }}
+                                  className={`py-2 px-1.5 rounded-xl border font-bold text-[11px] transition-all cursor-pointer ${
+                                    (thermalPrinterDraft.receiptFontSize || "medium") === sz.id
+                                      ? "bg-slate-900 text-white border-slate-900 shadow-sm"
+                                      : "bg-white text-slate-700 border-slate-300 hover:bg-slate-100"
+                                  }`}
+                                >
+                                  {sz.shortLabel}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+
+                        <div
+                          className="bg-slate-50 border border-dashed border-slate-300 rounded-xl px-4 py-3 text-slate-950 font-bold flex flex-wrap items-center justify-between gap-2"
+                          style={{
+                            fontFamily: receiptTypo.cssFamily,
+                            fontSize: receiptTypo.previewFontSizeCss,
+                            fontWeight: 700
+                          }}
+                        >
+                          <span className="font-black uppercase">{selectedTenant?.name || "CLIENT STORE"} • BOLD RECEIPT</span>
+                          <span className="font-bold">Invoice Total: ₹330.00</span>
+                        </div>
+                      </div>
+                    );
+                  })()}
+
                 </div>
 
                 {/* Right Column: Live Interactive Preview Simulator (5 Cols) */}
@@ -7433,7 +8063,7 @@ export default function SuperAdminConsole({
                   </div>
 
                   {/* Simulated Terminal Window Rendered in Client's Chosen Typography */}
-                  <div className={`bg-slate-950 rounded-2xl border border-slate-800 p-4 space-y-4 tenant-font-${typographyFontFamily.toLowerCase().replace(/\s+/g, '-')} tenant-scale-${typographyFontSizeScale}`}>
+                  <div className={`typography-preview-box bg-slate-950 rounded-2xl border border-slate-800 p-4 space-y-4 tenant-font-${typographyFontFamily.toLowerCase().replace(/\s+/g, '-')} tenant-scale-${typographyFontSizeScale}`}>
                     
                     {/* Simulated Header */}
                     <div className="flex items-center justify-between pb-3 border-b border-slate-800">
@@ -8801,35 +9431,51 @@ export default function SuperAdminConsole({
               </p>
             </div>
 
-            <div className="p-6 space-y-6 overflow-y-auto text-xs" id="superadmin-invoice-print">
+            <div
+              className="p-6 space-y-6 overflow-y-auto text-xs font-bold text-slate-950"
+              id="superadmin-invoice-print"
+              style={{
+                fontFamily: getReceiptTypographySpec(
+                  selectedPrinterLayout,
+                  thermalPrinterDraft.receiptFontStyle,
+                  thermalPrinterDraft.receiptFontSize
+                ).cssFamily,
+                fontSize: getReceiptTypographySpec(
+                  selectedPrinterLayout,
+                  thermalPrinterDraft.receiptFontStyle,
+                  thermalPrinterDraft.receiptFontSize
+                ).previewFontSizeCss,
+                fontWeight: 700
+              }}
+            >
               
               {/* Header Branding */}
               <div className="flex justify-between items-start">
                 <div className="space-y-1">
-                  <h4 className="text-lg font-black text-blue-600 tracking-tight font-sans">EXPERT POS SAAS INC.</h4>
-                  <p className="text-[9px] text-slate-400 font-semibold uppercase tracking-widest">Sovereign Core Infrastructure</p>
+                  <h4 className="text-lg font-black text-blue-700 tracking-tight">EXPERT POS SAAS INC.</h4>
+                  <p className="text-[9px] text-slate-950 font-bold uppercase tracking-widest">Sovereign Core Infrastructure</p>
                 </div>
                 <div className="text-right space-y-0.5">
-                  <p className="font-bold text-slate-900">INVOICE ID</p>
-                  <p className="font-mono text-blue-600 font-extrabold text-sm">{selectedInvoice.id}</p>
+                  <p className="font-bold text-slate-950">INVOICE ID</p>
+                  <p className="font-bold text-blue-700 text-sm">{selectedInvoice.id}</p>
                 </div>
               </div>
 
               {/* Bill To Info */}
-              <div className="grid grid-cols-2 gap-4 bg-slate-50 p-4 rounded-xl border border-slate-100">
+              <div className="grid grid-cols-2 gap-4 bg-slate-50 p-4 rounded-xl border border-slate-200 text-slate-950 font-bold">
                 <div className="space-y-1">
-                  <p className="text-[9px] text-slate-400 font-bold uppercase tracking-widest">Billed To</p>
-                  <p className="font-extrabold text-slate-800">{selectedInvoice.tenantName}</p>
-                  <p className="text-slate-500 font-medium">Tenant ID: {selectedInvoice.tenantId}</p>
+                  <p className="text-[9px] text-slate-950 font-bold uppercase tracking-widest">Billed To</p>
+                  <p className="font-black text-slate-950">{selectedInvoice.tenantName}</p>
+                  <p className="text-slate-950 font-bold">Tenant ID: {selectedInvoice.tenantId}</p>
                 </div>
                 <div className="space-y-1 text-right">
-                  <p className="text-[9px] text-slate-400 font-bold uppercase tracking-widest">Dates & Parameters</p>
-                  <p className="text-slate-600"><span className="font-semibold">Issued:</span> <span className="font-mono">{selectedInvoice.issueDate}</span></p>
-                  <p className="text-slate-600"><span className="font-semibold">Due:</span> <span className="font-mono">{selectedInvoice.dueDate}</span></p>
+                  <p className="text-[9px] text-slate-950 font-bold uppercase tracking-widest">Dates & Parameters</p>
+                  <p className="text-slate-950 font-bold"><span className="font-bold">Issued:</span> <span>{selectedInvoice.issueDate}</span></p>
+                  <p className="text-slate-950 font-bold"><span className="font-bold">Due:</span> <span>{selectedInvoice.dueDate}</span></p>
                   {selectedInvoice.paymentMethod && (
-                    <p className="text-slate-600">
-                      <span className="font-semibold">Method:</span>{" "}
-                      <span className="font-bold text-blue-600 bg-blue-50 border border-blue-100/50 rounded px-1.5 py-0.5 text-[9px] font-mono inline-block">
+                    <p className="text-slate-950 font-bold">
+                      <span className="font-bold">Method:</span>{" "}
+                      <span className="font-bold text-blue-700 bg-blue-50 border border-blue-200 rounded px-1.5 py-0.5 text-[9px] inline-block">
                         {selectedInvoice.paymentMethod}
                       </span>
                     </p>
@@ -8838,38 +9484,38 @@ export default function SuperAdminConsole({
               </div>
 
               {/* Items List */}
-              <div className="space-y-2">
-                <p className="text-[9px] text-slate-400 font-bold uppercase tracking-widest border-b border-slate-100 pb-1">Itemized Slices & Fees</p>
-                <div className="divide-y divide-slate-100">
+              <div className="space-y-2 text-slate-950 font-bold">
+                <p className="text-[9px] text-slate-950 font-bold uppercase tracking-widest border-b border-slate-200 pb-1">Itemized Slices & Fees</p>
+                <div className="divide-y divide-slate-200">
                   {selectedInvoice.items.map((item, index) => (
                     <div key={index} className="py-2.5 flex justify-between items-center">
-                      <span className="font-bold text-slate-700">{item.description}</span>
-                      <span className="font-mono font-bold text-slate-800">₹{item.amount.toLocaleString()}</span>
+                      <span className="font-bold text-slate-950">{item.description}</span>
+                      <span className="font-bold text-slate-950">₹{item.amount.toLocaleString()}</span>
                     </div>
                   ))}
                 </div>
               </div>
 
               {/* Calculations Block */}
-              <div className="border-t border-slate-100 pt-4 space-y-1.5 text-right font-medium text-slate-600">
+              <div className="border-t border-slate-200 pt-4 space-y-1.5 text-right font-bold text-slate-950">
                 <div className="flex justify-between">
                   <span>Taxable Subtotal:</span>
-                  <span className="font-mono">₹{selectedInvoice.amount.toLocaleString()}</span>
+                  <span>₹{selectedInvoice.amount.toLocaleString()}</span>
                 </div>
-                <div className="flex justify-between text-slate-500">
+                <div className="flex justify-between text-slate-950">
                   <span>Integrated GST (18% Total):</span>
-                  <span className="font-mono">₹{selectedInvoice.gst.toLocaleString()}</span>
+                  <span>₹{selectedInvoice.gst.toLocaleString()}</span>
                 </div>
-                <div className="flex justify-between text-base font-black text-slate-900 border-t border-slate-100 pt-2.5">
+                <div className="flex justify-between text-base font-black text-slate-950 border-t border-slate-200 pt-2.5">
                   <span>Total Due (INR):</span>
-                  <span className="font-mono text-blue-600">₹{selectedInvoice.totalAmount.toLocaleString()}</span>
+                  <span className="text-blue-700">₹{selectedInvoice.totalAmount.toLocaleString()}</span>
                 </div>
               </div>
 
               {/* Corporate Compliance Stamp */}
-              <div className="text-center p-3 bg-blue-50/50 rounded-xl border border-blue-100 text-[10px] text-blue-800 space-y-1">
-                <p className="font-extrabold uppercase tracking-widest">Sovereign Compliance Assurance</p>
-                <p className="text-slate-500">This receipt has been cryptographically published and verified to the client sandbox isolate ledger.</p>
+              <div className="text-center p-3 bg-blue-50/50 rounded-xl border border-blue-200 text-[10px] text-slate-950 font-bold space-y-1">
+                <p className="font-black uppercase tracking-widest">Sovereign Compliance Assurance</p>
+                <p className="font-bold text-slate-950">This receipt has been cryptographically published and verified to the client sandbox isolate ledger.</p>
               </div>
 
             </div>
@@ -8883,7 +9529,12 @@ export default function SuperAdminConsole({
               </button>
               <button
                 onClick={() => {
-                  const res = printElementDirect("superadmin-invoice-print", selectedPrinterLayout);
+                  const res = printElementDirect(
+                    "superadmin-invoice-print",
+                    selectedPrinterLayout,
+                    thermalPrinterDraft.receiptFontStyle,
+                    thermalPrinterDraft.receiptFontSize
+                  );
                   if (res.ok) {
                     triggerNotification(`Invoice ${selectedInvoice.id} sent to printer dialog.`, "success");
                   } else {
@@ -9868,7 +10519,7 @@ export default function SuperAdminConsole({
                 </div>
 
                 {/* Live Specimen Preview */}
-                <div className={`p-4 bg-slate-900 text-white rounded-2xl border border-slate-800 space-y-2 tenant-font-${typographyFontFamily.toLowerCase().replace(/\s+/g, '-')} tenant-scale-${typographyFontSizeScale}`}>
+                <div className={`typography-preview-box p-4 bg-slate-900 text-white rounded-2xl border border-slate-800 space-y-2 tenant-font-${typographyFontFamily.toLowerCase().replace(/\s+/g, '-')} tenant-scale-${typographyFontSizeScale}`}>
                   <div className="flex justify-between items-center text-xs">
                     <span className="font-extrabold text-purple-300 uppercase">Live Font Simulation</span>
                     <span className="text-[10px] font-mono text-slate-400">{typographyFontFamily} • {typographyFontSizeScale}</span>

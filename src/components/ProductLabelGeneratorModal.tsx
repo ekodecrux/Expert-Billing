@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import {
   Printer,
   Tag,
@@ -21,9 +21,11 @@ import {
   Sparkles,
   QrCode,
   HelpCircle,
-  HardDrive
+  HardDrive,
+  Save,
+  Lock
 } from "lucide-react";
-import { Product, saveElementAsPDF } from "../types";
+import { Product, LabelPrinterConfig, saveElementAsPDF } from "../types";
 import {
   LABEL_SIZE_PRESETS,
   LabelSizePresetId,
@@ -47,7 +49,34 @@ export interface ProductLabelGeneratorModalProps {
   initialSelectedProduct?: Product | null;
   storeName?: string;
   currencySymbol?: string;
+  canConfigureLabelPrinter?: boolean;
+  labelPrinterConfig?: LabelPrinterConfig;
+  onUpdateLabelPrinterConfig?: (config: LabelPrinterConfig) => void;
 }
+
+const normalizePrinterModel = (raw?: string): LabelPrinterModel => {
+  if (!raw) return "zebra-zpl";
+  if (raw === "tsc_te244") return "tsc-tspl";
+  const valid: LabelPrinterModel[] = [
+    "zebra-zpl",
+    "tsc-tspl",
+    "tvs-lp46",
+    "xprinter-xp",
+    "epson-tm",
+    "citizen-cl",
+    "rollo-usb",
+    "dymo-lw",
+    "laser-a4"
+  ];
+  return (valid.includes(raw as LabelPrinterModel) ? raw : "zebra-zpl") as LabelPrinterModel;
+};
+
+const normalizePresetId = (raw?: string): LabelSizePresetId => {
+  if (!raw) return "roll-50x25";
+  if (raw === "50x25_1col") return "roll-50x25";
+  const found = LABEL_SIZE_PRESETS.some((p) => p.id === raw);
+  return (found ? raw : "roll-50x25") as LabelSizePresetId;
+};
 
 export const ProductLabelGeneratorModal: React.FC<ProductLabelGeneratorModalProps> = ({
   isOpen,
@@ -55,14 +84,13 @@ export const ProductLabelGeneratorModal: React.FC<ProductLabelGeneratorModalProp
   products,
   initialSelectedProduct = null,
   storeName = "EXPERT POS HYPERMARKETS",
-  currencySymbol = "₹"
+  currencySymbol = "₹",
+  canConfigureLabelPrinter = false,
+  labelPrinterConfig,
+  onUpdateLabelPrinterConfig
 }) => {
-  if (!isOpen) return null;
-
   // Mode: "single" | "batch"
-  const [mode, setMode] = useState<"single" | "batch">(
-    initialSelectedProduct ? "single" : "single"
-  );
+  const [mode, setMode] = useState<"single" | "batch">("single");
 
   // Single Product Selection
   const [selectedProductId, setSelectedProductId] = useState<string>(
@@ -78,15 +106,21 @@ export const ProductLabelGeneratorModal: React.FC<ProductLabelGeneratorModalProp
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [categoryFilter, setCategoryFilter] = useState<string>("ALL");
 
-  // Printer Hardware & Profile
-  const [printerModel, setPrinterModel] = useState<LabelPrinterModel>("zebra-zpl");
-  const [printerDpi, setPrinterDpi] = useState<203 | 300 | 600>(203);
+  // Printer Hardware & Profile (synced with Admin / Super Admin defaults)
+  const [printerModel, setPrinterModel] = useState<LabelPrinterModel>(() =>
+    normalizePrinterModel(labelPrinterConfig?.printerModel)
+  );
+  const [printerDpi, setPrinterDpi] = useState<203 | 300 | 600>(
+    ([203, 300, 600].includes(Number(labelPrinterConfig?.dpi)) ? Number(labelPrinterConfig?.dpi) : 203) as 203 | 300 | 600
+  );
 
   // Selected Preset
-  const [selectedPresetId, setSelectedPresetId] = useState<LabelSizePresetId>("roll-50x25");
+  const [selectedPresetId, setSelectedPresetId] = useState<LabelSizePresetId>(() =>
+    normalizePresetId(labelPrinterConfig?.presetId)
+  );
   const [customWidthMm, setCustomWidthMm] = useState<number>(50);
   const [customHeightMm, setCustomHeightMm] = useState<number>(25);
-  const [customGapMm, setCustomGapMm] = useState<number>(3);
+  const [customGapMm, setCustomGapMm] = useState<number>(labelPrinterConfig?.gapMm || 3);
 
   // Copies per item
   const [copiesPerProduct, setCopiesPerProduct] = useState<number>(
@@ -98,7 +132,8 @@ export const ProductLabelGeneratorModal: React.FC<ProductLabelGeneratorModalProp
     ...DEFAULT_LABEL_DESIGN_OPTIONS,
     storeName: storeName || "EXPERT POS HYPERMARKETS",
     currencySymbol: currencySymbol || "₹",
-    dpi: 203
+    dpi: ([203, 300, 600].includes(Number(labelPrinterConfig?.dpi)) ? Number(labelPrinterConfig?.dpi) : 203) as 203 | 300 | 600,
+    darkness: labelPrinterConfig?.darkness || DEFAULT_LABEL_DESIGN_OPTIONS.darkness
   });
 
   // Active view tab in right panel: "preview" | "raw-code" | "hardware-guide"
@@ -114,6 +149,35 @@ export const ProductLabelGeneratorModal: React.FC<ProductLabelGeneratorModalProp
     setFeedbackMsg(text);
     setTimeout(() => setFeedbackMsg(null), 3200);
   };
+
+  useEffect(() => {
+    if (!isOpen) return;
+    if (initialSelectedProduct) {
+      setSelectedProductId(initialSelectedProduct.id);
+      setMode("single");
+    }
+    if (labelPrinterConfig) {
+      const nextModel = normalizePrinterModel(labelPrinterConfig.printerModel);
+      const nextDpi = ([203, 300, 600].includes(Number(labelPrinterConfig.dpi)) ? Number(labelPrinterConfig.dpi) : 203) as 203 | 300 | 600;
+      const nextPreset = normalizePresetId(labelPrinterConfig.presetId);
+      setPrinterModel(nextModel);
+      setPrinterDpi(nextDpi);
+      setSelectedPresetId(nextPreset);
+      if (labelPrinterConfig.gapMm) setCustomGapMm(labelPrinterConfig.gapMm);
+      setDesignOptions((prev) => ({
+        ...prev,
+        storeName: storeName || prev.storeName,
+        currencySymbol: currencySymbol || prev.currencySymbol,
+        dpi: nextDpi,
+        darkness: labelPrinterConfig.darkness || prev.darkness
+      }));
+      if (nextModel === "zebra-zpl" || nextModel === "citizen-cl") setRawProtocol("ZPL");
+      if (nextModel === "tsc-tspl" || nextModel === "tvs-lp46" || nextModel === "xprinter-xp") setRawProtocol("TSPL");
+    }
+    if (!canConfigureLabelPrinter) {
+      setActiveRightTab("preview");
+    }
+  }, [isOpen, initialSelectedProduct, labelPrinterConfig, storeName, currencySymbol, canConfigureLabelPrinter]);
 
   // Categories list
   const categories = useMemo(() => {
@@ -391,6 +455,33 @@ export const ProductLabelGeneratorModal: React.FC<ProductLabelGeneratorModalProp
     `;
   }
 
+  if (!isOpen) return null;
+
+  const handleSaveAsDefaultLabelPrinter = () => {
+    if (!canConfigureLabelPrinter || !onUpdateLabelPrinterConfig) return;
+    const baseCfg: LabelPrinterConfig = labelPrinterConfig || {
+      printerModel,
+      printerName: "Label Printer",
+      presetId: selectedPresetId,
+      connectionType: "browser",
+      networkIp: "192.168.1.200",
+      networkPort: "9100",
+      dpi: printerDpi,
+      darkness: designOptions.darkness,
+      gapMm: customGapMm,
+      sensorType: "gap"
+    };
+    onUpdateLabelPrinterConfig({
+      ...baseCfg,
+      printerModel,
+      presetId: selectedPresetId,
+      dpi: printerDpi,
+      darkness: designOptions.darkness,
+      gapMm: customGapMm
+    });
+    showFeedback("Label printer configuration saved as store default!");
+  };
+
   return (
     <div className="fixed inset-0 z-50 bg-slate-950/75 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4 animate-fadeIn font-sans">
       <div className="bg-white rounded-2xl sm:rounded-3xl shadow-2xl border border-slate-200 w-full max-w-7xl max-h-[94vh] flex flex-col overflow-hidden">
@@ -417,15 +508,17 @@ export const ProductLabelGeneratorModal: React.FC<ProductLabelGeneratorModalProp
           </div>
 
           <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={handlePrintTestLabel}
-              className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-purple-300 text-xs font-bold rounded-lg border border-purple-500/30 transition-colors cursor-pointer"
-              title="Prints a test calibration label to check alignment and darkness"
-            >
-              <Zap className="w-3.5 h-3.5 text-purple-400" />
-              Calibration Test Print
-            </button>
+            {canConfigureLabelPrinter && (
+              <button
+                type="button"
+                onClick={handlePrintTestLabel}
+                className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-purple-300 text-xs font-bold rounded-lg border border-purple-500/30 transition-colors cursor-pointer"
+                title="Prints a test calibration label to check alignment and darkness"
+              >
+                <Zap className="w-3.5 h-3.5 text-purple-400" />
+                Calibration Test Print
+              </button>
+            )}
             <button
               onClick={onClose}
               className="p-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
@@ -442,16 +535,30 @@ export const ProductLabelGeneratorModal: React.FC<ProductLabelGeneratorModalProp
           {/* LEFT CONTROLS (5 cols) */}
           <div className="col-span-12 lg:col-span-5 border-r border-slate-200 bg-slate-50/70 p-4 sm:p-5 overflow-y-auto space-y-4">
             
-            {/* Step 1: Printer Hardware & Dimension Preset */}
+            {/* Step 1: Printer Hardware & Dimension Preset (Exclusively Admin / Super Admin) */}
+            {canConfigureLabelPrinter ? (
             <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-2xs space-y-3">
-              <div className="flex justify-between items-center">
+              <div className="flex justify-between items-center gap-2">
                 <label className="text-[11px] font-black text-slate-700 uppercase tracking-wider font-mono flex items-center gap-1.5">
                   <HardDrive className="w-3.5 h-3.5 text-purple-600" />
                   1. Label Printer &amp; Roll Preset
                 </label>
-                <span className="text-[10px] font-mono font-bold text-purple-600 bg-purple-50 px-2 py-0.5 rounded border border-purple-200">
-                  {currentDimension.widthMm} × {currentDimension.heightMm} mm
-                </span>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[10px] font-mono font-bold text-purple-600 bg-purple-50 px-2 py-0.5 rounded border border-purple-200">
+                    {currentDimension.widthMm} × {currentDimension.heightMm} mm
+                  </span>
+                  {onUpdateLabelPrinterConfig && (
+                    <button
+                      type="button"
+                      onClick={handleSaveAsDefaultLabelPrinter}
+                      className="text-[10px] font-bold bg-purple-600 hover:bg-purple-700 text-white px-2 py-0.5 rounded inline-flex items-center gap-1 cursor-pointer"
+                      title="Save as store default label printer settings"
+                    >
+                      <Save className="w-3 h-3" />
+                      Save
+                    </button>
+                  )}
+                </div>
               </div>
 
               {/* Hardware Profile Picker */}
@@ -569,6 +676,24 @@ export const ProductLabelGeneratorModal: React.FC<ProductLabelGeneratorModalProp
                 </div>
               )}
             </div>
+            ) : (
+            <div className="bg-slate-100 p-3.5 rounded-xl border border-slate-200 flex items-center justify-between gap-2 text-xs">
+              <div className="flex items-center gap-2 min-w-0">
+                <Lock className="w-3.5 h-3.5 text-slate-500 shrink-0" />
+                <div className="min-w-0">
+                  <p className="text-[10px] font-black uppercase tracking-wider text-slate-600 font-mono">
+                    Configured Label Printer
+                  </p>
+                  <p className="text-xs font-bold text-slate-800 truncate">
+                    {labelPrinterConfig?.printerName || printerModel.toUpperCase()} • {currentDimension.name} ({printerDpi} DPI)
+                  </p>
+                </div>
+              </div>
+              <span className="text-[9px] font-bold text-slate-500 bg-white px-2 py-1 rounded border border-slate-200 shrink-0">
+                Admin Managed
+              </span>
+            </div>
+            )}
 
             {/* Step 2: Selection Mode & Products */}
             <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-2xs space-y-3">
@@ -849,21 +974,23 @@ export const ProductLabelGeneratorModal: React.FC<ProductLabelGeneratorModalProp
                 </label>
               </div>
 
-              {/* Darkness / Density Slider */}
-              <div className="pt-2 border-t border-slate-100">
-                <div className="flex justify-between items-center text-[10px] font-bold text-slate-600 mb-1">
-                  <span>Thermal Print Density / Darkness</span>
-                  <span className="font-mono text-purple-600">{designOptions.darkness} / 15</span>
+              {/* Darkness / Density Slider (Admin / Super Admin Only) */}
+              {canConfigureLabelPrinter && (
+                <div className="pt-2 border-t border-slate-100">
+                  <div className="flex justify-between items-center text-[10px] font-bold text-slate-600 mb-1">
+                    <span>Thermal Print Density / Darkness</span>
+                    <span className="font-mono text-purple-600">{designOptions.darkness} / 15</span>
+                  </div>
+                  <input
+                    type="range"
+                    min={1}
+                    max={15}
+                    value={designOptions.darkness}
+                    onChange={(e) => setDesignOptions({ ...designOptions, darkness: parseInt(e.target.value) || 10 })}
+                    className="w-full accent-purple-600 cursor-pointer"
+                  />
                 </div>
-                <input
-                  type="range"
-                  min={1}
-                  max={15}
-                  value={designOptions.darkness}
-                  onChange={(e) => setDesignOptions({ ...designOptions, darkness: parseInt(e.target.value) || 10 })}
-                  className="w-full accent-purple-600 cursor-pointer"
-                />
-              </div>
+              )}
 
               {/* Promotional Ribbon Text */}
               <div>
@@ -897,26 +1024,30 @@ export const ProductLabelGeneratorModal: React.FC<ProductLabelGeneratorModalProp
                   <Eye className="w-3.5 h-3.5 text-purple-600" />
                   Live Label Preview
                 </button>
-                <button
-                  type="button"
-                  onClick={() => setActiveRightTab("raw-code")}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
-                    activeRightTab === "raw-code" ? "bg-white text-slate-900 shadow-2xs" : "text-slate-600 hover:text-slate-900"
-                  }`}
-                >
-                  <FileCode className="w-3.5 h-3.5 text-purple-600" />
-                  Raw Printer Commands
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setActiveRightTab("hardware-guide")}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
-                    activeRightTab === "hardware-guide" ? "bg-white text-slate-900 shadow-2xs" : "text-slate-600 hover:text-slate-900"
-                  }`}
-                >
-                  <HelpCircle className="w-3.5 h-3.5 text-purple-600" />
-                  Hardware Guide
-                </button>
+                {canConfigureLabelPrinter && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => setActiveRightTab("raw-code")}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                        activeRightTab === "raw-code" ? "bg-white text-slate-900 shadow-2xs" : "text-slate-600 hover:text-slate-900"
+                      }`}
+                    >
+                      <FileCode className="w-3.5 h-3.5 text-purple-600" />
+                      Raw Printer Commands
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setActiveRightTab("hardware-guide")}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                        activeRightTab === "hardware-guide" ? "bg-white text-slate-900 shadow-2xs" : "text-slate-600 hover:text-slate-900"
+                      }`}
+                    >
+                      <HelpCircle className="w-3.5 h-3.5 text-purple-600" />
+                      Hardware Guide
+                    </button>
+                  </>
+                )}
               </div>
 
               {feedbackMsg && (
@@ -1178,14 +1309,16 @@ export const ProductLabelGeneratorModal: React.FC<ProductLabelGeneratorModalProp
                   <Copy className="w-3.5 h-3.5" />
                   Copy Barcode
                 </button>
-                <button
-                  type="button"
-                  onClick={handleDownloadRawFile}
-                  className="px-3 py-2 bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer shadow-2xs"
-                >
-                  <FileCode className="w-3.5 h-3.5 text-purple-600" />
-                  Export {rawProtocol} File
-                </button>
+                {canConfigureLabelPrinter && (
+                  <button
+                    type="button"
+                    onClick={handleDownloadRawFile}
+                    className="px-3 py-2 bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer shadow-2xs"
+                  >
+                    <FileCode className="w-3.5 h-3.5 text-purple-600" />
+                    Export {rawProtocol} File
+                  </button>
+                )}
               </div>
 
               <div className="flex items-center gap-2">

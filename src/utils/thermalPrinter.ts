@@ -11,6 +11,125 @@ export type ThermalConnectionMode =
   | "webserial"
   | "network";
 
+export type ReceiptFontStyle =
+  | "courier"
+  | "jetbrains"
+  | "lucida"
+  | "inter"
+  | "roboto"
+  | "system"
+  | "arial"
+  | "georgia";
+
+export type ReceiptFontSize = "small" | "medium" | "large" | "xlarge";
+
+export const RECEIPT_FONT_STYLE_OPTIONS: {
+  id: ReceiptFontStyle;
+  label: string;
+  description: string;
+  cssFamily: string;
+}[] = [
+  {
+    id: "courier",
+    label: "Courier Thermal Mono",
+    description: "Classic crisp POS monospace",
+    cssFamily: '"Courier New", Courier, monospace'
+  },
+  {
+    id: "jetbrains",
+    label: "JetBrains Mono",
+    description: "Modern sharp monospace",
+    cssFamily: '"JetBrains Mono", "Courier New", monospace'
+  },
+  {
+    id: "lucida",
+    label: "Lucida Console",
+    description: "Wide high-contrast mono",
+    cssFamily: '"Lucida Console", Monaco, monospace'
+  },
+  {
+    id: "inter",
+    label: "Inter Modern Sans",
+    description: "Clean modern POS sans-serif",
+    cssFamily: '"Inter", system-ui, -apple-system, sans-serif'
+  },
+  {
+    id: "roboto",
+    label: "Roboto Sans",
+    description: "Compact high-readability sans",
+    cssFamily: '"Roboto", system-ui, -apple-system, sans-serif'
+  },
+  {
+    id: "arial",
+    label: "Arial / Helvetica",
+    description: "Bold universal retail sans",
+    cssFamily: 'Arial, Helvetica, sans-serif'
+  },
+  {
+    id: "system",
+    label: "System UI Sans",
+    description: "Native OS driver font",
+    cssFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif'
+  },
+  {
+    id: "georgia",
+    label: "Georgia Serif",
+    description: "Boutique heritage invoice",
+    cssFamily: 'Georgia, "Times New Roman", serif'
+  }
+];
+
+export const RECEIPT_FONT_SIZE_OPTIONS: {
+  id: ReceiptFontSize;
+  label: string;
+  shortLabel: string;
+  scaleFactor: number;
+  previewPx: number;
+  description: string;
+}[] = [
+  { id: "small", label: "Small (Compact)", shortLabel: "S", scaleFactor: 0.88, previewPx: 10, description: "Compact spacing for long item lists" },
+  { id: "medium", label: "Medium (Standard)", shortLabel: "M", scaleFactor: 1.0, previewPx: 11, description: "Balanced default receipt readability" },
+  { id: "large", label: "Large (High Clarity)", shortLabel: "L", scaleFactor: 1.15, previewPx: 12.5, description: "Larger bold text for easier reading" },
+  { id: "xlarge", label: "Extra Large", shortLabel: "XL", scaleFactor: 1.3, previewPx: 14, description: "Maximum print size for customer visibility" }
+];
+
+export function getReceiptTypographySpec(
+  layoutProfile: PrinterLayoutProfile = "thermal-80mm",
+  fontStyle?: ReceiptFontStyle,
+  fontSize?: ReceiptFontSize
+): {
+  fontStyle: ReceiptFontStyle;
+  fontSize: ReceiptFontSize;
+  cssFamily: string;
+  printFontSizeCss: string;
+  previewFontSizeCss: string;
+  scaleFactor: number;
+} {
+  const validStyle = RECEIPT_FONT_STYLE_OPTIONS.find((f) => f.id === fontStyle);
+  const resolvedStyle: ReceiptFontStyle =
+    validStyle?.id || (layoutProfile === "standard-a4" ? "system" : "courier");
+  const cssFamily =
+    RECEIPT_FONT_STYLE_OPTIONS.find((f) => f.id === resolvedStyle)?.cssFamily ||
+    '"Courier New", Courier, monospace';
+
+  const sizeObj =
+    RECEIPT_FONT_SIZE_OPTIONS.find((s) => s.id === fontSize) ||
+    RECEIPT_FONT_SIZE_OPTIONS[1];
+
+  const baseSpec = THERMAL_LAYOUT_SPECS[layoutProfile] || THERMAL_LAYOUT_SPECS["thermal-80mm"];
+  const basePrintPx = parseFloat(baseSpec.fontSizeCss) || 9.2;
+  const computedPrintPx = Number((basePrintPx * sizeObj.scaleFactor).toFixed(2));
+
+  return {
+    fontStyle: resolvedStyle,
+    fontSize: sizeObj.id,
+    cssFamily,
+    printFontSizeCss: `${computedPrintPx}px`,
+    previewFontSizeCss: `${sizeObj.previewPx}px`,
+    scaleFactor: sizeObj.scaleFactor
+  };
+}
+
 export interface ThermalPrinterConfig {
   layoutProfile: PrinterLayoutProfile;
   connectionMode: ThermalConnectionMode;
@@ -20,6 +139,8 @@ export interface ThermalPrinterConfig {
   autoCut: boolean;
   openCashDrawer: boolean;
   pairedDeviceLabel?: string;
+  receiptFontStyle?: ReceiptFontStyle;
+  receiptFontSize?: ReceiptFontSize;
 }
 
 export const THERMAL_LAYOUT_SPECS: Record<
@@ -102,7 +223,9 @@ export const DEFAULT_THERMAL_PRINTER_CONFIG: ThermalPrinterConfig = {
   networkIp: "192.168.1.200",
   networkPort: 9100,
   autoCut: true,
-  openCashDrawer: false
+  openCashDrawer: false,
+  receiptFontStyle: "courier",
+  receiptFontSize: "medium"
 };
 
 export function loadThermalPrinterConfig(): ThermalPrinterConfig {
@@ -118,7 +241,13 @@ export function loadThermalPrinterConfig(): ThermalPrinterConfig {
         : "thermal-80mm",
       connectionMode: ["system", "webusb", "webserial", "network"].includes(parsed?.connectionMode)
         ? parsed.connectionMode
-        : "system"
+        : "system",
+      receiptFontStyle: RECEIPT_FONT_STYLE_OPTIONS.some((f) => f.id === parsed?.receiptFontStyle)
+        ? (parsed.receiptFontStyle as ReceiptFontStyle)
+        : "courier",
+      receiptFontSize: RECEIPT_FONT_SIZE_OPTIONS.some((s) => s.id === parsed?.receiptFontSize)
+        ? (parsed.receiptFontSize as ReceiptFontSize)
+        : "medium"
     };
   } catch {
     return { ...DEFAULT_THERMAL_PRINTER_CONFIG };
@@ -329,7 +458,7 @@ export function buildEscPosPayload(
     bytes.push(0x1b, 0x70, 0x00, 0x19, 0xfa);
   }
 
-  // Header block (Centered)
+  // Header block (Centered, Always Bold for thermal legibility)
   setAlign(1);
   setBold(true);
   setSize(cols >= 40);
@@ -339,7 +468,6 @@ export function buildEscPosPayload(
   if (data.receiptHeader) {
     wrapText(data.receiptHeader.toUpperCase(), cols).forEach((ln) => pushLine(ln));
   }
-  setBold(false);
   if (data.branchText) {
     wrapText(data.branchText, cols).forEach((ln) => pushLine(ln));
   }
@@ -353,7 +481,7 @@ export function buildEscPosPayload(
   setAlign(0);
   pushLine("-".repeat(cols));
 
-  // Metadata lines
+  // Metadata lines (Bold)
   data.metaLines.forEach((m) => {
     pushLine(twoColLine(m.key, m.val, cols));
   });
@@ -362,9 +490,7 @@ export function buildEscPosPayload(
 
   if (cols <= 32) {
     // 58mm (32 cols): 2-line per item so MRP/Rate/Qty/Total never collide
-    setBold(true);
     pushLine("Item / MRP   Rate  Qty     Total");
-    setBold(false);
     pushLine("-".repeat(cols));
     data.items.forEach((it) => {
       wrapText(it.name, cols).forEach((ln) => pushLine(ln));
@@ -383,7 +509,6 @@ export function buildEscPosPayload(
     const totalW = cols >= 64 ? 12 : cols >= 48 ? 11 : 10;
     const descW = Math.max(10, cols - mrpW - rateW - qtyW - totalW);
 
-    setBold(true);
     pushLine(
       padRight("Item", descW) +
         padLeft("MRP", mrpW) +
@@ -391,7 +516,6 @@ export function buildEscPosPayload(
         centerPad("Qty", qtyW) +
         padLeft("Total", totalW)
     );
-    setBold(false);
     pushLine("-".repeat(cols));
 
     data.items.forEach((it) => {
@@ -413,9 +537,7 @@ export function buildEscPosPayload(
   pushLine("-".repeat(cols));
 
   if (data.savingsLabel && data.savingsValue) {
-    setBold(true);
     pushLine(twoColLine(data.savingsLabel, data.savingsValue, cols));
-    setBold(false);
     pushLine("-".repeat(cols));
   }
 
@@ -425,9 +547,7 @@ export function buildEscPosPayload(
       m.key.toUpperCase().includes("NET PAYABLE");
     if (isTotal) {
       pushLine("=".repeat(cols));
-      setBold(true);
       pushLine(twoColLine(m.key, m.val, cols));
-      setBold(false);
       pushLine("=".repeat(cols));
     } else {
       pushLine(twoColLine(m.key, m.val, cols));
@@ -476,6 +596,8 @@ export interface PrintSnapshotPayload {
   html: string;
   layoutProfile: PrinterLayoutProfile;
   connectionMode?: ThermalConnectionMode;
+  receiptFontStyle?: ReceiptFontStyle;
+  receiptFontSize?: ReceiptFontSize;
   invoiceId?: string;
   createdAt: number;
 }
@@ -531,6 +653,8 @@ export function encodeSnapshotToHash(payload: PrintSnapshotPayload): string {
       html: htmlForHash,
       layoutProfile: payload.layoutProfile,
       connectionMode: payload.connectionMode,
+      receiptFontStyle: payload.receiptFontStyle,
+      receiptFontSize: payload.receiptFontSize,
       invoiceId: payload.invoiceId,
       createdAt: payload.createdAt
     };

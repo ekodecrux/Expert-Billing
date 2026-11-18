@@ -17,7 +17,10 @@ import {
   printViaWebSerial,
   printViaNetworkSocket,
   PrinterLayoutProfile,
-  ThermalConnectionMode
+  ThermalConnectionMode,
+  ReceiptFontStyle,
+  ReceiptFontSize,
+  getReceiptTypographySpec
 } from "../utils/thermalPrinter";
 
 function getInitialSnapshot(): PrintSnapshotPayload | null {
@@ -41,7 +44,9 @@ export const StandaloneReceiptPrintPage: React.FC = () => {
       connectionMode: (initialSnap?.connectionMode &&
       ["system", "webusb", "webserial", "network"].includes(initialSnap.connectionMode)
         ? initialSnap.connectionMode
-        : cfg.connectionMode) as ThermalConnectionMode
+        : cfg.connectionMode) as ThermalConnectionMode,
+      receiptFontStyle: (initialSnap?.receiptFontStyle || cfg.receiptFontStyle || "courier") as ReceiptFontStyle,
+      receiptFontSize: (initialSnap?.receiptFontSize || cfg.receiptFontSize || "medium") as ReceiptFontSize
     };
   });
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
@@ -53,6 +58,11 @@ export const StandaloneReceiptPrintPage: React.FC = () => {
   const layout: PrinterLayoutProfile = printerConfig.layoutProfile || "thermal-80mm";
   const spec = THERMAL_LAYOUT_SPECS[layout] || THERMAL_LAYOUT_SPECS["thermal-80mm"];
   const isA4 = layout === "standard-a4";
+  const typo = getReceiptTypographySpec(
+    layout,
+    snapshot?.receiptFontStyle || printerConfig.receiptFontStyle,
+    snapshot?.receiptFontSize || printerConfig.receiptFontSize
+  );
 
   const scheduleRelayWindowClose = (delayMs = 800) => {
     setTimeout(() => {
@@ -69,7 +79,12 @@ export const StandaloneReceiptPrintPage: React.FC = () => {
       scheduleRelayWindowClose(250);
     };
     window.addEventListener("afterprint", onAfterPrint, { once: true });
-    const res = printElementDirect("standalone-receipt-body", layout);
+    const res = printElementDirect(
+      "standalone-receipt-body",
+      layout,
+      typo.fontStyle,
+      typo.fontSize
+    );
     if (!res.ok) {
       window.removeEventListener("afterprint", onAfterPrint);
     }
@@ -96,7 +111,9 @@ export const StandaloneReceiptPrintPage: React.FC = () => {
               serverSnap.connectionMode &&
               ["system", "webusb", "webserial", "network"].includes(serverSnap.connectionMode)
                 ? (serverSnap.connectionMode as ThermalConnectionMode)
-                : prev.connectionMode
+                : prev.connectionMode,
+            receiptFontStyle: serverSnap.receiptFontStyle || prev.receiptFontStyle || "courier",
+            receiptFontSize: serverSnap.receiptFontSize || prev.receiptFontSize || "medium"
           };
           saveThermalPrinterConfig(next);
           return next;
@@ -335,13 +352,22 @@ export const StandaloneReceiptPrintPage: React.FC = () => {
           padding: ${spec.paddingCss};
           background: #ffffff;
           color: #000000;
-          font-family: ${isA4 ? 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif' : '"Courier New", Courier, monospace'};
-          font-size: ${spec.fontSizeCss};
+          font-family: ${typo.cssFamily} !important;
+          font-size: ${typo.printFontSizeCss};
+          font-weight: 700 !important;
           line-height: 1.3;
           box-shadow: 0 10px 25px rgba(15, 23, 42, 0.12);
           border: 1px solid #cbd5e1;
         }
-        ${buildReceiptUtilityStyles(layout, "#standalone-receipt-body ")}
+        #standalone-receipt-body * {
+          font-family: ${typo.cssFamily} !important;
+          font-weight: 700 !important;
+        }
+        #standalone-receipt-body h4,
+        #standalone-receipt-body [data-receipt-store-name="true"] {
+          font-weight: 900 !important;
+        }
+        ${buildReceiptUtilityStyles(layout, "#standalone-receipt-body ", typo.fontStyle, typo.fontSize)}
       `}</style>
 
       <div
