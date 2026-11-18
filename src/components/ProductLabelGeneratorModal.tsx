@@ -23,11 +23,13 @@ import {
   HelpCircle,
   HardDrive,
   Save,
-  Lock
+  Lock,
+  ExternalLink
 } from "lucide-react";
 import { Product, LabelPrinterConfig, saveElementAsPDF } from "../types";
 import {
   LABEL_SIZE_PRESETS,
+  DUAL_ROLL_PRESETS,
   LabelSizePresetId,
   LabelSizeDimension,
   LabelPrinterModel,
@@ -37,9 +39,12 @@ import {
   generateQrCodeSvgString,
   generateZplCommands,
   generateTsplCommands,
-  generateCalibrationTestZpl,
-  generateCalibrationTestTspl,
-  printThermalLabelsDirect
+  printThermalLabelsDirect,
+  isDualRollPreset,
+  getDualRollGeometry,
+  chunkLabelsForRows,
+  buildLabelsPrintHtml,
+  buildCalibrationTestHtml
 } from "../utils/labelPrinterEngine";
 
 export interface ProductLabelGeneratorModalProps {
@@ -72,10 +77,27 @@ const normalizePrinterModel = (raw?: string): LabelPrinterModel => {
 };
 
 const normalizePresetId = (raw?: string): LabelSizePresetId => {
-  if (!raw) return "roll-50x25";
-  if (raw === "50x25_1col") return "roll-50x25";
-  const found = LABEL_SIZE_PRESETS.some((p) => p.id === raw);
-  return (found ? raw : "roll-50x25") as LabelSizePresetId;
+  if (!raw) return "dual-roll-50x25";
+  const aliasMap: Record<string, LabelSizePresetId> = {
+    "50x25_1col": "roll-50x25",
+    "50x30_1col": "roll-50x30",
+    "100x50_1col": "roll-100x50",
+    "100x150_1col": "roll-100x150",
+    "25x15_2col": "dual-roll-25x15",
+    "32x19_2col": "dual-roll-32x19",
+    "35x25_2col": "dual-roll-35x25",
+    "38x25_2col": "dual-roll-38x25",
+    "40x25_2col": "dual-roll-40x25",
+    "40x30_2col": "dual-roll-40x30",
+    "48x25_2col": "dual-roll-48x25",
+    "50x25_2col": "dual-roll-50x25",
+    "50x30_2col": "dual-roll-50x30",
+    "50x38_2col": "dual-roll-50x38",
+    "50x50_2col": "dual-roll-50x50"
+  };
+  const mapped = aliasMap[raw] || raw;
+  const found = LABEL_SIZE_PRESETS.some((p) => p.id === mapped);
+  return (found ? mapped : "dual-roll-50x25") as LabelSizePresetId;
 };
 
 export const ProductLabelGeneratorModal: React.FC<ProductLabelGeneratorModalProps> = ({
@@ -120,12 +142,12 @@ export const ProductLabelGeneratorModal: React.FC<ProductLabelGeneratorModalProp
   );
   const [customWidthMm, setCustomWidthMm] = useState<number>(50);
   const [customHeightMm, setCustomHeightMm] = useState<number>(25);
-  const [customGapMm, setCustomGapMm] = useState<number>(labelPrinterConfig?.gapMm || 3);
+  const [customGapMm, setCustomGapMm] = useState<number>(labelPrinterConfig?.gapMm ?? 3);
+  const [customColumnsAcross, setCustomColumnsAcross] = useState<1 | 2>(2);
+  const [customHorizontalGapMm, setCustomHorizontalGapMm] = useState<number>(3);
 
-  // Copies per item
-  const [copiesPerProduct, setCopiesPerProduct] = useState<number>(
-    initialSelectedProduct ? 2 : 1
-  );
+  // Copies per item (default 2 so 2-up dual rolls preview a complete paired row)
+  const [copiesPerProduct, setCopiesPerProduct] = useState<number>(2);
 
   // Label Design Config
   const [designOptions, setDesignOptions] = useState<LabelDesignOptions>({
@@ -144,6 +166,7 @@ export const ProductLabelGeneratorModal: React.FC<ProductLabelGeneratorModalProp
 
   // Live Toast / Notification feedback
   const [feedbackMsg, setFeedbackMsg] = useState<string | null>(null);
+  const [labelSandboxPrintUrl, setLabelSandboxPrintUrl] = useState<string | null>(null);
 
   const showFeedback = (text: string) => {
     setFeedbackMsg(text);
@@ -152,6 +175,7 @@ export const ProductLabelGeneratorModal: React.FC<ProductLabelGeneratorModalProp
 
   useEffect(() => {
     if (!isOpen) return;
+    setLabelSandboxPrintUrl(null);
     if (initialSelectedProduct) {
       setSelectedProductId(initialSelectedProduct.id);
       setMode("single");
@@ -191,6 +215,23 @@ export const ProductLabelGeneratorModal: React.FC<ProductLabelGeneratorModalProp
   // Current active dimension
   const currentDimension: LabelSizeDimension = useMemo(() => {
     if (selectedPresetId === "custom") {
+      if (customColumnsAcross === 2) {
+        const totalRollWidth = Number((customWidthMm * 2 + customHorizontalGapMm).toFixed(2));
+        return {
+          id: "custom",
+          name: `Custom 2-Up (${customWidthMm}×${customHeightMm} mm • ${totalRollWidth}mm Total)`,
+          category: "multi-column",
+          widthMm: totalRollWidth,
+          heightMm: customHeightMm,
+          gapMm: customGapMm,
+          columnsAcross: 2,
+          labelWidthMm: customWidthMm,
+          horizontalGapMm: customHorizontalGapMm,
+          sideMarginMm: 0,
+          description: `Custom 2-Up Dual Roll: ${customWidthMm}×${customHeightMm} mm labels, ${customHorizontalGapMm} mm centre gap, ${customGapMm} mm vertical gap (${totalRollWidth} mm total width)`,
+          recommendedFor: "Custom dual-column thermal label rolls"
+        };
+      }
       return {
         id: "custom",
         name: `Custom (${customWidthMm}×${customHeightMm} mm)`,
@@ -199,7 +240,7 @@ export const ProductLabelGeneratorModal: React.FC<ProductLabelGeneratorModalProp
         heightMm: customHeightMm,
         gapMm: customGapMm,
         columnsAcross: 1,
-        description: "User Defined Custom Label Dimensions",
+        description: "User Defined Custom Single-Roll Label Dimensions",
         recommendedFor: "Custom specialty label rolls"
       };
     }
@@ -207,7 +248,7 @@ export const ProductLabelGeneratorModal: React.FC<ProductLabelGeneratorModalProp
       LABEL_SIZE_PRESETS.find(p => p.id === selectedPresetId) ||
       LABEL_SIZE_PRESETS[0]
     );
-  }, [selectedPresetId, customWidthMm, customHeightMm, customGapMm]);
+  }, [selectedPresetId, customWidthMm, customHeightMm, customGapMm, customColumnsAcross, customHorizontalGapMm]);
 
   // Filter products for dropdown / checklist
   const filteredProducts = useMemo(() => {
@@ -316,24 +357,29 @@ export const ProductLabelGeneratorModal: React.FC<ProductLabelGeneratorModalProp
 
   // Print Thermal Alignment & Calibration Test Label
   const handlePrintTestLabel = () => {
-    const testHtml = `
-      <div class="label-print-page" style="padding: 3mm; border: 1px dashed #000; text-align: center; height: 100%;">
-        <div style="font-size: 10px; font-weight: bold; border-bottom: 1px solid #000; padding-bottom: 1mm;">
-          EXPERT POS THERMAL CALIBRATION
-        </div>
-        <div style="font-size: 8px; margin: 1.5mm 0; font-family: monospace;">
-          Size: ${currentDimension.widthMm}×${currentDimension.heightMm}mm | DPI: ${designOptions.dpi} | Dark: ${designOptions.darkness}/15
-        </div>
-        <div style="margin: 1.5mm auto; width: 90%;">
-          ${generateBarcodeSvgString("CALIB-OK-99", 32, true)}
-        </div>
-        <div style="font-size: 7.5px; font-family: monospace; border-top: 1px solid #000; padding-top: 1mm;">
-          ALIGNMENT MARGINS &amp; TEAR-OFF TEST
-        </div>
-      </div>
-    `;
-    printThermalLabelsDirect(testHtml, currentDimension, "Expert POS Calibration Test");
-    showFeedback("Spooling calibration label to printer...");
+    const testHtml = buildCalibrationTestHtml(
+      labelPrinterConfig?.printerName || printerModel.toUpperCase(),
+      currentDimension,
+      designOptions.dpi,
+      designOptions.darkness
+    );
+    const res = printThermalLabelsDirect(testHtml, currentDimension, "Expert POS Calibration Test", {
+      rawCommands: currentRawCommands,
+      rawProtocol
+    });
+    if (res.ok) {
+      setLabelSandboxPrintUrl(null);
+      showFeedback(
+        isDualRollPreset(currentDimension)
+          ? "Spooling 2-Up dual calibration labels (Left + Right) to printer..."
+          : "Spooling calibration label to printer..."
+      );
+    } else if (res.blockedBySandbox && res.printStationUrl) {
+      setLabelSandboxPrintUrl(res.printStationUrl);
+      showFeedback("Embedded preview blocks direct print dialogs — click 'Open Direct Label Print Window' below.");
+    } else {
+      showFeedback(res.reason || "Unable to open label print dialog.");
+    }
   };
 
   // Primary Action: Print Labels using direct thermal browser engine
@@ -343,34 +389,29 @@ export const ProductLabelGeneratorModal: React.FC<ProductLabelGeneratorModalProp
       return;
     }
 
-    // Build the clean thermal page HTML
-    const isA4Sheet = currentDimension.category === "sheet";
+    const combinedHtml = buildLabelsPrintHtml(labelQueue, currentDimension, designOptions);
+    const geo = getDualRollGeometry(currentDimension);
+    const rowCount = geo.isDualRoll ? Math.ceil(flatLabelsToRender.length / 2) : flatLabelsToRender.length;
 
-    let combinedHtml = "";
-
-    if (isA4Sheet) {
-      // Grid based for A4 sheet
-      const cols = currentDimension.columnsAcross || 3;
-      combinedHtml = `
-        <div style="padding: 10mm 6mm; width: 210mm; min-height: 297mm; display: grid; grid-template-columns: repeat(${cols}, 1fr); gap: 2.5mm; box-sizing: border-box;">
-          ${flatLabelsToRender.map(prod => renderSingleLabelHtml(prod, currentDimension, designOptions)).join("")}
-        </div>
-      `;
+    const res = printThermalLabelsDirect(
+      combinedHtml,
+      currentDimension,
+      `Expert POS Labels (${flatLabelsToRender.length})`,
+      { rawCommands: currentRawCommands, rawProtocol }
+    );
+    if (res.ok) {
+      setLabelSandboxPrintUrl(null);
+      showFeedback(
+        geo.isDualRoll
+          ? `Sending ${flatLabelsToRender.length} label(s) (${rowCount} × 2-Up rows) to ${currentDimension.name}...`
+          : `Sending ${flatLabelsToRender.length} label(s) to ${currentDimension.name}...`
+      );
+    } else if (res.blockedBySandbox && res.printStationUrl) {
+      setLabelSandboxPrintUrl(res.printStationUrl);
+      showFeedback("Embedded preview blocks direct print dialogs — click 'Open Direct Label Print Window' below.");
     } else {
-      // Individual continuous roll pages
-      combinedHtml = flatLabelsToRender
-        .map(
-          prod => `
-          <div class="label-print-page" style="padding: 1.5mm 2.5mm; box-sizing: border-box;">
-            ${renderSingleLabelHtml(prod, currentDimension, designOptions)}
-          </div>
-        `
-        )
-        .join("");
+      showFeedback(res.reason || "Unable to open label print dialog.");
     }
-
-    showFeedback(`Sending ${flatLabelsToRender.length} label(s) to ${currentDimension.name}...`);
-    printThermalLabelsDirect(combinedHtml, currentDimension, `Expert POS Labels (${flatLabelsToRender.length})`);
   };
 
   // Download PDF
@@ -380,80 +421,6 @@ export const ProductLabelGeneratorModal: React.FC<ProductLabelGeneratorModalProp
     await saveElementAsPDF("product-label-preview-container", name, "standard-a4");
     showFeedback(`Downloaded PDF: ${name}`);
   };
-
-  // Helper: Renders pure HTML string for a single label (used by iframe direct print)
-  function renderSingleLabelHtml(
-    prod: Product,
-    dim: LabelSizeDimension,
-    opt: LabelDesignOptions
-  ): string {
-    const barcodeVal = prod.barcode || prod.sku;
-    const hasMrp = prod.mrp && prod.mrp > prod.price;
-    const disc = hasMrp ? Math.round(((prod.mrp! - prod.price) / prod.mrp!) * 100) : 0;
-
-    const barcodeSvg =
-      opt.barcodeType === "QR"
-        ? generateQrCodeSvgString(barcodeVal, 48)
-        : generateBarcodeSvgString(barcodeVal, dim.heightMm > 35 ? 42 : 30, opt.showBarcodeText);
-
-    return `
-      <div style="border: 0.5px solid #000; border-radius: 2px; padding: 1.5mm; background: #fff; color: #000; display: flex; flex-direction: column; justify-content: space-between; height: 100%; box-sizing: border-box; overflow: hidden; font-family: -apple-system, sans-serif;">
-        ${
-          opt.showStoreName
-            ? `<div style="text-align: center; font-size: 7.5px; font-weight: 900; letter-spacing: 0.5px; text-transform: uppercase; border-bottom: 0.5px solid #000; padding-bottom: 0.5mm; margin-bottom: 0.5mm;">
-                ${opt.storeName}
-              </div>`
-            : ""
-        }
-        ${
-          opt.customPromoText.trim()
-            ? `<div style="background: #000; color: #fff; font-size: 6.5px; font-weight: bold; text-align: center; text-transform: uppercase; padding: 0.5mm 0; margin-bottom: 0.5mm;">
-                ${opt.customPromoText}
-              </div>`
-            : ""
-        }
-        ${
-          opt.showProductName
-            ? `<div style="text-align: center; font-size: 8.5px; font-weight: 800; line-height: 1.1; margin: 0.5mm 0; max-height: 18px; overflow: hidden;">
-                ${prod.name}
-              </div>`
-            : ""
-        }
-        <div style="display: flex; justify-content: space-between; align-items: baseline; margin: 0.5mm 0;">
-          <div>
-            ${
-              opt.showMrp && hasMrp
-                ? `<span style="font-size: 7px; color: #555; font-family: monospace;">MRP:${opt.currencySymbol}${prod.mrp?.toFixed(2)}</span>`
-                : ""
-            }
-            <div style="font-size: 11px; font-weight: 900; font-family: monospace; line-height: 1;">
-              ${opt.currencySymbol}${prod.price.toFixed(2)}
-              <span style="font-size: 7px; font-weight: normal;">/${prod.unit || "Unit"}</span>
-            </div>
-          </div>
-          ${
-            opt.showSavingsBadge && disc > 0
-              ? `<div style="background: #000; color: #fff; font-size: 7px; font-weight: bold; font-family: monospace; padding: 0.5mm 1mm; border-radius: 1px;">
-                  ${disc}% OFF
-                </div>`
-              : ""
-          }
-        </div>
-        ${
-          opt.showBarcodeGraphic
-            ? `<div style="margin: 0.5mm auto; width: 100%; text-align: center;">
-                ${barcodeSvg}
-              </div>`
-            : ""
-        }
-        <div style="display: flex; justify-content: space-between; font-size: 6.5px; font-family: monospace; color: #333; border-top: 0.5px solid #ddd; padding-top: 0.5mm; margin-top: 0.5mm;">
-          ${opt.showSku ? `<span>SKU: ${prod.sku}</span>` : ""}
-          ${opt.showBatchNo && prod.batchNumber ? `<span>B: ${prod.batchNumber}</span>` : ""}
-          ${opt.showExpiryDate && prod.expiryDate ? `<span>EXP: ${prod.expiryDate}</span>` : ""}
-        </div>
-      </div>
-    `;
-  }
 
   if (!isOpen) return null;
 
@@ -608,20 +575,33 @@ export const ProductLabelGeneratorModal: React.FC<ProductLabelGeneratorModalProp
 
               {/* Label Preset Selection */}
               <div>
-                <label className="block text-[10px] font-bold text-slate-500 mb-1">Label Dimension Preset</label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-[10px] font-bold text-slate-500">Label Dimension Preset</label>
+                  {isDualRollPreset(currentDimension) && (
+                    <span className="text-[9px] font-mono font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200">
+                      2-UP DUAL ROLL • {getDualRollGeometry(currentDimension).totalRollWidthMm}mm Backing
+                    </span>
+                  )}
+                </div>
                 <select
                   value={selectedPresetId}
                   onChange={(e) => setSelectedPresetId(e.target.value as LabelSizePresetId)}
                   className="w-full bg-slate-50 border border-slate-300 rounded-lg py-2 px-2.5 text-xs font-bold text-slate-900 outline-none focus:border-purple-600 cursor-pointer"
                 >
-                  <optgroup label="Direct Thermal Roll Presets (Continuous / Gap)">
+                  <optgroup label="2-Up Dual Roll Presets (2 Labels Across)">
+                    {DUAL_ROLL_PRESETS.map((preset) => (
+                      <option key={preset.id} value={preset.id}>
+                        {preset.name} — {preset.widthMm}mm roll
+                      </option>
+                    ))}
+                  </optgroup>
+                  <optgroup label="1-Up Direct Thermal Roll Presets (Single Across)">
                     <option value="roll-50x25">50 × 25 mm (2" × 1") - Standard Retail Shelf Tag</option>
                     <option value="roll-38x25">38 × 25 mm (1.5" × 1") - Compact Item Sticker</option>
                     <option value="roll-50x30">50 × 30 mm - Grocery &amp; Deli Shelf Roll</option>
                     <option value="roll-75x50">75 × 50 mm (3" × 2") - Medium Box / Apparel Tag</option>
                     <option value="roll-100x50">100 × 50 mm (4" × 2") - Shelf Talker &amp; Bin Tag</option>
                     <option value="roll-100x150">100 × 150 mm (4" × 6") - Shipping &amp; Pallet Label</option>
-                    <option value="dual-roll-38x25">2-Up Dual Roll (2 × 38×25 mm across 80mm roll)</option>
                     <option value="jewelry-32x19">Jewelry Tag (32 × 19 mm Dumbbell Foldable)</option>
                   </optgroup>
                   <optgroup label="Laser &amp; Inkjet A4 Sheets">
@@ -629,49 +609,129 @@ export const ProductLabelGeneratorModal: React.FC<ProductLabelGeneratorModalProp
                     <option value="a4-sheet-40">A4 Sheet: 40 Labels (52.5 × 29.7 mm, 4 cols × 10 rows)</option>
                     <option value="a4-sheet-65">A4 Sheet: 65 Labels (38.1 × 21.2 mm, 5 cols × 13 rows)</option>
                   </optgroup>
-                  <optgroup label="Custom Sizing">
-                    <option value="custom">Custom Dimensions (Set Width, Height &amp; Gap)</option>
+                  <optgroup label="Custom Sizing (1-Up or 2-Up Dual Roll)">
+                    <option value="custom">Custom Dimensions (1-Up or 2-Up Dual Roll)</option>
                   </optgroup>
                 </select>
                 <p className="text-[10px] text-slate-500 mt-1">{currentDimension.description}</p>
+                {(() => {
+                  const geo = getDualRollGeometry(currentDimension);
+                  return (
+                    <div className="mt-2 grid grid-cols-5 gap-1 p-1.5 bg-slate-50 rounded-lg border border-slate-200 text-center font-mono">
+                      <div>
+                        <div className="text-[8px] text-slate-500 uppercase">Label W</div>
+                        <div className="text-[10px] font-black text-slate-900">{geo.singleLabelWidthMm}mm</div>
+                      </div>
+                      <div>
+                        <div className="text-[8px] text-slate-500 uppercase">Label H</div>
+                        <div className="text-[10px] font-black text-slate-900">{geo.heightMm}mm</div>
+                      </div>
+                      <div>
+                        <div className="text-[8px] text-slate-500 uppercase">Centre Gap</div>
+                        <div className="text-[10px] font-black text-purple-700">{geo.horizontalGapMm}mm</div>
+                      </div>
+                      <div>
+                        <div className="text-[8px] text-slate-500 uppercase">Total W</div>
+                        <div className="text-[10px] font-black text-emerald-700">{geo.totalRollWidthMm}mm</div>
+                      </div>
+                      <div>
+                        <div className="text-[8px] text-slate-500 uppercase">Vert. Gap</div>
+                        <div className="text-[10px] font-black text-slate-900">{currentDimension.gapMm}mm</div>
+                      </div>
+                    </div>
+                  );
+                })()}
               </div>
 
               {/* Custom Dimensions Editor */}
               {selectedPresetId === "custom" && (
-                <div className="grid grid-cols-3 gap-2 p-2.5 bg-purple-50/60 rounded-lg border border-purple-200">
-                  <div>
-                    <label className="text-[10px] font-bold text-purple-900 block">Width (mm)</label>
-                    <input
-                      type="number"
-                      min={15}
-                      max={220}
-                      value={customWidthMm}
-                      onChange={(e) => setCustomWidthMm(Math.max(10, parseInt(e.target.value) || 50))}
-                      className="w-full bg-white border border-purple-300 rounded px-2 py-1 text-xs font-bold text-center"
-                    />
+                <div className="p-2.5 bg-purple-50/60 rounded-lg border border-purple-200 space-y-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-[10px] font-bold text-purple-900 uppercase tracking-wider">Roll Layout</span>
+                    <div className="grid grid-cols-2 gap-1 bg-white p-0.5 rounded-lg border border-purple-200">
+                      <button
+                        type="button"
+                        onClick={() => setCustomColumnsAcross(1)}
+                        className={`px-2 py-0.5 rounded text-[10px] font-bold cursor-pointer ${
+                          customColumnsAcross === 1 ? "bg-purple-600 text-white" : "text-purple-900 hover:bg-purple-50"
+                        }`}
+                      >
+                        1-Up Single
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setCustomColumnsAcross(2)}
+                        className={`px-2 py-0.5 rounded text-[10px] font-bold cursor-pointer ${
+                          customColumnsAcross === 2 ? "bg-purple-600 text-white" : "text-purple-900 hover:bg-purple-50"
+                        }`}
+                      >
+                        2-Up Dual Roll
+                      </button>
+                    </div>
                   </div>
-                  <div>
-                    <label className="text-[10px] font-bold text-purple-900 block">Height (mm)</label>
-                    <input
-                      type="number"
-                      min={10}
-                      max={350}
-                      value={customHeightMm}
-                      onChange={(e) => setCustomHeightMm(Math.max(10, parseInt(e.target.value) || 25))}
-                      className="w-full bg-white border border-purple-300 rounded px-2 py-1 text-xs font-bold text-center"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-[10px] font-bold text-purple-900 block">Gap (mm)</label>
-                    <input
-                      type="number"
-                      min={0}
-                      max={10}
-                      step={0.5}
-                      value={customGapMm}
-                      onChange={(e) => setCustomGapMm(Math.max(0, parseFloat(e.target.value) || 3))}
-                      className="w-full bg-white border border-purple-300 rounded px-2 py-1 text-xs font-bold text-center"
-                    />
+                  <div className={`grid gap-2 ${customColumnsAcross === 2 ? "grid-cols-4" : "grid-cols-3"}`}>
+                    <div>
+                      <label className="text-[10px] font-bold text-purple-900 block">
+                        {customColumnsAcross === 2 ? "Label W (mm)" : "Width (mm)"}
+                      </label>
+                      <input
+                        type="number"
+                        min={15}
+                        max={220}
+                        value={customWidthMm}
+                        onChange={(e) => {
+                          const v = parseFloat(e.target.value);
+                          setCustomWidthMm(Number.isFinite(v) ? Math.max(10, v) : 50);
+                        }}
+                        className="w-full bg-white border border-purple-300 rounded px-2 py-1 text-xs font-bold text-center"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-bold text-purple-900 block">Height (mm)</label>
+                      <input
+                        type="number"
+                        min={10}
+                        max={350}
+                        value={customHeightMm}
+                        onChange={(e) => {
+                          const v = parseFloat(e.target.value);
+                          setCustomHeightMm(Number.isFinite(v) ? Math.max(10, v) : 25);
+                        }}
+                        className="w-full bg-white border border-purple-300 rounded px-2 py-1 text-xs font-bold text-center"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-bold text-purple-900 block">Vert. Gap</label>
+                      <input
+                        type="number"
+                        min={0}
+                        max={10}
+                        step={0.5}
+                        value={customGapMm}
+                        onChange={(e) => {
+                          const v = parseFloat(e.target.value);
+                          setCustomGapMm(Number.isFinite(v) ? Math.max(0, v) : 3);
+                        }}
+                        className="w-full bg-white border border-purple-300 rounded px-2 py-1 text-xs font-bold text-center"
+                      />
+                    </div>
+                    {customColumnsAcross === 2 && (
+                      <div>
+                        <label className="text-[10px] font-bold text-purple-900 block">Centre Gap</label>
+                        <input
+                          type="number"
+                          min={0}
+                          max={15}
+                          step={0.5}
+                          value={customHorizontalGapMm}
+                          onChange={(e) => {
+                            const v = parseFloat(e.target.value);
+                            setCustomHorizontalGapMm(Number.isFinite(v) ? Math.max(0, v) : 3);
+                          }}
+                          className="w-full bg-white border border-purple-300 rounded px-2 py-1 text-xs font-bold text-center"
+                        />
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
@@ -1061,129 +1121,163 @@ export const ProductLabelGeneratorModal: React.FC<ProductLabelGeneratorModalProp
             {/* Content Area */}
             <div className="flex-1 overflow-y-auto bg-white rounded-xl border border-slate-200 p-4 sm:p-6 shadow-inner relative flex flex-col justify-start">
               
-              {activeRightTab === "preview" && (
-                <div id="product-label-preview-container" className="w-full space-y-4">
-                  {/* Summary Ribbon */}
-                  <div className="flex justify-between items-center bg-slate-50 p-2.5 rounded-xl border border-slate-200 text-xs">
-                    <span className="font-bold text-slate-700">
-                      Total Output: <span className="text-purple-600 font-mono font-black">{flatLabelsToRender.length}</span> labels
-                    </span>
-                    <span className="text-[11px] font-mono text-slate-500">
-                      Target Paper: {currentDimension.name} ({currentDimension.widthMm}×{currentDimension.heightMm} mm)
-                    </span>
-                  </div>
+              {activeRightTab === "preview" && (() => {
+                const dualGeo = getDualRollGeometry(currentDimension);
+                const pairedRows = dualGeo.isDualRoll ? chunkLabelsForRows(labelQueue, 2) : [];
 
-                  {/* Rendered Preview Grid */}
-                  <div
-                    className={`grid gap-3 w-full ${
-                      currentDimension.category === "sheet"
-                        ? "grid-cols-2 sm:grid-cols-3"
-                        : currentDimension.widthMm <= 40
-                        ? "grid-cols-2 sm:grid-cols-3 md:grid-cols-4"
-                        : currentDimension.widthMm <= 60
-                        ? "grid-cols-1 sm:grid-cols-2 md:grid-cols-3"
-                        : "grid-cols-1 sm:grid-cols-2"
-                    }`}
-                  >
-                    {flatLabelsToRender.map((product, idx) => {
-                      const hasMrp = product.mrp && product.mrp > product.price;
-                      const discountPercent = hasMrp
-                        ? Math.round(((product.mrp! - product.price) / product.mrp!) * 100)
-                        : 0;
-                      const barcodeVal = product.barcode || product.sku;
+                const renderPreviewCard = (product: Product, keyVal: string) => {
+                  const hasMrp = product.mrp && product.mrp > product.price;
+                  const discountPercent = hasMrp
+                    ? Math.round(((product.mrp! - product.price) / product.mrp!) * 100)
+                    : 0;
+                  const barcodeVal = product.barcode || product.sku;
 
-                      return (
-                        <div
-                          key={`${product.id}-${idx}`}
-                          className="border border-stone-300 rounded-lg bg-white p-3 flex flex-col justify-between overflow-hidden shadow-2xs hover:border-purple-400 transition-colors"
-                          style={{
-                            minHeight: currentDimension.heightMm > 40 ? "160px" : "120px"
-                          }}
-                        >
-                          {/* Store Name */}
-                          {designOptions.showStoreName && (
-                            <div className="text-center border-b border-stone-200 pb-1 mb-1">
-                              <div className="text-[9px] font-black uppercase tracking-tight font-display text-stone-900 leading-none">
-                                {designOptions.storeName}
-                              </div>
-                            </div>
-                          )}
-
-                          {/* Promo Banner */}
-                          {designOptions.customPromoText.trim() && (
-                            <div className="bg-slate-900 text-white text-[8px] font-bold uppercase tracking-wider text-center py-0.5 rounded-xs my-0.5">
-                              {designOptions.customPromoText}
-                            </div>
-                          )}
-
-                          {/* Product Title */}
-                          {designOptions.showProductName && (
-                            <div className="text-center my-0.5">
-                              <div className="text-[11px] font-extrabold text-stone-900 leading-tight line-clamp-2">
-                                {product.name}
-                              </div>
-                            </div>
-                          )}
-
-                          {/* Price Row */}
-                          <div className="flex items-center justify-between my-1 px-1">
-                            <div>
-                              {designOptions.showMrp && hasMrp && (
-                                <div className="text-[9px] text-stone-500 font-mono leading-none">
-                                  MRP: {currencySymbol}{product.mrp?.toFixed(2)}
-                                </div>
-                              )}
-                              <div className="text-sm font-black font-mono text-stone-950 leading-none mt-0.5">
-                                {currencySymbol}{product.price.toFixed(2)}
-                                <span className="text-[9px] font-normal text-stone-500 ml-1">
-                                  /{product.unit || "Unit"}
-                                </span>
-                              </div>
-                            </div>
-
-                            {designOptions.showSavingsBadge && hasMrp && discountPercent > 0 && (
-                              <div className="bg-emerald-100 text-emerald-800 text-[9px] font-extrabold font-mono px-1.5 py-0.5 rounded">
-                                {discountPercent}% OFF
-                              </div>
-                            )}
-                          </div>
-
-                          {/* Barcode / QR Element */}
-                          {designOptions.showBarcodeGraphic && (
-                            <div className="my-1 flex flex-col items-center">
-                              {designOptions.barcodeType === "QR" ? (
-                                <div
-                                  dangerouslySetInnerHTML={{
-                                    __html: generateQrCodeSvgString(barcodeVal, 48)
-                                  }}
-                                />
-                              ) : (
-                                <div
-                                  className="w-full"
-                                  dangerouslySetInnerHTML={{
-                                    __html: generateBarcodeSvgString(
-                                      barcodeVal,
-                                      currentDimension.heightMm > 35 ? 40 : 28,
-                                      designOptions.showBarcodeText
-                                    )
-                                  }}
-                                />
-                              )}
-                            </div>
-                          )}
-
-                          {/* Footer with SKU & Expiry */}
-                          <div className="flex justify-between items-center text-[8px] font-mono text-stone-500 border-t border-stone-100 pt-1 mt-0.5">
-                            {designOptions.showSku && <span>SKU: {product.sku}</span>}
-                            {designOptions.showBatchNo && product.batchNumber && <span>B:{product.batchNumber}</span>}
-                            {designOptions.showExpiryDate && product.expiryDate && <span>EXP:{product.expiryDate}</span>}
+                  return (
+                    <div
+                      key={keyVal}
+                      className="border border-stone-300 rounded-lg bg-white p-2.5 flex flex-col justify-between overflow-hidden shadow-2xs hover:border-purple-400 transition-colors"
+                      style={{
+                        minHeight: currentDimension.heightMm > 40 ? "160px" : dualGeo.isDualRoll ? "115px" : "120px"
+                      }}
+                    >
+                      {designOptions.showStoreName && (
+                        <div className="text-center border-b border-stone-200 pb-1 mb-1">
+                          <div className="text-[9px] font-black uppercase tracking-tight font-display text-stone-900 leading-none truncate">
+                            {designOptions.storeName}
                           </div>
                         </div>
-                      );
-                    })}
+                      )}
+
+                      {designOptions.customPromoText.trim() && (
+                        <div className="bg-slate-900 text-white text-[8px] font-bold uppercase tracking-wider text-center py-0.5 rounded-xs my-0.5">
+                          {designOptions.customPromoText}
+                        </div>
+                      )}
+
+                      {designOptions.showProductName && (
+                        <div className="text-center my-0.5">
+                          <div className="text-[11px] font-extrabold text-stone-900 leading-tight line-clamp-2">
+                            {product.name}
+                          </div>
+                        </div>
+                      )}
+
+                      <div className="flex items-center justify-between my-1 px-1">
+                        <div>
+                          {designOptions.showMrp && hasMrp && (
+                            <div className="text-[9px] text-stone-500 font-mono leading-none">
+                              MRP: {currencySymbol}{product.mrp?.toFixed(2)}
+                            </div>
+                          )}
+                          <div className="text-sm font-black font-mono text-stone-950 leading-none mt-0.5">
+                            {currencySymbol}{product.price.toFixed(2)}
+                            <span className="text-[9px] font-normal text-stone-500 ml-1">
+                              /{product.unit || "Unit"}
+                            </span>
+                          </div>
+                        </div>
+
+                        {designOptions.showSavingsBadge && hasMrp && discountPercent > 0 && (
+                          <div className="bg-emerald-100 text-emerald-800 text-[9px] font-extrabold font-mono px-1.5 py-0.5 rounded">
+                            {discountPercent}% OFF
+                          </div>
+                        )}
+                      </div>
+
+                      {designOptions.showBarcodeGraphic && (
+                        <div className="my-1 flex flex-col items-center">
+                          {designOptions.barcodeType === "QR" ? (
+                            <div
+                              dangerouslySetInnerHTML={{
+                                __html: generateQrCodeSvgString(barcodeVal, 48)
+                              }}
+                            />
+                          ) : (
+                            <div
+                              className="w-full"
+                              dangerouslySetInnerHTML={{
+                                __html: generateBarcodeSvgString(
+                                  barcodeVal,
+                                  currentDimension.heightMm > 35 ? 40 : 28,
+                                  designOptions.showBarcodeText
+                                )
+                              }}
+                            />
+                          )}
+                        </div>
+                      )}
+
+                      <div className="flex justify-between items-center text-[8px] font-mono text-stone-500 border-t border-stone-100 pt-1 mt-0.5">
+                        {designOptions.showSku && <span>SKU: {product.sku}</span>}
+                        {designOptions.showBatchNo && product.batchNumber && <span>B:{product.batchNumber}</span>}
+                        {designOptions.showExpiryDate && product.expiryDate && <span>EXP:{product.expiryDate}</span>}
+                      </div>
+                    </div>
+                  );
+                };
+
+                return (
+                  <div id="product-label-preview-container" className="w-full space-y-4">
+                    {/* Summary Ribbon */}
+                    <div className="flex flex-wrap justify-between items-center gap-2 bg-slate-50 p-2.5 rounded-xl border border-slate-200 text-xs">
+                      <span className="font-bold text-slate-700">
+                        Total Output: <span className="text-purple-600 font-mono font-black">{flatLabelsToRender.length}</span> labels
+                        {dualGeo.isDualRoll && (
+                          <span className="text-emerald-700 font-mono font-bold ml-1.5">
+                            ({pairedRows.length} × 2-Up rows)
+                          </span>
+                        )}
+                      </span>
+                      <span className="text-[11px] font-mono text-slate-500">
+                        Target Paper: {currentDimension.name} ({dualGeo.totalRollWidthMm}×{dualGeo.heightMm} mm)
+                      </span>
+                    </div>
+
+                    {/* Rendered Preview: 2-Up Dual Roll Backing Strip vs Standard Grid */}
+                    {dualGeo.isDualRoll ? (
+                      <div className="space-y-3 max-w-2xl mx-auto">
+                        {pairedRows.map((pair, rIdx) => (
+                          <div
+                            key={`dual-row-${rIdx}`}
+                            className="bg-amber-50/40 border-2 border-dashed border-slate-300 rounded-xl p-2.5 space-y-1.5"
+                          >
+                            <div className="flex flex-wrap justify-between items-center gap-1 text-[9px] font-mono font-bold text-slate-500 px-1">
+                              <span>ROW #{rIdx + 1} • TOTAL WIDTH {dualGeo.totalRollWidthMm}mm • VERT. GAP {currentDimension.gapMm}mm</span>
+                              <span>COL 1 ({dualGeo.singleLabelWidthMm}×{dualGeo.heightMm}mm) + {dualGeo.horizontalGapMm}mm GAP + COL 2 ({dualGeo.singleLabelWidthMm}×{dualGeo.heightMm}mm)</span>
+                            </div>
+                            <div className="grid grid-cols-2 gap-2.5 items-stretch">
+                              {renderPreviewCard(pair.left, `left-${pair.left.id}-${rIdx}`)}
+                              {pair.right ? (
+                                renderPreviewCard(pair.right, `right-${pair.right.id}-${rIdx}`)
+                              ) : (
+                                <div className="border-2 border-dashed border-slate-300 rounded-lg bg-slate-100/70 flex items-center justify-center text-[10px] font-mono font-bold text-slate-400 p-4 text-center">
+                                  Empty Right Liner Slot (Unprinted)
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div
+                        className={`grid gap-3 w-full ${
+                          currentDimension.category === "sheet"
+                            ? "grid-cols-2 sm:grid-cols-3"
+                            : currentDimension.widthMm <= 40
+                            ? "grid-cols-2 sm:grid-cols-3 md:grid-cols-4"
+                            : currentDimension.widthMm <= 60
+                            ? "grid-cols-1 sm:grid-cols-2 md:grid-cols-3"
+                            : "grid-cols-1 sm:grid-cols-2"
+                        }`}
+                      >
+                        {flatLabelsToRender.map((product, idx) =>
+                          renderPreviewCard(product, `${product.id}-${idx}`)
+                        )}
+                      </div>
+                    )}
                   </div>
-                </div>
-              )}
+                );
+              })()}
 
               {activeRightTab === "raw-code" && (
                 <div className="w-full space-y-4">
@@ -1255,8 +1349,8 @@ export const ProductLabelGeneratorModal: React.FC<ProductLabelGeneratorModalProp
                       </p>
                       <ul className="list-disc list-inside text-[11px] text-slate-600 space-y-0.5">
                         <li>Select your label printer (Zebra, TSC, TVS, Rollo, Dymo).</li>
-                        <li>Set Paper Size to matching preset (e.g. 50×25mm or 2"×1").</li>
-                        <li>Set Margins to <strong>None</strong>.</li>
+                        <li>Set Paper Size to matching preset or total 2-up backing width (e.g. 50×25mm 1-Up, or 80×25mm / 104×25mm for 2-Up dual rolls).</li>
+                        <li>Set Margins to <strong>None</strong> and Scale to <strong>100%</strong>.</li>
                         <li>Uncheck <strong>Headers and Footers</strong>.</li>
                       </ul>
                     </div>
@@ -1297,6 +1391,25 @@ export const ProductLabelGeneratorModal: React.FC<ProductLabelGeneratorModalProp
                 </div>
               )}
             </div>
+
+            {/* Sandbox Fallback Direct Print Window Bar */}
+            {labelSandboxPrintUrl && (
+              <div className="mt-3 p-3 bg-amber-50 border border-amber-300 rounded-xl flex flex-wrap items-center justify-between gap-3 shrink-0">
+                <p className="text-xs font-bold text-amber-900">
+                  Embedded preview blocks direct printer dialogs. Open a direct browser print window to print straight to your label printer:
+                </p>
+                <a
+                  href={labelSandboxPrintUrl}
+                  target="expertpos_label_print_station"
+                  rel="noopener noreferrer"
+                  onClick={() => setTimeout(() => setLabelSandboxPrintUrl(null), 500)}
+                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black inline-flex items-center gap-1.5 shadow-sm cursor-pointer shrink-0"
+                >
+                  <ExternalLink className="w-3.5 h-3.5" />
+                  Open Direct Label Print Window
+                </a>
+              </div>
+            )}
 
             {/* Bottom Modal Action Bar */}
             <div className="mt-4 pt-4 border-t border-slate-200 flex flex-wrap items-center justify-between gap-3 shrink-0">

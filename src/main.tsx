@@ -2,6 +2,7 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import App from "./App.tsx";
 import { StandaloneReceiptPrintPage } from "./components/StandaloneReceiptPrintPage.tsx";
+import { StandaloneLabelPrintPage } from "./components/StandaloneLabelPrintPage.tsx";
 import "./index.css";
 
 // Global uncaught error handler to prevent blank white screens
@@ -26,12 +27,19 @@ window.addEventListener("error", (event) => {
   }
 });
 
-const isStandalonePrintRoute =
-  typeof window !== "undefined" &&
-  new URLSearchParams(window.location.search).get("printReceipt") === "1";
+const searchParams =
+  typeof window !== "undefined" ? new URLSearchParams(window.location.search) : null;
+const isStandaloneReceiptRoute = searchParams?.get("printReceipt") === "1";
+const isStandaloneLabelRoute = searchParams?.get("printLabels") === "1";
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
-    {isStandalonePrintRoute ? <StandaloneReceiptPrintPage /> : <App />}
+    {isStandaloneLabelRoute ? (
+      <StandaloneLabelPrintPage />
+    ) : isStandaloneReceiptRoute ? (
+      <StandaloneReceiptPrintPage />
+    ) : (
+      <App />
+    )}
   </StrictMode>,
 );

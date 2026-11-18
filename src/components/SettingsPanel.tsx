@@ -5,7 +5,7 @@ import {
   Settings, CheckCircle, Smartphone, Globe, Plus, Trash, Users,
   Eye, Edit, X, Check, Mail, Lock, Unlock, ShieldAlert,
   Sliders, Briefcase, Package, Clock, Plug, Layout, Zap, Percent, Cpu, Laptop, ChevronRight, Receipt, DollarSign,
-  Upload, Image as ImageIcon, Building, RotateCcw, Camera, Sparkles, Tag, HardDrive, FileCode, MapPin, Building2, Type, Lock as LockIcon
+  Upload, Image as ImageIcon, Building, RotateCcw, Camera, Sparkles, Tag, HardDrive, FileCode, MapPin, Building2, Type, Lock as LockIcon, ExternalLink
 } from "lucide-react";
 import {
   UserRole,
@@ -23,7 +23,13 @@ import {
   TENANT_FONT_OPTIONS,
   TENANT_FONT_SIZE_OPTIONS
 } from "../types";
-import { LABEL_SIZE_PRESETS, printThermalLabelsDirect } from "../utils/labelPrinterEngine";
+import {
+  LABEL_SIZE_PRESETS,
+  DUAL_ROLL_PRESETS,
+  getDualRollGeometry,
+  printThermalLabelsDirect,
+  buildCalibrationTestHtml
+} from "../utils/labelPrinterEngine";
 import {
   ThermalPrinterConfig,
   THERMAL_LAYOUT_SPECS,
@@ -326,7 +332,7 @@ export default function SettingsPanel({
     propLabelPrinterConfig || {
       printerModel: "zebra-zpl",
       printerName: "Zebra ZD220 Direct Thermal Label Printer",
-      presetId: "roll-50x25",
+      presetId: "dual-roll-50x25",
       connectionType: "browser",
       networkIp: "192.168.1.200",
       networkPort: "9100",
@@ -363,28 +369,28 @@ export default function SettingsPanel({
     triggerNotification("Label printer hardware settings saved to database successfully!", "success");
   };
 
+  const [labelTestSandboxUrl, setLabelTestSandboxUrl] = useState<string | null>(null);
+
   const handleTestPrintFromSettings = () => {
     const selectedPreset = LABEL_SIZE_PRESETS.find(p => p.id === labelPrinterConfig.presetId) || LABEL_SIZE_PRESETS[0];
-    const testHtml = `
-      <div class="label-print-page" style="padding: 2.5mm; border: 1px dashed #000; text-align: center; height: 100%;">
-        <div style="font-size: 10px; font-weight: 900; border-bottom: 1px solid #000; padding-bottom: 1mm; text-transform: uppercase;">
-          ${labelPrinterConfig.printerName}
-        </div>
-        <div style="font-size: 8px; margin: 1.5mm 0; font-family: monospace;">
-          Size: ${selectedPreset.name} | DPI: ${labelPrinterConfig.dpi} | Dark: ${labelPrinterConfig.darkness}/15
-        </div>
-        <div style="margin: 1.5mm auto; width: 85%; font-size: 9px; font-family: monospace; border: 1px solid #000; padding: 1.5mm; font-weight: bold;">
-          ||||||||||||||||||||||||||||||||||||||||
-          <br/>
-          CALIB-OK-2026
-        </div>
-        <div style="font-size: 7.5px; font-family: monospace; border-top: 1px solid #000; padding-top: 1mm;">
-          INTERFACE: ${labelPrinterConfig.connectionType.toUpperCase()} | SENSOR: ${labelPrinterConfig.sensorType.toUpperCase()}
-        </div>
-      </div>
-    `;
-    printThermalLabelsDirect(testHtml, selectedPreset, "Label Printer Calibration Test");
-    triggerNotification("Spooling calibration label to printer...", "success");
+    const testHtml = buildCalibrationTestHtml(
+      labelPrinterConfig.printerName,
+      selectedPreset,
+      labelPrinterConfig.dpi,
+      labelPrinterConfig.darkness,
+      labelPrinterConfig.connectionType.toUpperCase(),
+      labelPrinterConfig.sensorType.toUpperCase()
+    );
+    const res = printThermalLabelsDirect(testHtml, selectedPreset, "Label Printer Calibration Test");
+    if (res.ok) {
+      setLabelTestSandboxUrl(null);
+      triggerNotification(`Spooling calibration label (${selectedPreset.name}) to printer...`, "success");
+    } else if (res.blockedBySandbox && res.printStationUrl) {
+      setLabelTestSandboxUrl(res.printStationUrl);
+      triggerNotification("Preview iframe blocks direct printing — click 'Open Direct Calibration Print Window' below.", "warning");
+    } else {
+      triggerNotification(res.reason || "Unable to open label print dialog.", "warning");
+    }
   };
 
   // --- Supplier state variables ---
@@ -2875,17 +2881,31 @@ export default function SettingsPanel({
                     </label>
                     <select
                       value={labelPrinterConfig.presetId}
-                      onChange={(e) => setLabelPrinterConfig({ ...labelPrinterConfig, presetId: e.target.value })}
+                      onChange={(e) => {
+                        const nextId = e.target.value;
+                        const matched = LABEL_SIZE_PRESETS.find((p) => p.id === nextId);
+                        setLabelPrinterConfig({
+                          ...labelPrinterConfig,
+                          presetId: nextId,
+                          gapMm: matched ? matched.gapMm : labelPrinterConfig.gapMm
+                        });
+                      }}
                       className="w-full bg-white border border-slate-300 rounded-xl py-2 px-3 text-xs font-bold text-slate-900 outline-none focus:border-purple-600 cursor-pointer"
                     >
-                      <optgroup label="Direct Thermal Roll Presets">
+                      <optgroup label="2-Up Dual Roll Presets (2 Labels Across)">
+                        {DUAL_ROLL_PRESETS.map((preset) => (
+                          <option key={preset.id} value={preset.id}>
+                            {preset.name} ({preset.widthMm}mm roll)
+                          </option>
+                        ))}
+                      </optgroup>
+                      <optgroup label="1-Up Direct Thermal Roll Presets">
                         <option value="roll-50x25">50 × 25 mm (2" × 1") - Standard Shelf Tag</option>
                         <option value="roll-38x25">38 × 25 mm (1.5" × 1") - Compact Item Sticker</option>
                         <option value="roll-50x30">50 × 30 mm - Grocery &amp; Deli Roll</option>
                         <option value="roll-75x50">75 × 50 mm (3" × 2") - Apparel Tag</option>
                         <option value="roll-100x50">100 × 50 mm (4" × 2") - Shelf Talker / Bin Tag</option>
                         <option value="roll-100x150">100 × 150 mm (4" × 6") - Shipping &amp; Pallet</option>
-                        <option value="dual-roll-38x25">2-Up Dual Roll (2 × 38×25 mm)</option>
                         <option value="jewelry-32x19">Jewelry Tag (32 × 19 mm Dumbbell)</option>
                       </optgroup>
                       <optgroup label="Office Laser/Inkjet A4 Sheets">
@@ -2894,6 +2914,34 @@ export default function SettingsPanel({
                         <option value="a4-sheet-65">A4 Sheet: 65 Labels (38.1 × 21.2 mm)</option>
                       </optgroup>
                     </select>
+                    {(() => {
+                      const activePreset = LABEL_SIZE_PRESETS.find((p) => p.id === labelPrinterConfig.presetId) || LABEL_SIZE_PRESETS[0];
+                      const geo = getDualRollGeometry(activePreset);
+                      return (
+                        <div className="mt-2 grid grid-cols-5 gap-1 p-1.5 bg-slate-100/80 rounded-lg border border-slate-200 text-center font-mono">
+                          <div>
+                            <div className="text-[8px] text-slate-500 uppercase">Label W</div>
+                            <div className="text-[10px] font-black text-slate-900">{geo.singleLabelWidthMm}mm</div>
+                          </div>
+                          <div>
+                            <div className="text-[8px] text-slate-500 uppercase">Label H</div>
+                            <div className="text-[10px] font-black text-slate-900">{geo.heightMm}mm</div>
+                          </div>
+                          <div>
+                            <div className="text-[8px] text-slate-500 uppercase">Centre Gap</div>
+                            <div className="text-[10px] font-black text-purple-700">{geo.horizontalGapMm}mm</div>
+                          </div>
+                          <div>
+                            <div className="text-[8px] text-slate-500 uppercase">Total W</div>
+                            <div className="text-[10px] font-black text-emerald-700">{geo.totalRollWidthMm}mm</div>
+                          </div>
+                          <div>
+                            <div className="text-[8px] text-slate-500 uppercase">Vert. Gap</div>
+                            <div className="text-[10px] font-black text-slate-900">{labelPrinterConfig.gapMm}mm</div>
+                          </div>
+                        </div>
+                      );
+                    })()}
                   </div>
 
                   <div>
@@ -2989,6 +3037,24 @@ export default function SettingsPanel({
                     Save Label Hardware Settings
                   </button>
                 </div>
+
+                {labelTestSandboxUrl && (
+                  <div className="p-3 bg-amber-50 border border-amber-300 rounded-xl flex flex-wrap items-center justify-between gap-2">
+                    <span className="text-xs font-bold text-amber-900">
+                      Preview iframe blocks direct printing. Open a direct print window to calibrate your label printer:
+                    </span>
+                    <a
+                      href={labelTestSandboxUrl}
+                      target="expertpos_label_print_station"
+                      rel="noopener noreferrer"
+                      onClick={() => setTimeout(() => setLabelTestSandboxUrl(null), 500)}
+                      className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold inline-flex items-center gap-1.5 cursor-pointer"
+                    >
+                      <ExternalLink className="w-3.5 h-3.5" />
+                      Open Direct Calibration Print Window
+                    </a>
+                  </div>
+                )}
               </form>
             </div>
           </>

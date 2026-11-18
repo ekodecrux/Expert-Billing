@@ -468,13 +468,22 @@ app.post("/api/print/escpos-network", async (req, res) => {
   }
 });
 
-// Ephemeral cross-frame print receipt relay (bypasses browser iframe Storage Partitioning)
+// Ephemeral cross-frame print relay (bypasses browser iframe Storage Partitioning)
 interface ServerPrintSnapshot {
   jobId: string;
+  kind?: "receipt" | "label";
   html: string;
   layoutProfile: string;
   connectionMode?: string;
   invoiceId?: string;
+  pageWidthMm?: number;
+  pageHeightMm?: number;
+  isA4Sheet?: boolean;
+  isDualRoll?: boolean;
+  presetName?: string;
+  jobTitle?: string;
+  rawCommands?: string;
+  rawProtocol?: string;
   createdAt: number;
 }
 const printSnapshotStore = new Map<string, ServerPrintSnapshot>();
@@ -500,20 +509,30 @@ app.post("/api/print/snapshot", (req, res) => {
     }
     const html = String(body?.html || "");
     if (!html) {
-      return res.status(400).json({ success: false, error: "Empty receipt HTML snapshot." });
+      return res.status(400).json({ success: false, error: "Empty print HTML snapshot." });
     }
-    const jobId = String(body?.jobId || `PJ-${Date.now()}`).slice(0, 120);
+    const kind = body?.kind === "label" ? "label" : "receipt";
+    const jobId = String(body?.jobId || `${kind === "label" ? "LBL" : "PJ"}-${Date.now()}`).slice(0, 120);
     const entry: ServerPrintSnapshot = {
       jobId,
+      kind,
       html,
-      layoutProfile: String(body?.layoutProfile || "thermal-80mm"),
+      layoutProfile: String(body?.layoutProfile || (kind === "label" ? "label-roll" : "thermal-80mm")),
       connectionMode: body?.connectionMode ? String(body.connectionMode) : undefined,
       invoiceId: body?.invoiceId ? String(body.invoiceId) : undefined,
+      pageWidthMm: typeof body?.pageWidthMm === "number" ? body.pageWidthMm : undefined,
+      pageHeightMm: typeof body?.pageHeightMm === "number" ? body.pageHeightMm : undefined,
+      isA4Sheet: typeof body?.isA4Sheet === "boolean" ? body.isA4Sheet : undefined,
+      isDualRoll: typeof body?.isDualRoll === "boolean" ? body.isDualRoll : undefined,
+      presetName: body?.presetName ? String(body.presetName) : undefined,
+      jobTitle: body?.jobTitle ? String(body.jobTitle) : undefined,
+      rawCommands: body?.rawCommands ? String(body.rawCommands) : undefined,
+      rawProtocol: body?.rawProtocol ? String(body.rawProtocol) : undefined,
       createdAt: Date.now()
     };
     prunePrintSnapshots();
     printSnapshotStore.set(jobId, entry);
-    printSnapshotStore.set("latest", entry);
+    printSnapshotStore.set(kind === "label" ? "latest_label" : "latest", entry);
     return res.json({ success: true, jobId });
   } catch (e: any) {
     return res.status(400).json({ success: false, error: e?.message || "Invalid print snapshot payload." });
@@ -523,7 +542,8 @@ app.post("/api/print/snapshot", (req, res) => {
 app.get("/api/print/snapshot/:jobId", (req, res) => {
   prunePrintSnapshots();
   const jobId = String(req.params.jobId || "latest").slice(0, 120);
-  const entry = printSnapshotStore.get(jobId) || printSnapshotStore.get("latest");
+  const fallbackKey = jobId.startsWith("LBL") || jobId === "latest_label" ? "latest_label" : "latest";
+  const entry = printSnapshotStore.get(jobId) || printSnapshotStore.get(fallbackKey);
   if (!entry) {
     return res.status(404).json({ success: false, error: "Print job not found or expired." });
   }

@@ -684,13 +684,13 @@ export default function App() {
   const [labelPrinterConfig, setLabelPrinterConfig] = useState<LabelPrinterConfig>({
     printerModel: "tsc_te244",
     printerName: "TSC TE244 Thermal Label Printer",
-    presetId: "50x25_1col",
-    connectionType: "usb",
+    presetId: "dual-roll-50x25",
+    connectionType: "browser",
     networkIp: "192.168.1.100",
     networkPort: "9100",
     dpi: 203,
     darkness: 10,
-    gapMm: 2,
+    gapMm: 3,
     sensorType: "gap"
   });
 

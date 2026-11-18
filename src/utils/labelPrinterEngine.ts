@@ -1,10 +1,11 @@
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
- * 
+ *
  * Enterprise Thermal Label & Barcode Printer Engine
  * Supports Zebra (ZPL II), TSC / TVS / Xprinter (TSPL/TSPL2), Epson (ESC/POS),
- * and high-precision browser direct thermal print with exact CSS @page mm rules.
+ * full 1-Up & 2-Up Dual Roll continuous/gap labels, and high-precision browser
+ * direct thermal print with exact CSS @page mm rules.
  */
 
 import { Product } from "../types";
@@ -27,7 +28,17 @@ export type LabelSizePresetId =
   | "roll-75x50"       // 75 x 50 mm (3" x 2") - Medium retail box / carton
   | "roll-100x50"      // 100 x 50 mm (4" x 2") - Large product / shelf banner
   | "roll-100x150"     // 100 x 150 mm (4" x 6") - Shipping / Logistics / Pallet
-  | "dual-roll-38x25"  // 2-Across (38x25 mm dual roll on 80mm backing)
+  | "dual-roll-25x15"  // 2-Up (2 x 25x15 mm on 54mm roll)
+  | "dual-roll-32x19"  // 2-Up (2 x 32x19 mm on 68mm roll)
+  | "dual-roll-35x25"  // 2-Up (2 x 35x25 mm on 74mm roll)
+  | "dual-roll-38x25"  // 2-Up (2 x 38x25 mm dual roll on 80mm backing)
+  | "dual-roll-40x25"  // 2-Up (2 x 40x25 mm on 84mm roll)
+  | "dual-roll-40x30"  // 2-Up (2 x 40x30 mm on 84mm roll)
+  | "dual-roll-48x25"  // 2-Up (2 x 48x25 mm on 100mm roll)
+  | "dual-roll-50x25"  // 2-Up (2 x 50x25 mm on 104mm / 4" roll)
+  | "dual-roll-50x30"  // 2-Up (2 x 50x30 mm on 104mm / 4" roll)
+  | "dual-roll-50x38"  // 2-Up (2 x 50x38 mm on 104mm / 4" roll)
+  | "dual-roll-50x50"  // 2-Up (2 x 50x50 mm on 104mm / 4" roll)
   | "jewelry-32x19"    // 32 x 19 mm Dumbbell / Butterfly Jewelry Tag
   | "a4-sheet-24"      // A4 24 Labels (70 x 37 mm, 3 cols x 8 rows)
   | "a4-sheet-40"      // A4 40 Labels (52.5 x 29.7 mm, 4 cols x 10 rows)
@@ -38,10 +49,13 @@ export interface LabelSizeDimension {
   id: LabelSizePresetId;
   name: string;
   category: "roll" | "multi-column" | "sheet" | "custom";
-  widthMm: number;
+  widthMm: number;           // Total backing width (for 2-up, 2 * labelWidthMm + horizontalGapMm + 2 * sideMarginMm)
   heightMm: number;
-  gapMm: number;
+  gapMm: number;             // Vertical gap between rows
   columnsAcross: number;
+  labelWidthMm?: number;     // Width of a single sticker in multi-column roll
+  horizontalGapMm?: number;  // Gap between left & right sticker in 2-up roll
+  sideMarginMm?: number;     // Liner margin on left & right edge
   description: string;
   recommendedFor: string;
 }
@@ -113,6 +127,49 @@ export const LABEL_SIZE_PRESETS: LabelSizeDimension[] = [
     description: "Shipping / Courier / Pallet Logistics Label",
     recommendedFor: "E-commerce packages, B2B wholesale dispatch, freight cartons"
   },
+  // ==================== ALL 2-UP DUAL ROLL PRESETS ====================
+  {
+    id: "dual-roll-25x15",
+    name: "2-Up (2 × 25×15 mm)",
+    category: "multi-column",
+    widthMm: 54,
+    heightMm: 15,
+    gapMm: 2,
+    columnsAcross: 2,
+    labelWidthMm: 25,
+    horizontalGapMm: 2,
+    sideMarginMm: 1,
+    description: "2-Up Mini Dual Roll on 54mm Backing (2 labels across)",
+    recommendedFor: "Small sachets, vials, cosmetics, cables, optometry, mini stickers"
+  },
+  {
+    id: "dual-roll-32x19",
+    name: "2-Up (2 × 32×19 mm)",
+    category: "multi-column",
+    widthMm: 68,
+    heightMm: 19,
+    gapMm: 2,
+    columnsAcross: 2,
+    labelWidthMm: 32,
+    horizontalGapMm: 2,
+    sideMarginMm: 1,
+    description: "2-Up Compact Dual Roll on 68mm Backing (2 labels across)",
+    recommendedFor: "Optical frames, jewelry, small pharma bottles, boutique accessories"
+  },
+  {
+    id: "dual-roll-35x25",
+    name: "2-Up (2 × 35×25 mm)",
+    category: "multi-column",
+    widthMm: 74,
+    heightMm: 25,
+    gapMm: 2.5,
+    columnsAcross: 2,
+    labelWidthMm: 35,
+    horizontalGapMm: 2,
+    sideMarginMm: 1,
+    description: "2-Up Grocery/Pharmacy Dual Roll on 74mm Backing",
+    recommendedFor: "Pharmacy strips, bakery packets, fast-moving supermarket SKUs"
+  },
   {
     id: "dual-roll-38x25",
     name: "2-Up (2 × 38×25 mm)",
@@ -121,8 +178,109 @@ export const LABEL_SIZE_PRESETS: LabelSizeDimension[] = [
     heightMm: 25,
     gapMm: 3,
     columnsAcross: 2,
-    description: "Dual Column Roll on 80mm Thermal Backing Paper",
-    recommendedFor: "High-volume retail tagging, double throughput on 80mm printers"
+    labelWidthMm: 38,
+    horizontalGapMm: 2,
+    sideMarginMm: 1,
+    description: "Standard 2-Up Dual Roll on 80mm Thermal Backing Paper",
+    recommendedFor: "High-volume retail tagging, double throughput on 80mm / 4-inch printers"
+  },
+  {
+    id: "dual-roll-40x25",
+    name: "2-Up (2 × 40×25 mm)",
+    category: "multi-column",
+    widthMm: 84,
+    heightMm: 25,
+    gapMm: 3,
+    columnsAcross: 2,
+    labelWidthMm: 40,
+    horizontalGapMm: 2,
+    sideMarginMm: 1,
+    description: "2-Up Wide Retail Dual Roll on 84mm Backing",
+    recommendedFor: "Garments, footwear boxes, pharmacy, grocery shelf stickers"
+  },
+  {
+    id: "dual-roll-40x30",
+    name: "2-Up (2 × 40×30 mm)",
+    category: "multi-column",
+    widthMm: 84,
+    heightMm: 30,
+    gapMm: 3,
+    columnsAcross: 2,
+    labelWidthMm: 40,
+    horizontalGapMm: 2,
+    sideMarginMm: 1,
+    description: "2-Up Tall Dual Roll on 84mm Backing (Batch & Expiry)",
+    recommendedFor: "Packaged food, FMCG, dairy, apparel price & MRP tags"
+  },
+  {
+    id: "dual-roll-48x25",
+    name: "2-Up (2 × 48×25 mm)",
+    category: "multi-column",
+    widthMm: 100,
+    heightMm: 25,
+    gapMm: 3,
+    columnsAcross: 2,
+    labelWidthMm: 48,
+    horizontalGapMm: 2,
+    sideMarginMm: 1,
+    description: "2-Up 100mm Wide Backing Roll (2 × 48×25 mm)",
+    recommendedFor: "4-inch TSC/Zebra/TVS/Xprinter dual-column high-speed shelf labels"
+  },
+  {
+    id: "dual-roll-50x25",
+    name: "2-Up Dual Roll (50×25 mm • 103mm Total)",
+    category: "multi-column",
+    widthMm: 103,
+    heightMm: 25,
+    gapMm: 3,
+    columnsAcross: 2,
+    labelWidthMm: 50,
+    horizontalGapMm: 3,
+    sideMarginMm: 0,
+    description: "2-Up Dual Roll: 50×25 mm individual labels, 3 mm centre gap, 3 mm vertical gap (103 mm total width)",
+    recommendedFor: "Supermarkets, apparel retail, electronics, warehouse racks (4-inch thermal printers)"
+  },
+  {
+    id: "dual-roll-50x30",
+    name: "2-Up (2 × 50×30 mm)",
+    category: "multi-column",
+    widthMm: 104,
+    heightMm: 30,
+    gapMm: 3,
+    columnsAcross: 2,
+    labelWidthMm: 50,
+    horizontalGapMm: 2,
+    sideMarginMm: 1,
+    description: "2-Up 50×30 mm Dual Roll on 104mm (4-inch) Backing",
+    recommendedFor: "Supermarkets, FMCG with batch/expiry, high-volume fulfillment"
+  },
+  {
+    id: "dual-roll-50x38",
+    name: "2-Up (2 × 50×38 mm / 2\"×1.5\")",
+    category: "multi-column",
+    widthMm: 104,
+    heightMm: 38,
+    gapMm: 3,
+    columnsAcross: 2,
+    labelWidthMm: 50,
+    horizontalGapMm: 2,
+    sideMarginMm: 1,
+    description: "2-Up 2\"×1.5\" Dual Roll on 104mm (4-inch) Backing",
+    recommendedFor: "Detailed MRP + FSSAI + batch/expiry retail & warehouse labels"
+  },
+  {
+    id: "dual-roll-50x50",
+    name: "2-Up (2 × 50×50 mm / 2\"×2\")",
+    category: "multi-column",
+    widthMm: 104,
+    heightMm: 50,
+    gapMm: 3,
+    columnsAcross: 2,
+    labelWidthMm: 50,
+    horizontalGapMm: 2,
+    sideMarginMm: 1,
+    description: "2-Up Square Dual Roll on 104mm (4-inch) Backing",
+    recommendedFor: "QR + Barcode box stickers, apparel hang tags, inventory bins"
   },
   {
     id: "jewelry-32x19",
@@ -165,10 +323,59 @@ export const LABEL_SIZE_PRESETS: LabelSizeDimension[] = [
     heightMm: 21.2,
     gapMm: 0,
     columnsAcross: 5,
-    description: "Mini Mini Barcode Stickers (5 cols × 13 rows)",
+    description: "Mini Barcode Stickers (5 cols × 13 rows)",
     recommendedFor: "Small item inventory stickers on standard office A4 printers"
   }
 ];
+
+export const DUAL_ROLL_PRESETS = LABEL_SIZE_PRESETS.filter(
+  (p) => p.category !== "sheet" && p.columnsAcross === 2
+);
+
+export function isDualRollPreset(dimension: LabelSizeDimension): boolean {
+  return dimension.category !== "sheet" && dimension.columnsAcross === 2;
+}
+
+export function getDualRollGeometry(dimension: LabelSizeDimension): {
+  isDualRoll: boolean;
+  totalRollWidthMm: number;
+  singleLabelWidthMm: number;
+  horizontalGapMm: number;
+  sideMarginMm: number;
+  heightMm: number;
+  col2StartMm: number;
+} {
+  const isDualRoll = isDualRollPreset(dimension);
+  if (!isDualRoll) {
+    return {
+      isDualRoll: false,
+      totalRollWidthMm: dimension.widthMm,
+      singleLabelWidthMm: dimension.widthMm,
+      horizontalGapMm: 0,
+      sideMarginMm: 0,
+      heightMm: dimension.heightMm,
+      col2StartMm: 0
+    };
+  }
+  const horizontalGapMm = dimension.horizontalGapMm ?? 2;
+  const sideMarginMm = dimension.sideMarginMm ?? 1;
+  const singleLabelWidthMm =
+    dimension.labelWidthMm ??
+    Math.max(15, Number(((dimension.widthMm - horizontalGapMm - sideMarginMm * 2) / 2).toFixed(2)));
+  const totalRollWidthMm = Number(
+    (singleLabelWidthMm * 2 + horizontalGapMm + sideMarginMm * 2).toFixed(2)
+  );
+  const col2StartMm = Number((sideMarginMm + singleLabelWidthMm + horizontalGapMm).toFixed(2));
+  return {
+    isDualRoll: true,
+    totalRollWidthMm,
+    singleLabelWidthMm,
+    horizontalGapMm,
+    sideMarginMm,
+    heightMm: dimension.heightMm,
+    col2StartMm
+  };
+}
 
 export interface LabelDesignOptions {
   storeName: string;
@@ -194,6 +401,8 @@ export interface LabelDesignOptions {
   customWidthMm?: number;
   customHeightMm?: number;
   customGapMm?: number;
+  customColumnsAcross?: 1 | 2;
+  customHorizontalGapMm?: number;
 }
 
 export const DEFAULT_LABEL_DESIGN_OPTIONS: LabelDesignOptions = {
@@ -223,9 +432,6 @@ export const DEFAULT_LABEL_DESIGN_OPTIONS: LabelDesignOptions = {
 // Deterministic Code 128 & Barcode Pattern Generator (Pure Zero-Dependency SVG)
 // ============================================================================
 
-/**
- * Standard Code 128 subset B pattern mapping for scannable vector barcodes
- */
 const CODE128_PATTERNS: Record<number, string> = {
   0: "212222", 1: "222122", 2: "222221", 3: "121223", 4: "121322",
   5: "131222", 6: "122213", 7: "122312", 8: "132212", 9: "221213",
@@ -247,17 +453,14 @@ const CODE128_PATTERNS: Record<number, string> = {
   85: "124211", 86: "411212", 87: "421112", 88: "421211", 89: "212141",
   90: "214121", 91: "412121", 92: "111143", 93: "111341", 94: "131141",
   95: "114113", 96: "114311", 97: "411113", 98: "411311", 99: "113141",
-  100: "114131", 101: "311141", 102: "411131", 103: "211412", 104: "211214", // Start B
-  105: "211232", // Start C
-  106: "2331112" // Stop pattern
+  100: "114131", 101: "311141", 102: "411131", 103: "211412", 104: "211214",
+  105: "211232",
+  106: "2331112"
 };
 
-/**
- * Encodes text into Code 128 subset B modules for SVG rendering
- */
 export function encodeCode128B(text: string): { modules: boolean[]; code: string } {
   const clean = text.replace(/[^ -~]/g, "") || "000000";
-  const codes: number[] = [104]; // Start Code B
+  const codes: number[] = [104];
   let checksum = 104;
 
   for (let i = 0; i < clean.length; i++) {
@@ -268,10 +471,9 @@ export function encodeCode128B(text: string): { modules: boolean[]; code: string
 
   const checkVal = checksum % 103;
   codes.push(checkVal);
-  codes.push(106); // Stop pattern
+  codes.push(106);
 
   const modules: boolean[] = [];
-  // Quiet zone: 10 modules white
   for (let q = 0; q < 10; q++) modules.push(false);
 
   codes.forEach(codeVal => {
@@ -286,15 +488,11 @@ export function encodeCode128B(text: string): { modules: boolean[]; code: string
     }
   });
 
-  // Quiet zone: 10 modules white
   for (let q = 0; q < 10; q++) modules.push(false);
 
   return { modules, code: clean };
 }
 
-/**
- * Generate clean SVG Barcode string for high-contrast thermal printing
- */
 export function generateBarcodeSvgString(
   text: string,
   heightPx: number = 42,
@@ -302,7 +500,8 @@ export function generateBarcodeSvgString(
 ): string {
   const { modules, code } = encodeCode128B(text);
   const totalWidth = modules.length;
-  const barHeight = includeHumanReadable ? heightPx - 14 : heightPx;
+  const textZone = includeHumanReadable ? Math.min(13, Math.max(9, Math.round(heightPx * 0.34))) : 0;
+  const barHeight = Math.max(8, heightPx - textZone);
 
   let rects = "";
   let barStart = -1;
@@ -321,8 +520,9 @@ export function generateBarcodeSvgString(
     rects += `<rect x="${barStart}" y="0" width="${modules.length - barStart}" height="${barHeight}" fill="#000" />`;
   }
 
+  const textSize = Math.max(8, Math.min(11, textZone - 2));
   const textElement = includeHumanReadable
-    ? `<text x="${totalWidth / 2}" y="${heightPx - 1}" font-family="monospace" font-size="11" font-weight="bold" text-anchor="middle" fill="#000" letter-spacing="1.5">${code}</text>`
+    ? `<text x="${totalWidth / 2}" y="${heightPx - 1}" font-family="monospace" font-size="${textSize}" font-weight="bold" text-anchor="middle" fill="#000" letter-spacing="1.2">${code}</text>`
     : "";
 
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${totalWidth} ${heightPx}" preserveAspectRatio="none" style="image-rendering: pixelated; shape-rendering: crispEdges; width: 100%; height: ${heightPx}px;">
@@ -331,15 +531,10 @@ export function generateBarcodeSvgString(
   </svg>`;
 }
 
-/**
- * Simple SVG QR Code visual matrix generator for retail links / payment / UPI
- */
 export function generateQrCodeSvgString(text: string, sizePx: number = 70): string {
-  // Deterministic 21x21 QR Code Version 1 matrix simulation
   const matrixSize = 25;
   const cells: boolean[][] = Array.from({ length: matrixSize }, () => Array(matrixSize).fill(false));
 
-  // Finder patterns at corners (7x7)
   const stampFinder = (startX: number, startY: number) => {
     for (let y = 0; y < 7; y++) {
       for (let x = 0; x < 7; x++) {
@@ -353,17 +548,15 @@ export function generateQrCodeSvgString(text: string, sizePx: number = 70): stri
     }
   };
 
-  stampFinder(0, 0); // Top-left
-  stampFinder(matrixSize - 7, 0); // Top-right
-  stampFinder(0, matrixSize - 7); // Bottom-left
+  stampFinder(0, 0);
+  stampFinder(matrixSize - 7, 0);
+  stampFinder(0, matrixSize - 7);
 
-  // Timing lines
   for (let i = 7; i < matrixSize - 7; i++) {
     cells[6][i] = i % 2 === 0;
     cells[i][6] = i % 2 === 0;
   }
 
-  // Hash payload text deterministically into inner cells
   let hash = 0;
   for (let i = 0; i < text.length; i++) {
     hash = (hash << 5) - hash + text.charCodeAt(i);
@@ -392,20 +585,145 @@ export function generateQrCodeSvgString(text: string, sizePx: number = 70): stri
 }
 
 // ============================================================================
+// Pair Chunking Helper for 2-Up Dual Roll Output
+// ============================================================================
+
+export interface LabelRowPair {
+  left: Product;
+  right: Product | null;
+}
+
+export function chunkLabelsForRows(
+  products: { product: Product; quantity: number }[],
+  columnsAcross: number
+): LabelRowPair[] {
+  const flat: Product[] = [];
+  products.forEach(({ product, quantity }) => {
+    const count = Math.max(0, Math.floor(quantity));
+    for (let i = 0; i < count; i++) {
+      flat.push(product);
+    }
+  });
+
+  if (columnsAcross !== 2) {
+    return flat.map((p) => ({ left: p, right: null }));
+  }
+
+  const pairs: LabelRowPair[] = [];
+  for (let i = 0; i < flat.length; i += 2) {
+    pairs.push({
+      left: flat[i],
+      right: flat[i + 1] ?? null
+    });
+  }
+  return pairs;
+}
+
+interface CompactPairRun {
+  left: Product;
+  right: Product | null;
+  count: number;
+}
+
+function compressPairRuns(pairs: LabelRowPair[]): CompactPairRun[] {
+  const runs: CompactPairRun[] = [];
+  pairs.forEach((pair) => {
+    const prev = runs[runs.length - 1];
+    if (
+      prev &&
+      prev.left.id === pair.left.id &&
+      (prev.right?.id ?? null) === (pair.right?.id ?? null)
+    ) {
+      prev.count += 1;
+    } else {
+      runs.push({ left: pair.left, right: pair.right, count: 1 });
+    }
+  });
+  return runs;
+}
+
+// ============================================================================
 // Raw Industrial Label Printer Command Generators (ZPL II & TSPL/TSPL2)
 // ============================================================================
 
-/**
- * Calculates dots from millimeters based on target printer DPI
- */
 export function mmToDots(mm: number, dpi: 203 | 300 | 600 = 203): number {
   const dotsPerMm = dpi === 600 ? 23.62 : dpi === 300 ? 11.81 : 8.0;
   return Math.round(mm * dotsPerMm);
 }
 
+function renderZplSingleSlot(
+  product: Product,
+  options: LabelDesignOptions,
+  xOriginDots: number,
+  slotWidthDots: number,
+  slotWidthMm: number,
+  heightMm: number
+): string {
+  const dpi = options.dpi || 203;
+  const barcodeVal = (product.barcode || product.sku || "000000").replace(/[^a-zA-Z0-9]/g, "");
+  const hasMrp = product.mrp && product.mrp > product.price;
+  const discountPercent = hasMrp
+    ? Math.round(((product.mrp! - product.price) / product.mrp!) * 100)
+    : 0;
+
+  const compact = heightMm <= 20 || slotWidthMm <= 34;
+  let out = "";
+  let yOffset = mmToDots(compact ? 1.0 : 1.8, dpi);
+
+  if (options.showStoreName && options.storeName) {
+    const fontH = compact ? 2.2 : 2.9;
+    out += `^FO${xOriginDots},${yOffset}^FB${slotWidthDots},1,0,C^A0N,${mmToDots(fontH, dpi)},${mmToDots(fontH, dpi)}^FD${options.storeName.toUpperCase().substring(0, compact ? 18 : 28)}^FS\n`;
+    yOffset += mmToDots(compact ? 2.6 : 3.6, dpi);
+  }
+
+  if (options.showProductName) {
+    const baseNameMm =
+      options.productNameFontSize === "large" ? 3.8 : options.productNameFontSize === "small" ? 2.6 : 3.2;
+    const pNameFont = compact ? Math.min(2.6, baseNameMm) : baseNameMm;
+    out += `^FO${xOriginDots},${yOffset}^FB${slotWidthDots},${compact ? 1 : 2},0,C^A0N,${mmToDots(pNameFont, dpi)},${mmToDots(pNameFont, dpi)}^FD${product.name.substring(0, compact ? 22 : 38)}^FS\n`;
+    yOffset += mmToDots(compact ? 3.0 : 5.0, dpi);
+  }
+
+  if (options.showSellingPrice) {
+    const priceStr = `${options.currencySymbol}${product.price.toFixed(2)}`;
+    const mrpStr = hasMrp && options.showMrp ? `MRP:${options.currencySymbol}${product.mrp?.toFixed(2)}` : "";
+    const discStr = discountPercent > 0 && options.showSavingsBadge ? ` (${discountPercent}% OFF)` : "";
+
+    if (mrpStr && !compact) {
+      out += `^FO${xOriginDots},${yOffset}^FB${slotWidthDots},1,0,C^A0N,${mmToDots(2.5, dpi)},${mmToDots(2.5, dpi)}^FD${mrpStr}${discStr}^FS\n`;
+      yOffset += mmToDots(3.3, dpi);
+    }
+
+    const priceFont = compact ? 3.2 : 4.2;
+    out += `^FO${xOriginDots},${yOffset}^FB${slotWidthDots},1,0,C^A0N,${mmToDots(priceFont, dpi)},${mmToDots(priceFont, dpi)}^FD${priceStr}${compact ? "" : ` / ${product.unit || "Unit"}`}^FS\n`;
+    yOffset += mmToDots(compact ? 3.6 : 5.0, dpi);
+  }
+
+  if (options.showBarcodeGraphic) {
+    const barHeightMm = heightMm > 35 ? 11 : heightMm <= 20 ? 4.5 : 7;
+    const barHeight = mmToDots(barHeightMm, dpi);
+    const barModuleWidth = slotWidthMm <= 34 ? 1 : 2;
+    const estBarWidthDots = mmToDots(Math.min(slotWidthMm - 4, 34), dpi);
+    const barX = xOriginDots + Math.max(mmToDots(2, dpi), Math.round((slotWidthDots - estBarWidthDots) / 2));
+    out += `^BY${barModuleWidth},2.2,${barHeight}\n`;
+    out += `^FO${barX},${yOffset}^BCN,${barHeight},${options.showBarcodeText ? "Y" : "N"},N,N^FD${barcodeVal}^FS\n`;
+    yOffset += barHeight + mmToDots(options.showBarcodeText ? (compact ? 2.5 : 4.0) : 1.5, dpi);
+  }
+
+  const footerParts: string[] = [];
+  if (options.showSku) footerParts.push(`SKU:${product.sku}`);
+  if (options.showBatchNo && product.batchNumber && !compact) footerParts.push(`B:${product.batchNumber}`);
+  if (options.showExpiryDate && product.expiryDate && !compact) footerParts.push(`EXP:${product.expiryDate}`);
+
+  if (footerParts.length > 0 && yOffset < mmToDots(heightMm - 2, dpi)) {
+    out += `^FO${xOriginDots},${yOffset}^FB${slotWidthDots},1,0,C^A0N,${mmToDots(2.1, dpi)},${mmToDots(2.1, dpi)}^FD${footerParts.join(" | ")}^FS\n`;
+  }
+
+  return out;
+}
+
 /**
- * Generates Zebra ZPL II raw command string for direct thermal barcode printers
- * Compatible with Zebra ZD220, ZD230, ZD420, ZT230, Citizen, Datamax (ZGL)
+ * Generates Zebra ZPL II raw command string (1-Up and 2-Up Dual Roll aware)
  */
 export function generateZplCommands(
   products: { product: Product; quantity: number }[],
@@ -413,78 +731,44 @@ export function generateZplCommands(
   dimension: LabelSizeDimension
 ): string {
   const dpi = options.dpi || 203;
-  const pw = mmToDots(dimension.widthMm, dpi);
-  const ll = mmToDots(dimension.heightMm, dpi);
+  const geo = getDualRollGeometry(dimension);
+  const pw = mmToDots(geo.totalRollWidthMm, dpi);
+  const ll = mmToDots(geo.heightMm, dpi);
+  const slotWidthDots = mmToDots(geo.singleLabelWidthMm, dpi);
+  const leftOriginDots = mmToDots(geo.sideMarginMm, dpi);
+  const rightOriginDots = mmToDots(geo.col2StartMm, dpi);
 
   let zpl = "";
 
+  if (geo.isDualRoll) {
+    const pairs = chunkLabelsForRows(products, 2);
+    const runs = compressPairRuns(pairs);
+    runs.forEach(({ left, right, count }) => {
+      zpl += `^XA\n`;
+      zpl += `^PW${pw}\n`;
+      zpl += `^LL${ll}\n`;
+      zpl += `^PON\n`;
+      zpl += `^LH0,0\n`;
+      zpl += `~SD${Math.min(30, Math.max(1, options.darkness * 2))}\n`;
+      zpl += renderZplSingleSlot(left, options, leftOriginDots, slotWidthDots, geo.singleLabelWidthMm, geo.heightMm);
+      if (right) {
+        zpl += renderZplSingleSlot(right, options, rightOriginDots, slotWidthDots, geo.singleLabelWidthMm, geo.heightMm);
+      }
+      zpl += `^PQ${count},0,1,Y\n`;
+      zpl += `^XZ\n\n`;
+    });
+    return zpl;
+  }
+
   products.forEach(({ product, quantity }) => {
     if (quantity <= 0) return;
-
-    const barcodeVal = (product.barcode || product.sku || "000000").replace(/[^a-zA-Z0-9]/g, "");
-    const hasMrp = product.mrp && product.mrp > product.price;
-    const discountPercent = hasMrp
-      ? Math.round(((product.mrp! - product.price) / product.mrp!) * 100)
-      : 0;
-
-    // Single label header
     zpl += `^XA\n`;
     zpl += `^PW${pw}\n`;
     zpl += `^LL${ll}\n`;
     zpl += `^PON\n`;
     zpl += `^LH0,0\n`;
-    zpl += `~SD${Math.min(30, Math.max(1, options.darkness * 2))}\n`; // Set darkness
-
-    let yOffset = mmToDots(2, dpi);
-
-    // 1. Store Name Header
-    if (options.showStoreName && options.storeName) {
-      zpl += `^FO0,${yOffset}^FB${pw},1,0,C^A0N,${mmToDots(3.2, dpi)},${mmToDots(3.2, dpi)}^FD${options.storeName.toUpperCase()}^FS\n`;
-      yOffset += mmToDots(4, dpi);
-    }
-
-    // 2. Product Name
-    if (options.showProductName) {
-      const pNameFont = options.productNameFontSize === "large" ? 4.2 : options.productNameFontSize === "small" ? 3.0 : 3.6;
-      zpl += `^FO0,${yOffset}^FB${pw},2,0,C^A0N,${mmToDots(pNameFont, dpi)},${mmToDots(pNameFont, dpi)}^FD${product.name.substring(0, 42)}^FS\n`;
-      yOffset += mmToDots(5.5, dpi);
-    }
-
-    // 3. Pricing Section (MRP vs Selling Price)
-    if (options.showSellingPrice) {
-      const priceStr = `${options.currencySymbol}${product.price.toFixed(2)}`;
-      const mrpStr = hasMrp && options.showMrp ? `MRP:${options.currencySymbol}${product.mrp?.toFixed(2)}` : "";
-      const discStr = discountPercent > 0 && options.showSavingsBadge ? ` (${discountPercent}% OFF)` : "";
-
-      if (mrpStr) {
-        zpl += `^FO0,${yOffset}^FB${pw},1,0,C^A0N,${mmToDots(2.8, dpi)},${mmToDots(2.8, dpi)}^FD${mrpStr}${discStr}^FS\n`;
-        yOffset += mmToDots(3.8, dpi);
-      }
-
-      zpl += `^FO0,${yOffset}^FB${pw},1,0,C^A0N,${mmToDots(4.8, dpi)},${mmToDots(4.8, dpi)}^FD${priceStr} / ${product.unit || "Unit"}^FS\n`;
-      yOffset += mmToDots(5.8, dpi);
-    }
-
-    // 4. Barcode
-    if (options.showBarcodeGraphic) {
-      const barHeight = mmToDots(dimension.heightMm > 35 ? 12 : 8, dpi);
-      const barX = Math.max(mmToDots(4, dpi), Math.round((pw - mmToDots(36, dpi)) / 2));
-      zpl += `^BY2,2.5,${barHeight}\n`;
-      zpl += `^FO${barX},${yOffset}^BCN,${barHeight},${options.showBarcodeText ? "Y" : "N"},N,N^FD${barcodeVal}^FS\n`;
-      yOffset += barHeight + mmToDots(options.showBarcodeText ? 4.5 : 2, dpi);
-    }
-
-    // 5. SKU & Batch Footer
-    const footerParts: string[] = [];
-    if (options.showSku) footerParts.push(`SKU:${product.sku}`);
-    if (options.showBatchNo && product.batchNumber) footerParts.push(`B:${product.batchNumber}`);
-    if (options.showExpiryDate && product.expiryDate) footerParts.push(`EXP:${product.expiryDate}`);
-
-    if (footerParts.length > 0) {
-      zpl += `^FO0,${yOffset}^FB${pw},1,0,C^A0N,${mmToDots(2.4, dpi)},${mmToDots(2.4, dpi)}^FD${footerParts.join(" | ")}^FS\n`;
-    }
-
-    // Print count
+    zpl += `~SD${Math.min(30, Math.max(1, options.darkness * 2))}\n`;
+    zpl += renderZplSingleSlot(product, options, 0, pw, geo.singleLabelWidthMm, geo.heightMm);
     zpl += `^PQ${quantity},0,1,Y\n`;
     zpl += `^XZ\n\n`;
   });
@@ -492,90 +776,111 @@ export function generateZplCommands(
   return zpl;
 }
 
+function renderTsplSingleSlot(
+  product: Product,
+  options: LabelDesignOptions,
+  xCenterMm: number,
+  slotWidthMm: number,
+  heightMm: number
+): string {
+  const dpi = options.dpi || 203;
+  const barcodeVal = (product.barcode || product.sku || "000000").replace(/[^a-zA-Z0-9]/g, "");
+  const hasMrp = product.mrp && product.mrp > product.price;
+  const discountPercent = hasMrp
+    ? Math.round(((product.mrp! - product.price) / product.mrp!) * 100)
+    : 0;
+  const compact = heightMm <= 20 || slotWidthMm <= 34;
+
+  let out = "";
+  let yMm = compact ? 1.0 : 1.8;
+  const xDots = mmToDots(xCenterMm, dpi);
+
+  if (options.showStoreName && options.storeName) {
+    out += `TEXT ${xDots},${mmToDots(yMm, dpi)},"${compact ? "1" : "2"}",0,1,1,2,"${options.storeName.toUpperCase().substring(0, compact ? 16 : 26)}"\n`;
+    yMm += compact ? 2.6 : 3.8;
+  }
+
+  if (options.showProductName) {
+    out += `TEXT ${xDots},${mmToDots(yMm, dpi)},"${compact ? "2" : "3"}",0,1,1,2,"${product.name.substring(0, compact ? 18 : 28)}"\n`;
+    yMm += compact ? 3.2 : 4.8;
+  }
+
+  if (options.showSellingPrice) {
+    const priceText = `${options.currencySymbol}${product.price.toFixed(2)}`;
+    const mrpText = hasMrp && options.showMrp ? `MRP:${options.currencySymbol}${product.mrp?.toFixed(2)}` : "";
+
+    if (mrpText && !compact) {
+      out += `TEXT ${xDots},${mmToDots(yMm, dpi)},"1",0,1,1,2,"${mrpText}${discountPercent > 0 && options.showSavingsBadge ? ` (${discountPercent}% OFF)` : ""}"\n`;
+      yMm += 3.2;
+    }
+
+    out += `TEXT ${xDots},${mmToDots(yMm, dpi)},"${compact ? "3" : "4"}",0,1,1,2,"${priceText}${compact ? "" : ` / ${product.unit || "Pack"}`}"\n`;
+    yMm += compact ? 3.5 : 5.2;
+  }
+
+  if (options.showBarcodeGraphic) {
+    const barHeightMm = heightMm > 35 ? 11 : heightMm <= 20 ? 4.5 : 7.5;
+    const barHeightDots = mmToDots(barHeightMm, dpi);
+    const narrow = slotWidthMm <= 34 ? 1 : 2;
+    const wide = slotWidthMm <= 34 ? 2 : 4;
+    out += `BARCODE ${xDots},${mmToDots(yMm, dpi)},"128",${barHeightDots},${options.showBarcodeText ? 2 : 0},0,${narrow},${wide},"${barcodeVal}"\n`;
+    yMm += barHeightMm + (options.showBarcodeText ? (compact ? 2.5 : 4.0) : 1.5);
+  }
+
+  const footerParts: string[] = [];
+  if (options.showSku) footerParts.push(`SKU:${product.sku}`);
+  if (options.showBatchNo && product.batchNumber && !compact) footerParts.push(`B:${product.batchNumber}`);
+  if (options.showExpiryDate && product.expiryDate && !compact) footerParts.push(`EXP:${product.expiryDate}`);
+
+  if (footerParts.length > 0 && yMm < heightMm - 2) {
+    out += `TEXT ${xDots},${mmToDots(yMm, dpi)},"1",0,1,1,2,"${footerParts.join(" | ")}"\n`;
+  }
+
+  return out;
+}
+
 /**
- * Generates TSC TSPL/TSPL2 raw command string
- * Compatible with TSC TE244, TTP-244 Pro, TVS LP 46 Neo, Xprinter XP-420B, Rongta, Gainscha
+ * Generates TSC TSPL/TSPL2 raw command string (1-Up and 2-Up Dual Roll aware)
  */
 export function generateTsplCommands(
   products: { product: Product; quantity: number }[],
   options: LabelDesignOptions,
   dimension: LabelSizeDimension
 ): string {
+  const geo = getDualRollGeometry(dimension);
   let tspl = "";
+
+  if (geo.isDualRoll) {
+    const pairs = chunkLabelsForRows(products, 2);
+    const runs = compressPairRuns(pairs);
+    const col1CenterMm = geo.sideMarginMm + geo.singleLabelWidthMm / 2;
+    const col2CenterMm = geo.col2StartMm + geo.singleLabelWidthMm / 2;
+
+    runs.forEach(({ left, right, count }) => {
+      tspl += `SIZE ${geo.totalRollWidthMm} mm, ${geo.heightMm} mm\n`;
+      tspl += `GAP ${dimension.gapMm} mm, 0 mm\n`;
+      tspl += `DIRECTION 1\n`;
+      tspl += `REFERENCE 0,0\n`;
+      tspl += `DENSITY ${Math.min(15, Math.max(1, options.darkness))}\n`;
+      tspl += `CLS\n`;
+      tspl += renderTsplSingleSlot(left, options, col1CenterMm, geo.singleLabelWidthMm, geo.heightMm);
+      if (right) {
+        tspl += renderTsplSingleSlot(right, options, col2CenterMm, geo.singleLabelWidthMm, geo.heightMm);
+      }
+      tspl += `PRINT ${count},1\n\n`;
+    });
+    return tspl;
+  }
 
   products.forEach(({ product, quantity }) => {
     if (quantity <= 0) return;
-
-    const barcodeVal = (product.barcode || product.sku || "000000").replace(/[^a-zA-Z0-9]/g, "");
-    const hasMrp = product.mrp && product.mrp > product.price;
-    const discountPercent = hasMrp
-      ? Math.round(((product.mrp! - product.price) / product.mrp!) * 100)
-      : 0;
-
-    tspl += `SIZE ${dimension.widthMm} mm, ${dimension.heightMm} mm\n`;
+    tspl += `SIZE ${geo.totalRollWidthMm} mm, ${geo.heightMm} mm\n`;
     tspl += `GAP ${dimension.gapMm} mm, 0 mm\n`;
     tspl += `DIRECTION 1\n`;
     tspl += `REFERENCE 0,0\n`;
     tspl += `DENSITY ${Math.min(15, Math.max(1, options.darkness))}\n`;
     tspl += `CLS\n`;
-
-    let yMm = 2;
-
-    // 1. Store Header
-    if (options.showStoreName && options.storeName) {
-      const xDots = mmToDots(dimension.widthMm / 2, options.dpi);
-      const yDots = mmToDots(yMm, options.dpi);
-      tspl += `TEXT ${xDots},${yDots},"2",0,1,1,2,"${options.storeName.toUpperCase()}"\n`;
-      yMm += 4;
-    }
-
-    // 2. Product Name
-    if (options.showProductName) {
-      const xDots = mmToDots(dimension.widthMm / 2, options.dpi);
-      const yDots = mmToDots(yMm, options.dpi);
-      tspl += `TEXT ${xDots},${yDots},"3",0,1,1,2,"${product.name.substring(0, 32)}"\n`;
-      yMm += 5;
-    }
-
-    // 3. Price & MRP
-    if (options.showSellingPrice) {
-      const xDots = mmToDots(dimension.widthMm / 2, options.dpi);
-      const yDots = mmToDots(yMm, options.dpi);
-      const priceText = `${options.currencySymbol}${product.price.toFixed(2)}`;
-      const mrpText = hasMrp ? `MRP:${options.currencySymbol}${product.mrp?.toFixed(2)}` : "";
-      
-      if (mrpText) {
-        tspl += `TEXT ${xDots},${yDots},"1",0,1,1,2,"${mrpText} ${discountPercent > 0 ? `(${discountPercent}% OFF)` : ''}"\n`;
-        yMm += 3.5;
-      }
-      
-      const priceYDots = mmToDots(yMm, options.dpi);
-      tspl += `TEXT ${xDots},${priceYDots},"4",0,1,1,2,"${priceText} / ${product.unit || 'Pack'}"\n`;
-      yMm += 5.5;
-    }
-
-    // 4. Barcode
-    if (options.showBarcodeGraphic) {
-      const xDots = mmToDots(dimension.widthMm / 2, options.dpi);
-      const yDots = mmToDots(yMm, options.dpi);
-      const barHeightDots = mmToDots(dimension.heightMm > 35 ? 12 : 8, options.dpi);
-      // BARCODE X, Y, "code type", height, human readable, rotation, narrow, wide, "content"
-      tspl += `BARCODE ${xDots},${yDots},"128",${barHeightDots},${options.showBarcodeText ? 2 : 0},0,2,4,"${barcodeVal}"\n`;
-      yMm += (dimension.heightMm > 35 ? 12 : 8) + (options.showBarcodeText ? 4 : 2);
-    }
-
-    // 5. SKU & Expiry Footer
-    const footerParts: string[] = [];
-    if (options.showSku) footerParts.push(`SKU:${product.sku}`);
-    if (options.showBatchNo && product.batchNumber) footerParts.push(`B:${product.batchNumber}`);
-    if (options.showExpiryDate && product.expiryDate) footerParts.push(`EXP:${product.expiryDate}`);
-
-    if (footerParts.length > 0) {
-      const xDots = mmToDots(dimension.widthMm / 2, options.dpi);
-      const yDots = mmToDots(yMm, options.dpi);
-      tspl += `TEXT ${xDots},${yDots},"1",0,1,1,2,"${footerParts.join(" | ")}"\n`;
-    }
-
+    tspl += renderTsplSingleSlot(product, options, geo.totalRollWidthMm / 2, geo.singleLabelWidthMm, geo.heightMm);
     tspl += `PRINT ${quantity},1\n\n`;
   });
 
@@ -586,8 +891,32 @@ export function generateTsplCommands(
  * Generates Thermal Alignment & Sensor Calibration Test Label (ZPL)
  */
 export function generateCalibrationTestZpl(options: LabelDesignOptions, dimension: LabelSizeDimension): string {
-  const pw = mmToDots(dimension.widthMm, options.dpi);
-  const ll = mmToDots(dimension.heightMm, options.dpi);
+  const geo = getDualRollGeometry(dimension);
+  const pw = mmToDots(geo.totalRollWidthMm, options.dpi);
+  const ll = mmToDots(geo.heightMm, options.dpi);
+
+  if (geo.isDualRoll) {
+    const slotW = mmToDots(geo.singleLabelWidthMm, options.dpi);
+    const x1 = mmToDots(geo.sideMarginMm, options.dpi);
+    const x2 = mmToDots(geo.col2StartMm, options.dpi);
+    const boxH = Math.max(40, ll - 8);
+    return `^XA
+^PW${pw}
+^LL${ll}
+^PON
+^LH0,0
+~SD${options.darkness * 2}
+^FO${x1},4^GB${slotW},${boxH},2,B^FS
+^FO${x1 + 8},12^A0N,20,20^FD2-UP LEFT (${geo.singleLabelWidthMm}x${geo.heightMm})^FS
+^BY1,2,36
+^FO${x1 + 14},44^BCN,36,Y,N,N^FDCALIB-L1^FS
+^FO${x2},4^GB${slotW},${boxH},2,B^FS
+^FO${x2 + 8},12^A0N,20,20^FD2-UP RIGHT (${geo.singleLabelWidthMm}x${geo.heightMm})^FS
+^BY1,2,36
+^FO${x2 + 14},44^BCN,36,Y,N,N^FDCALIB-R2^FS
+^PQ1,0,1,Y
+^XZ`;
+  }
 
   return `^XA
 ^PW${pw}
@@ -610,6 +939,34 @@ export function generateCalibrationTestZpl(options: LabelDesignOptions, dimensio
  * Generates Thermal Alignment & Sensor Calibration Test Label (TSPL)
  */
 export function generateCalibrationTestTspl(options: LabelDesignOptions, dimension: LabelSizeDimension): string {
+  const geo = getDualRollGeometry(dimension);
+
+  if (geo.isDualRoll) {
+    const x1 = mmToDots(geo.sideMarginMm, options.dpi);
+    const x1End = mmToDots(geo.sideMarginMm + geo.singleLabelWidthMm, options.dpi);
+    const x2 = mmToDots(geo.col2StartMm, options.dpi);
+    const x2End = mmToDots(geo.col2StartMm + geo.singleLabelWidthMm, options.dpi);
+    const c1 = mmToDots(geo.sideMarginMm + geo.singleLabelWidthMm / 2, options.dpi);
+    const c2 = mmToDots(geo.col2StartMm + geo.singleLabelWidthMm / 2, options.dpi);
+    const boxYEnd = mmToDots(Math.max(10, geo.heightMm - 1), options.dpi);
+    return `SIZE ${geo.totalRollWidthMm} mm, ${geo.heightMm} mm
+GAP ${dimension.gapMm} mm, 0 mm
+DIRECTION 1
+REFERENCE 0,0
+DENSITY ${options.darkness}
+CLS
+BOX ${x1},4,${x1End},${boxYEnd},2
+TEXT ${c1},12,"2",0,1,1,2,"2-UP LEFT"
+TEXT ${c1},34,"1",0,1,1,2,"${geo.singleLabelWidthMm}x${geo.heightMm}mm"
+BARCODE ${c1},52,"128",36,2,0,1,2,"CALIB-L1"
+BOX ${x2},4,${x2End},${boxYEnd},2
+TEXT ${c2},12,"2",0,1,1,2,"2-UP RIGHT"
+TEXT ${c2},34,"1",0,1,1,2,"${geo.singleLabelWidthMm}x${geo.heightMm}mm"
+BARCODE ${c2},52,"128",36,2,0,1,2,"CALIB-R2"
+PRINT 1,1
+`;
+  }
+
   return `SIZE ${dimension.widthMm} mm, ${dimension.heightMm} mm
 GAP ${dimension.gapMm} mm, 0 mm
 DIRECTION 1
@@ -626,108 +983,566 @@ PRINT 1,1
 }
 
 // ============================================================================
+// High-Precision HTML Builders for Direct Browser Printing (1-Up, 2-Up & A4)
+// ============================================================================
+
+export function renderSingleLabelHtml(
+  prod: Product,
+  dim: LabelSizeDimension,
+  opt: LabelDesignOptions
+): string {
+  const geo = getDualRollGeometry(dim);
+  const effectiveWidthMm = geo.isDualRoll ? geo.singleLabelWidthMm : dim.widthMm;
+  const compact = dim.heightMm <= 20 || effectiveWidthMm <= 34;
+
+  const barcodeVal = prod.barcode || prod.sku;
+  const hasMrp = prod.mrp && prod.mrp > prod.price;
+  const disc = hasMrp ? Math.round(((prod.mrp! - prod.price) / prod.mrp!) * 100) : 0;
+
+  const barHeightPx = dim.heightMm <= 16 ? 15 : dim.heightMm <= 20 ? 19 : dim.heightMm > 35 ? 40 : 26;
+  const qrSizePx = dim.heightMm <= 20 ? 28 : 44;
+
+  const barcodeSvg =
+    opt.barcodeType === "QR"
+      ? generateQrCodeSvgString(barcodeVal, qrSizePx)
+      : generateBarcodeSvgString(barcodeVal, barHeightPx, opt.showBarcodeText);
+
+  const padCss = compact ? "0.6mm 1mm" : "1.2mm 1.5mm";
+  const storeFont = compact ? "6px" : "7.5px";
+  const nameFont = compact ? "7px" : opt.productNameFontSize === "large" ? "9.5px" : opt.productNameFontSize === "small" ? "7.5px" : "8.5px";
+  const priceFont = compact ? "9px" : "11px";
+  const footerFont = compact ? "5.5px" : "6.5px";
+
+  return `
+    <div style="border: 0.4px solid #000; border-radius: 1.5px; padding: ${padCss}; background: #fff; color: #000; display: flex; flex-direction: column; justify-content: space-between; width: 100%; height: 100%; box-sizing: border-box; overflow: hidden; font-family: -apple-system, sans-serif;">
+      ${
+        opt.showStoreName
+          ? `<div style="text-align: center; font-size: ${storeFont}; font-weight: 900; letter-spacing: 0.3px; text-transform: uppercase; border-bottom: 0.4px solid #000; padding-bottom: 0.3mm; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+              ${opt.storeName}
+            </div>`
+          : ""
+      }
+      ${
+        opt.customPromoText.trim() && !compact
+          ? `<div style="background: #000; color: #fff; font-size: 6px; font-weight: bold; text-align: center; text-transform: uppercase; padding: 0.3mm 0;">
+              ${opt.customPromoText}
+            </div>`
+          : ""
+      }
+      ${
+        opt.showProductName
+          ? `<div style="text-align: center; font-size: ${nameFont}; font-weight: 800; line-height: 1.1; max-height: ${compact ? "10px" : "18px"}; overflow: hidden;">
+              ${prod.name}
+            </div>`
+          : ""
+      }
+      <div style="display: flex; justify-content: space-between; align-items: baseline;">
+        <div style="display: flex; align-items: baseline; gap: 2px; flex-wrap: wrap;">
+          ${
+            opt.showMrp && hasMrp && !compact
+              ? `<span style="font-size: 6.5px; color: #333; font-family: monospace; font-weight: 700;">MRP:${opt.currencySymbol}${prod.mrp?.toFixed(2)}</span>`
+              : ""
+          }
+          <div style="font-size: ${priceFont}; font-weight: 900; font-family: monospace; line-height: 1;">
+            ${opt.currencySymbol}${prod.price.toFixed(2)}${compact ? "" : `<span style="font-size: 6.5px; font-weight: 700;">/${prod.unit || "Unit"}</span>`}
+          </div>
+        </div>
+        ${
+          opt.showSavingsBadge && disc > 0 && !compact
+            ? `<div style="background: #000; color: #fff; font-size: 6.5px; font-weight: bold; font-family: monospace; padding: 0.3mm 0.8mm; border-radius: 1px;">
+                ${disc}% OFF
+              </div>`
+            : ""
+        }
+      </div>
+      ${
+        opt.showBarcodeGraphic
+          ? `<div style="width: 100%; text-align: center; line-height: 0;">
+              ${barcodeSvg}
+            </div>`
+          : ""
+      }
+      ${
+        opt.showSku || (opt.showBatchNo && prod.batchNumber) || (opt.showExpiryDate && prod.expiryDate)
+          ? `<div style="display: flex; justify-content: space-between; font-size: ${footerFont}; font-family: monospace; font-weight: 700; color: #000; border-top: 0.4px solid #ccc; padding-top: 0.3mm; white-space: nowrap; overflow: hidden;">
+              ${opt.showSku ? `<span>${prod.sku}</span>` : ""}
+              ${opt.showBatchNo && prod.batchNumber && !compact ? `<span>B:${prod.batchNumber}</span>` : ""}
+              ${opt.showExpiryDate && prod.expiryDate && !compact ? `<span>EXP:${prod.expiryDate}</span>` : ""}
+            </div>`
+          : ""
+      }
+    </div>
+  `;
+}
+
+export function buildLabelsPrintHtml(
+  products: { product: Product; quantity: number }[],
+  dim: LabelSizeDimension,
+  opt: LabelDesignOptions
+): string {
+  if (dim.category === "sheet") {
+    const flat: Product[] = [];
+    products.forEach(({ product, quantity }) => {
+      for (let i = 0; i < Math.max(0, quantity); i++) flat.push(product);
+    });
+    const cols = dim.columnsAcross || 3;
+    return `
+      <div style="padding: 10mm 6mm; width: 210mm; min-height: 297mm; display: grid; grid-template-columns: repeat(${cols}, 1fr); gap: 2.5mm; box-sizing: border-box;">
+        ${flat.map((prod) => renderSingleLabelHtml(prod, dim, opt)).join("")}
+      </div>
+    `;
+  }
+
+  const geo = getDualRollGeometry(dim);
+
+  if (geo.isDualRoll) {
+    const pairs = chunkLabelsForRows(products, 2);
+    return pairs
+      .map(
+        ({ left, right }) => `
+        <div
+          class="label-print-page label-dual-row"
+          style="
+            width: ${geo.totalRollWidthMm}mm;
+            height: ${geo.heightMm}mm;
+            padding: 0mm ${geo.sideMarginMm}mm;
+            display: grid;
+            grid-template-columns: ${geo.singleLabelWidthMm}mm ${geo.singleLabelWidthMm}mm;
+            column-gap: ${geo.horizontalGapMm}mm;
+            align-items: stretch;
+            box-sizing: border-box;
+          "
+        >
+          <div style="width: ${geo.singleLabelWidthMm}mm; height: ${geo.heightMm}mm; overflow: hidden;">
+            ${renderSingleLabelHtml(left, dim, opt)}
+          </div>
+          <div style="width: ${geo.singleLabelWidthMm}mm; height: ${geo.heightMm}mm; overflow: hidden;">
+            ${right ? renderSingleLabelHtml(right, dim, opt) : ""}
+          </div>
+        </div>
+      `
+      )
+      .join("");
+  }
+
+  const singleRows = chunkLabelsForRows(products, 1);
+  return singleRows
+    .map(
+      ({ left }) => `
+      <div class="label-print-page" style="padding: 1mm 1.5mm; box-sizing: border-box;">
+        ${renderSingleLabelHtml(left, dim, opt)}
+      </div>
+    `
+    )
+    .join("");
+}
+
+export function buildCalibrationTestHtml(
+  printerName: string,
+  dim: LabelSizeDimension,
+  dpi: number,
+  darkness: number,
+  interfaceLabel: string = "BROWSER",
+  sensorLabel: string = "GAP"
+): string {
+  const geo = getDualRollGeometry(dim);
+
+  if (geo.isDualRoll) {
+    const compact = geo.heightMm <= 20 || geo.singleLabelWidthMm <= 34;
+    const renderTestSlot = (slotTag: string, code: string) => `
+      <div style="padding: ${compact ? "0.6mm" : "1.2mm"}; border: 1px dashed #000; text-align: center; height: 100%; display: flex; flex-direction: column; justify-content: space-between; overflow: hidden;">
+        <div style="font-size: ${compact ? "6.5px" : "8px"}; font-weight: 900; border-bottom: 0.5px solid #000; padding-bottom: 0.4mm; text-transform: uppercase;">
+          2-UP ${slotTag} (${geo.singleLabelWidthMm}×${geo.heightMm}mm)
+        </div>
+        <div style="font-size: ${compact ? "6px" : "7px"}; font-family: monospace; font-weight: 700;">
+          DPI:${dpi} | D:${darkness}/15 | GAP:${geo.horizontalGapMm}mm
+        </div>
+        <div style="margin: 0 auto; width: 92%; line-height: 0;">
+          ${generateBarcodeSvgString(code, compact ? 15 : 22, true)}
+        </div>
+      </div>
+    `;
+
+    return `
+      <div
+        class="label-print-page label-dual-row"
+        style="
+          width: ${geo.totalRollWidthMm}mm;
+          height: ${geo.heightMm}mm;
+          padding: 0mm ${geo.sideMarginMm}mm;
+          display: grid;
+          grid-template-columns: ${geo.singleLabelWidthMm}mm ${geo.singleLabelWidthMm}mm;
+          column-gap: ${geo.horizontalGapMm}mm;
+          align-items: stretch;
+          box-sizing: border-box;
+        "
+      >
+        ${renderTestSlot("LEFT", "CALIB-L1")}
+        ${renderTestSlot("RIGHT", "CALIB-R2")}
+      </div>
+    `;
+  }
+
+  return `
+    <div class="label-print-page" style="padding: 2mm; border: 1px dashed #000; text-align: center; height: 100%;">
+      <div style="font-size: 9.5px; font-weight: 900; border-bottom: 1px solid #000; padding-bottom: 0.8mm; text-transform: uppercase;">
+        ${printerName}
+      </div>
+      <div style="font-size: 8px; margin: 1mm 0; font-family: monospace; font-weight: 700;">
+        Size: ${dim.widthMm}×${dim.heightMm}mm | DPI: ${dpi} | Dark: ${darkness}/15
+      </div>
+      <div style="margin: 1mm auto; width: 90%;">
+        ${generateBarcodeSvgString("CALIB-OK-99", dim.heightMm <= 20 ? 18 : 28, true)}
+      </div>
+      <div style="font-size: 7px; font-family: monospace; font-weight: 700; border-top: 1px solid #000; padding-top: 0.8mm;">
+        ${interfaceLabel} | SENSOR: ${sensorLabel}
+      </div>
+    </div>
+  `;
+}
+
+// ============================================================================
 // High-Precision Thermal Direct Browser Print Engine with CSS @page (mm)
 // ============================================================================
 
+export interface DirectLabelPrintResult {
+  ok: boolean;
+  blockedBySandbox?: boolean;
+  printStationUrl?: string;
+  reason?: string;
+}
+
+export interface LabelPrintSnapshotPayload {
+  jobId?: string;
+  kind: "label";
+  html: string;
+  layoutProfile?: string;
+  pageWidthMm: number;
+  pageHeightMm: number;
+  isA4Sheet: boolean;
+  isDualRoll: boolean;
+  presetName: string;
+  jobTitle: string;
+  rawCommands?: string;
+  rawProtocol?: "ZPL" | "TSPL";
+  createdAt: number;
+}
+
+const LABEL_PRINT_SNAPSHOT_KEY = "expertpos_label_snapshot_v1";
+
+function encodeUtf8ToBase64Url(input: string): string {
+  const bytes = new TextEncoder().encode(input);
+  let binary = "";
+  for (let i = 0; i < bytes.length; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+}
+
+function decodeBase64UrlToUtf8(b64Url: string): string {
+  const padded = b64Url.replace(/-/g, "+").replace(/_/g, "/") + "===".slice((b64Url.length + 3) % 4);
+  const binary = atob(padded);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  return new TextDecoder().decode(bytes);
+}
+
+export function saveLabelPrintSnapshot(payload: LabelPrintSnapshotPayload): void {
+  try {
+    localStorage.setItem(LABEL_PRINT_SNAPSHOT_KEY, JSON.stringify(payload));
+  } catch {
+    // Ignore storage quota errors
+  }
+}
+
+export function loadLabelPrintSnapshot(): LabelPrintSnapshotPayload | null {
+  try {
+    const raw = localStorage.getItem(LABEL_PRINT_SNAPSHOT_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (!parsed?.html) return null;
+    return parsed as LabelPrintSnapshotPayload;
+  } catch {
+    return null;
+  }
+}
+
+export function encodeLabelSnapshotToHash(payload: LabelPrintSnapshotPayload): string {
+  try {
+    const compact: LabelPrintSnapshotPayload = {
+      jobId: payload.jobId,
+      kind: "label",
+      html: payload.html,
+      pageWidthMm: payload.pageWidthMm,
+      pageHeightMm: payload.pageHeightMm,
+      isA4Sheet: payload.isA4Sheet,
+      isDualRoll: payload.isDualRoll,
+      presetName: payload.presetName,
+      jobTitle: payload.jobTitle,
+      createdAt: payload.createdAt
+    };
+    const encoded = encodeUtf8ToBase64Url(JSON.stringify(compact));
+    if (encoded.length > 48000) return "";
+    return encoded;
+  } catch {
+    return "";
+  }
+}
+
+export function decodeLabelSnapshotFromHash(hashStr: string): LabelPrintSnapshotPayload | null {
+  try {
+    const clean = hashStr.replace(/^#/, "");
+    const match = clean.match(/(?:^|&)l=([^&]+)/);
+    if (!match?.[1]) return null;
+    const jsonStr = decodeBase64UrlToUtf8(decodeURIComponent(match[1]));
+    const parsed = JSON.parse(jsonStr);
+    if (!parsed?.html) return null;
+    return parsed as LabelPrintSnapshotPayload;
+  } catch {
+    return null;
+  }
+}
+
+export function sendLabelPrintSnapshotToServer(jobId: string, payload: LabelPrintSnapshotPayload): void {
+  try {
+    const body = JSON.stringify({ ...payload, jobId, kind: "label", layoutProfile: payload.presetName || "label-roll" });
+    if (typeof navigator !== "undefined" && typeof navigator.sendBeacon === "function" && body.length < 60000) {
+      const ok = navigator.sendBeacon("/api/print/snapshot", new Blob([body], { type: "text/plain" }));
+      if (ok) return;
+    }
+    void fetch("/api/print/snapshot", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body,
+      keepalive: true
+    }).catch(() => {});
+  } catch {
+    // Ignore relay failures; hash & localStorage remain active
+  }
+}
+
+export async function fetchLabelPrintSnapshotFromServer(jobId: string): Promise<LabelPrintSnapshotPayload | null> {
+  const id = (jobId || "latest_label").trim() || "latest_label";
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      const res = await fetch(`/api/print/snapshot/${encodeURIComponent(id)}`, { cache: "no-store" });
+      if (res.ok) {
+        const data = await res.json();
+        if (data?.success && data?.snapshot?.html) {
+          return data.snapshot as LabelPrintSnapshotPayload;
+        }
+      }
+    } catch {
+      // Retry shortly
+    }
+    if (attempt < 2) {
+      await new Promise((r) => setTimeout(r, 180));
+    }
+  }
+  return null;
+}
+
+export function buildStandaloneLabelPrintUrl(jobId: string, payload: LabelPrintSnapshotPayload | null): string {
+  const base = `/?printLabels=1&job=${encodeURIComponent(jobId || "latest_label")}`;
+  if (!payload) return base;
+  const hashData = encodeLabelSnapshotToHash(payload);
+  return hashData ? `${base}#l=${hashData}` : base;
+}
+
 /**
- * Triggers a direct thermal print window configured with exact millimeter page dimensions.
- * This overrides browser header/footer margins and forces continuous roll feed without blank pages.
+ * Synchronously triggers browser/OS print dialog inside the active click gesture
+ * using a dedicated @media print root (#pos-label-print-root) so thermal & A4
+ * label printers receive exact mm geometry without hidden-iframe or user-gesture blocks.
  */
+export function printLabelHtmlSynchronously(
+  renderedHtmlContent: string,
+  pageWidthMm: number,
+  pageHeightMm: number,
+  isA4Sheet: boolean,
+  jobTitle: string = "Expert POS Thermal Label Print"
+): { ok: boolean; blockedBySandbox?: boolean; reason?: string } {
+  if (!renderedHtmlContent || !renderedHtmlContent.trim()) {
+    return { ok: false, reason: "No label content generated to print." };
+  }
+
+  const pageWidthCss = isA4Sheet ? "210mm" : `${pageWidthMm}mm`;
+  const pageHeightCss = isA4Sheet ? "297mm" : `${pageHeightMm}mm`;
+
+  try {
+    document.getElementById("pos-label-print-root")?.remove();
+    document.getElementById("pos-label-print-style")?.remove();
+
+    const styleEl = document.createElement("style");
+    styleEl.id = "pos-label-print-style";
+    styleEl.textContent = `
+      @media screen {
+        #pos-label-print-root { display: none !important; }
+      }
+      @media print {
+        @page {
+          size: ${pageWidthCss} ${pageHeightCss};
+          margin: 0mm !important;
+        }
+        html, body {
+          width: ${pageWidthCss} !important;
+          height: auto !important;
+          min-height: 0 !important;
+          overflow: visible !important;
+          background: #ffffff !important;
+          color: #000000 !important;
+          margin: 0 !important;
+          padding: 0 !important;
+          font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif !important;
+        }
+        body > *:not(#pos-label-print-root) { display: none !important; }
+        #pos-label-print-root {
+          display: block !important;
+          width: ${pageWidthCss} !important;
+          margin: 0 !important;
+          padding: 0 !important;
+          background: #ffffff !important;
+          color: #000000 !important;
+        }
+        #pos-label-print-root * {
+          box-sizing: border-box;
+          -webkit-print-color-adjust: exact !important;
+          print-color-adjust: exact !important;
+        }
+        #pos-label-print-root .label-print-page {
+          width: ${pageWidthCss} !important;
+          height: ${pageHeightCss} !important;
+          page-break-after: always !important;
+          break-after: page !important;
+          overflow: hidden !important;
+          display: flex;
+          flex-direction: column;
+          justify-content: space-between;
+          background: #ffffff !important;
+        }
+        #pos-label-print-root .label-print-page.label-dual-row {
+          display: grid !important;
+        }
+        #pos-label-print-root .label-print-page:last-child {
+          page-break-after: auto !important;
+          break-after: auto !important;
+        }
+        #pos-label-print-root svg,
+        #pos-label-print-root img {
+          image-rendering: pixelated;
+          shape-rendering: crispEdges;
+        }
+      }
+    `;
+
+    const portalEl = document.createElement("div");
+    portalEl.id = "pos-label-print-root";
+    portalEl.innerHTML = renderedHtmlContent;
+
+    document.head.appendChild(styleEl);
+    document.body.appendChild(portalEl);
+
+    const prevTitle = document.title;
+    if (jobTitle) document.title = jobTitle;
+
+    let beforePrintFired = false;
+    const onBeforePrint = () => {
+      beforePrintFired = true;
+    };
+    const cleanupPortal = () => {
+      window.removeEventListener("beforeprint", onBeforePrint);
+      portalEl.remove();
+      styleEl.remove();
+      document.title = prevTitle;
+    };
+
+    window.addEventListener("beforeprint", onBeforePrint, { once: true });
+    window.addEventListener("afterprint", cleanupPortal, { once: true });
+    setTimeout(cleanupPortal, 120000);
+
+    const startedAt = Date.now();
+    window.focus();
+    window.print();
+    const elapsed = Date.now() - startedAt;
+
+    const inNestedFrame = typeof window !== "undefined" && window.self !== window.top;
+    if (inNestedFrame && !beforePrintFired && elapsed < 15) {
+      return {
+        ok: false,
+        blockedBySandbox: true,
+        reason: "Embedded preview restricts direct printer dialogs. Open the Direct Label Print Window to print directly."
+      };
+    }
+
+    return { ok: true };
+  } catch (error: any) {
+    console.error("Failed to execute thermal label print job:", error);
+    return {
+      ok: false,
+      reason: error?.message || "Failed to invoke system label print dialog."
+    };
+  }
+}
+
+export function prepareLabelPrintStationSnapshot(
+  renderedHtmlContent: string,
+  dimension: LabelSizeDimension,
+  jobTitle: string = "Expert POS Thermal Label Print",
+  extra?: { rawCommands?: string; rawProtocol?: "ZPL" | "TSPL" }
+): { jobId: string; snapshot: LabelPrintSnapshotPayload; printStationUrl: string } {
+  const isA4Sheet = dimension.category === "sheet";
+  const geo = getDualRollGeometry(dimension);
+  const pageWidthMm = isA4Sheet ? 210 : geo.totalRollWidthMm;
+  const pageHeightMm = isA4Sheet ? 297 : geo.heightMm;
+  const jobId = `LBL-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+
+  const snapshot: LabelPrintSnapshotPayload = {
+    jobId,
+    kind: "label",
+    html: renderedHtmlContent,
+    layoutProfile: dimension.id,
+    pageWidthMm,
+    pageHeightMm,
+    isA4Sheet,
+    isDualRoll: geo.isDualRoll,
+    presetName: dimension.name,
+    jobTitle,
+    rawCommands: extra?.rawCommands,
+    rawProtocol: extra?.rawProtocol,
+    createdAt: Date.now()
+  };
+
+  saveLabelPrintSnapshot(snapshot);
+  sendLabelPrintSnapshotToServer(jobId, snapshot);
+  const printStationUrl = buildStandaloneLabelPrintUrl(jobId, snapshot);
+
+  return { jobId, snapshot, printStationUrl };
+}
+
 export function printThermalLabelsDirect(
   renderedHtmlContent: string,
   dimension: LabelSizeDimension,
-  jobTitle: string = "Expert POS Thermal Label Print"
-): boolean {
-  try {
-    const iframe = document.createElement("iframe");
-    iframe.style.position = "fixed";
-    iframe.style.right = "0";
-    iframe.style.bottom = "0";
-    iframe.style.width = "0";
-    iframe.style.height = "0";
-    iframe.style.border = "none";
-    iframe.title = jobTitle;
+  jobTitle: string = "Expert POS Thermal Label Print",
+  extra?: { rawCommands?: string; rawProtocol?: "ZPL" | "TSPL" }
+): DirectLabelPrintResult {
+  const isA4Sheet = dimension.category === "sheet";
+  const geo = getDualRollGeometry(dimension);
+  const pageWidthMm = isA4Sheet ? 210 : geo.totalRollWidthMm;
+  const pageHeightMm = isA4Sheet ? 297 : geo.heightMm;
 
-    document.body.appendChild(iframe);
+  const { printStationUrl } = prepareLabelPrintStationSnapshot(renderedHtmlContent, dimension, jobTitle, extra);
 
-    const doc = iframe.contentWindow?.document;
-    if (!doc) {
-      console.error("Unable to access print iframe document.");
-      return false;
-    }
+  const printRes = printLabelHtmlSynchronously(
+    renderedHtmlContent,
+    pageWidthMm,
+    pageHeightMm,
+    isA4Sheet,
+    jobTitle
+  );
 
-    const isA4Sheet = dimension.category === "sheet";
-    const pageWidthCss = isA4Sheet ? "210mm" : `${dimension.widthMm}mm`;
-    const pageHeightCss = isA4Sheet ? "297mm" : `${dimension.heightMm}mm`;
-
-    const html = `<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8">
-  <title>${jobTitle}</title>
-  <style>
-    @page {
-      size: ${pageWidthCss} ${pageHeightCss};
-      margin: 0mm !important;
-    }
-    * {
-      box-sizing: border-box;
-      -webkit-print-color-adjust: exact !important;
-      print-color-adjust: exact !important;
-      margin: 0;
-      padding: 0;
-    }
-    html, body {
-      background: #fff !important;
-      color: #000 !important;
-      width: ${pageWidthCss} !important;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif !important;
-      margin: 0 !important;
-      padding: 0 !important;
-    }
-    .label-print-page {
-      width: ${pageWidthCss};
-      height: ${pageHeightCss};
-      page-break-after: always;
-      break-after: page;
-      overflow: hidden;
-      display: flex;
-      flex-direction: column;
-      justify-content: space-between;
-      box-sizing: border-box;
-    }
-    /* Anti-aliasing disable for sharp thermal printing */
-    svg, img {
-      image-rendering: pixelated;
-      shape-rendering: crispEdges;
-    }
-  </style>
-</head>
-<body>
-  ${renderedHtmlContent}
-</body>
-</html>`;
-
-    doc.open();
-    doc.write(html);
-    doc.close();
-
-    setTimeout(() => {
-      try {
-        iframe.contentWindow?.focus();
-        iframe.contentWindow?.print();
-      } catch (err) {
-        console.error("Error triggering print on iframe:", err);
-      } finally {
-        setTimeout(() => {
-          document.body.removeChild(iframe);
-        }, 3000);
-      }
-    }, 400);
-
-    return true;
-  } catch (error) {
-    console.error("Failed to execute thermal print job:", error);
-    return false;
-  }
+  return {
+    ...printRes,
+    printStationUrl
+  };
 }
