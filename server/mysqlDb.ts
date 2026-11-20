@@ -1550,6 +1550,87 @@ class MySqlDatabaseEngine {
     return this.getFullState();
   }
 
+  public async createBatchInvoices(invoices: Invoice[]): Promise<FullDbState> {
+    if (!Array.isArray(invoices) || invoices.length === 0) {
+      return this.getFullState();
+    }
+
+    const pool = await this.getLivePool();
+    this.assertLivePoolInProduction(pool, "createBatchInvoices");
+
+    if (pool) {
+      const conn = await pool.getConnection();
+      try {
+        await conn.beginTransaction();
+        const current = await this.readFullStateFromMysql(pool);
+        const touchedProducts = new Set<Product>();
+
+        for (const invoice of invoices) {
+          const bId = invoice.storeBranchId || "B1";
+          for (const item of invoice.items || []) {
+            const prod = current.products.find(
+              (p) => p.id === item.productId || (item.barcode && p.barcode === item.barcode)
+            );
+            if (prod) {
+              if (!prod.branchStocks) prod.branchStocks = {};
+              const currentBranchStock = prod.branchStocks[bId] ?? prod.stock;
+              const nextStock = Math.max(0, currentBranchStock - Number(item.quantity || 0));
+              prod.branchStocks[bId] = nextStock;
+              prod.stock = nextStock;
+              touchedProducts.add(prod);
+            }
+          }
+
+          if (invoice.customerId) {
+            const pointsEarned = Math.floor(Number(invoice.grandTotal || 0) / 10);
+            await conn.query(
+              `UPDATE \`customers\` SET \`loyalty_points\` = \`loyalty_points\` + ?, \`total_spent\` = \`total_spent\` + ? WHERE \`id\` = ?`,
+              [pointsEarned, Number(invoice.grandTotal || 0), invoice.customerId]
+            );
+          }
+
+          await this.insertInvoiceHeaderAndItems(conn, invoice);
+        }
+
+        for (const prod of touchedProducts) {
+          await this.upsertProductMysql(conn, prod);
+        }
+
+        await conn.commit();
+      } catch (err) {
+        await conn.rollback();
+        throw err;
+      } finally {
+        conn.release();
+      }
+      return this.readFullStateFromMysql(pool);
+    }
+
+    for (const invoice of invoices) {
+      const bId = invoice.storeBranchId || "B1";
+      for (const item of invoice.items || []) {
+        const prod = this.runtimeMemoryState.products.find(
+          (p) => p.id === item.productId || (item.barcode && p.barcode === item.barcode)
+        );
+        if (prod) {
+          if (!prod.branchStocks) prod.branchStocks = {};
+          const cur = prod.branchStocks[bId] ?? prod.stock;
+          prod.branchStocks[bId] = Math.max(0, cur - item.quantity);
+          prod.stock = prod.branchStocks[bId];
+        }
+      }
+      if (invoice.customerId) {
+        const cust = this.runtimeMemoryState.customers.find((c) => c.id === invoice.customerId);
+        if (cust) {
+          cust.loyaltyPoints += Math.floor(invoice.grandTotal / 10);
+        }
+      }
+      this.runtimeMemoryState.invoices.push(invoice);
+    }
+
+    return this.getFullState();
+  }
+
   public async createTransfer(payload: {
     productId: string;
     fromBranchId: string;

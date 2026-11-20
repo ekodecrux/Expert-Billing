@@ -669,6 +669,27 @@ export function buildReceiptUtilityStyles(
     ${s}[data-receipt-items-grid="true"] > span:nth-child(4) {
       text-align: center !important;
     }
+    ${s}[data-receipt-biller="true"] {
+      border-top: 1px dashed #64748b !important;
+      padding-top: 4px !important;
+      margin-top: 4px !important;
+      color: ${inkColor} !important;
+      font-weight: 700 !important;
+    }
+    ${s}[data-receipt-biller-row="true"] {
+      display: flex !important;
+      justify-content: space-between !important;
+      align-items: flex-start !important;
+      gap: 8px !important;
+      width: 100% !important;
+    }
+    ${s}[data-receipt-biller-row="true"] span:first-child {
+      flex-shrink: 0;
+    }
+    ${s}[data-receipt-biller-row="true"] span:last-child {
+      text-align: right;
+      word-break: break-word;
+    }
     ${s}[data-receipt-savings="true"] {
       display: flex !important;
       justify-content: space-between !important;
@@ -690,6 +711,30 @@ export function buildReceiptUtilityStyles(
       text-align: center !important;
       color: ${inkColor} !important;
       margin-top: 6px !important;
+    }
+    ${s}[data-multi-receipt-wrapper="true"] {
+      border: none !important;
+      padding: 0 !important;
+      margin: 0 !important;
+      box-shadow: none !important;
+      background: #ffffff !important;
+      border-radius: 0 !important;
+    }
+    ${s}[data-multi-receipt-card="true"] {
+      page-break-after: always !important;
+      break-after: page !important;
+      page-break-inside: avoid !important;
+      break-inside: avoid !important;
+      border: none !important;
+      padding: 0 !important;
+      margin: 0 0 4mm 0 !important;
+      background: #ffffff !important;
+    }
+    ${s}[data-multi-receipt-card="true"][data-last-receipt-card="true"],
+    ${s}[data-multi-receipt-wrapper="true"]:last-child [data-multi-receipt-card="true"] {
+      page-break-after: auto !important;
+      break-after: auto !important;
+      margin-bottom: 0 !important;
     }
   `;
 }

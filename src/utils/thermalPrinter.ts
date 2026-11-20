@@ -270,6 +270,7 @@ export interface ExtractedReceiptContent {
   contactText: string;
   metaLines: { key: string; val: string }[];
   items: { name: string; mrp: string; rate: string; qty: string; total: string }[];
+  billerLines: { key: string; val: string }[];
   savingsLabel: string;
   savingsValue: string;
   mathLines: { key: string; val: string }[];
@@ -329,6 +330,18 @@ export function extractReceiptDataFromElement(element: HTMLElement): ExtractedRe
     }
   });
 
+  const billerLines: { key: string; val: string }[] = [];
+  const billerRows = element.querySelectorAll("[data-receipt-biller-row='true']");
+  billerRows.forEach((row) => {
+    const spans = row.querySelectorAll("span");
+    if (spans.length >= 2) {
+      billerLines.push({
+        key: cleanEscPosText(spans[0].textContent || ""),
+        val: cleanEscPosText(spans[spans.length - 1].textContent || "")
+      });
+    }
+  });
+
   const savingsEl = element.querySelector("[data-receipt-savings='true']");
   let savingsLabel = "";
   let savingsValue = "";
@@ -363,6 +376,7 @@ export function extractReceiptDataFromElement(element: HTMLElement): ExtractedRe
     contactText,
     metaLines,
     items,
+    billerLines,
     savingsLabel,
     savingsValue,
     mathLines,
@@ -427,7 +441,35 @@ function centerPad(val: string, width: number): string {
  * Generates universal ESC/POS binary bytes compatible with Epson, Star, Xprinter,
  * TVS, Rongta, Citizen, Bixolon, Sunmi, Munbyn, Brother, and generic thermal printers.
  */
+export function buildBatchEscPosPayload(
+  elements: HTMLElement[],
+  config: ThermalPrinterConfig
+): Uint8Array {
+  const chunks = elements.map((el) => buildSingleEscPosPayload(el, config));
+  const totalLen = chunks.reduce((acc, c) => acc + c.length, 0);
+  const merged = new Uint8Array(totalLen);
+  let offset = 0;
+  for (const chunk of chunks) {
+    merged.set(chunk, offset);
+    offset += chunk.length;
+  }
+  return merged;
+}
+
 export function buildEscPosPayload(
+  element: HTMLElement,
+  config: ThermalPrinterConfig
+): Uint8Array {
+  const cards = Array.from(
+    element.querySelectorAll<HTMLElement>('[data-multi-receipt-card="true"]')
+  );
+  if (cards.length > 0) {
+    return buildBatchEscPosPayload(cards, config);
+  }
+  return buildSingleEscPosPayload(element, config);
+}
+
+function buildSingleEscPosPayload(
   element: HTMLElement,
   config: ThermalPrinterConfig
 ): Uint8Array {
@@ -535,6 +577,14 @@ export function buildEscPosPayload(
   }
 
   pushLine("-".repeat(cols));
+
+  if (data.billerLines.length > 0) {
+    pushLine("BILLER DETAILS");
+    data.billerLines.forEach((b) => {
+      pushLine(twoColLine(b.key, b.val, cols));
+    });
+    pushLine("-".repeat(cols));
+  }
 
   if (data.savingsLabel && data.savingsValue) {
     pushLine(twoColLine(data.savingsLabel, data.savingsValue, cols));

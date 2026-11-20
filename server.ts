@@ -245,6 +245,19 @@ app.post("/api/invoices", async (req, res) => {
   }
 });
 
+app.post("/api/invoices/batch", async (req, res) => {
+  try {
+    const list = Array.isArray(req.body?.invoices) ? req.body.invoices : Array.isArray(req.body) ? req.body : [];
+    if (list.length === 0) {
+      return res.status(400).json({ success: false, error: "No customer invoices provided in batch." });
+    }
+    const state = await mysqlDb.createBatchInvoices(list);
+    res.json({ success: true, state, invoices: list });
+  } catch (e: any) {
+    res.status(500).json({ success: false, error: e?.message || "Failed to persist batch invoices" });
+  }
+});
+
 // Stock Transfers
 app.get("/api/transfers", async (_req, res) => {
   try {

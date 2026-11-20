@@ -134,6 +134,7 @@ import StaffRegistry from "./components/StaffRegistry";
 import SettingsPanel from "./components/SettingsPanel";
 import { ExpertAidLogo } from "./components/ExpertAidLogo";
 import { ProductLabelGeneratorModal } from "./components/ProductLabelGeneratorModal";
+import { MultiCustomerBillingModal } from "./components/MultiCustomerBillingModal";
 import { BarcodeScannerModal } from "./components/BarcodeScannerModal";
 import { EditReceiptAddressModal } from "./components/EditReceiptAddressModal";
 import { 
@@ -756,6 +757,7 @@ export default function App() {
   // Dialog & Form states
   const [activeBarcodeUrl, setActiveBarcodeUrl] = useState<string | null>(null);
   const [isLabelModalOpen, setIsLabelModalOpen] = useState<boolean>(false);
+  const [isMultiBillModalOpen, setIsMultiBillModalOpen] = useState<boolean>(false);
   const [labelModalProduct, setLabelModalProduct] = useState<Product | null>(null);
   const [showInvoicePrintPreview, setShowInvoicePrintPreview] = useState<Invoice | null>(null);
   const [printerConfig, setPrinterConfig] = useState<ThermalPrinterConfig>(() => loadThermalPrinterConfig());
@@ -4359,8 +4361,17 @@ export default function App() {
                       </div>
                     </div>
 
-                    {/* Quick SKU preset chips for instant cashier testing */}
-                    <div className="flex flex-wrap items-center gap-1.5 pt-1 sm:pt-0">
+                    {/* Quick SKU preset chips + Simultaneous Multi-Customer Billing Trigger */}
+                    <div className="flex flex-wrap items-center justify-end gap-1.5 pt-1 sm:pt-0">
+                      <button
+                        type="button"
+                        onClick={() => setIsMultiBillModalOpen(true)}
+                        className="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-[11px] font-bold inline-flex items-center gap-1.5 shadow-sm transition-all cursor-pointer mr-1"
+                        title="Create and print bills & official receipts for multiple customers simultaneously"
+                      >
+                        <Users className="w-3.5 h-3.5 text-emerald-400" />
+                        <span>Multi-Customer Bills &amp; Receipts</span>
+                      </button>
                       <span className="text-[10px] font-mono text-slate-400 font-semibold">Quick SKUs:</span>
                       {tenantProducts.slice(0, 5).map((p) => (
                         <button
@@ -5087,6 +5098,15 @@ export default function App() {
                   >
                     <CreditCard className="w-4 h-4" />
                     Checkout Store Invoice
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setIsMultiBillModalOpen(true)}
+                    className={`w-full py-2 rounded-xl font-bold text-[11px] flex items-center justify-center gap-1.5 border transition-all cursor-pointer ${bgMode.inputBg} ${bgMode.border} hover:border-emerald-500`}
+                  >
+                    <Users className="w-3.5 h-3.5 text-emerald-500" />
+                    <span>Multi-Customer Simultaneous Billing</span>
                   </button>
                   
                   <p className={`text-[10px] text-center font-mono ${bgMode.textMuted || "text-slate-400"}`}>
@@ -7020,6 +7040,35 @@ export default function App() {
                                 })}
                               </div>
 
+                              {/* Biller Details directly under the product section */}
+                              <div data-receipt-biller="true" className="border-t border-dashed border-slate-400 pt-2 space-y-0.5 text-[0.88em] font-bold text-slate-950">
+                                <p className="font-black uppercase tracking-wide text-[0.92em] text-slate-950">
+                                  Biller Details
+                                </p>
+                                <div className="flex justify-between gap-2" data-receipt-biller-row="true">
+                                  <span className="font-bold">Biller / Cashier:</span>
+                                  <span className="font-black text-right">{selectedInv.cashierName || currentCashierName}</span>
+                                </div>
+                                <div className="flex justify-between gap-2" data-receipt-biller-row="true">
+                                  <span className="font-bold">Billed By:</span>
+                                  <span className="font-bold text-right">
+                                    {activeTenant.name} ({branches.find(b => b.id === selectedInv.storeBranchId)?.name || currentBranch?.name || selectedInv.storeBranchId})
+                                  </span>
+                                </div>
+                                <div className="flex justify-between gap-2" data-receipt-biller-row="true">
+                                  <span className="font-bold">Biller Contact:</span>
+                                  <span className="font-bold text-right">
+                                    {activeTenant.phone || branches.find(b => b.id === selectedInv.storeBranchId)?.phone || currentBranch?.phone || "N/A"}
+                                  </span>
+                                </div>
+                                <div className="flex justify-between gap-2" data-receipt-biller-row="true">
+                                  <span className="font-bold">GSTIN:</span>
+                                  <span className="font-black uppercase text-right">
+                                    {activeTenant.gstinRegNumber || (selectedInv.storeBranchId ? branches.find(b => b.id === selectedInv.storeBranchId)?.gstin : "") || "07AAAAA1111A1Z1"}
+                                  </span>
+                                </div>
+                              </div>
+
                               {/* MRP Savings */}
                               {(() => {
                                 const totalMrp = selectedInv.items.reduce((acc, it) => {
@@ -8735,6 +8784,35 @@ Payment Mode:   ${selectedInv.paymentMode}
                 })}
               </div>
 
+              {/* Biller Details directly under the product section */}
+              <div data-receipt-biller="true" className="border-t border-dashed border-slate-400 pt-2 space-y-0.5 text-[0.88em] font-bold text-slate-950">
+                <p className="font-black uppercase tracking-wide text-[0.92em] text-slate-950">
+                  Biller Details
+                </p>
+                <div className="flex justify-between gap-2" data-receipt-biller-row="true">
+                  <span className="font-bold">Biller / Cashier:</span>
+                  <span className="font-black text-right">{showInvoicePrintPreview.cashierName || currentCashierName}</span>
+                </div>
+                <div className="flex justify-between gap-2" data-receipt-biller-row="true">
+                  <span className="font-bold">Billed By:</span>
+                  <span className="font-bold text-right">
+                    {activeTenant.name} ({branches.find(b => b.id === showInvoicePrintPreview.storeBranchId)?.name || currentBranch?.name || showInvoicePrintPreview.storeBranchId})
+                  </span>
+                </div>
+                <div className="flex justify-between gap-2" data-receipt-biller-row="true">
+                  <span className="font-bold">Biller Contact:</span>
+                  <span className="font-bold text-right">
+                    {activeTenant.phone || currentBranch?.phone || "N/A"}
+                  </span>
+                </div>
+                <div className="flex justify-between gap-2" data-receipt-biller-row="true">
+                  <span className="font-bold">GSTIN:</span>
+                  <span className="font-black uppercase text-right">
+                    {activeTenant.gstinRegNumber || (currentBranch?.id ? branches.find(b => b.id === currentBranch.id)?.gstin : "") || "07AAAAA1111A1Z1"}
+                  </span>
+                </div>
+              </div>
+
               {/* MRP Savings Banner */}
               {(() => {
                 const totalMrp = showInvoicePrintPreview.items.reduce((acc, it) => {
@@ -8894,6 +8972,42 @@ Payment Mode:   ${selectedInv.paymentMode}
           setLabelPrinterConfig(cfg);
           persistSettings({ labelPrinterConfig: cfg });
         }}
+      />
+
+      {/* MULTI-CUSTOMER SIMULTANEOUS BILLING & RECEIPT STATION */}
+      <MultiCustomerBillingModal
+        isOpen={isMultiBillModalOpen}
+        onClose={() => setIsMultiBillModalOpen(false)}
+        products={tenantProducts}
+        customers={customers}
+        activeTenant={activeTenant}
+        currentBranch={currentBranch}
+        currentCashierName={currentCashierName}
+        currentRole={currentRole}
+        isSuperAdmin={isSuperAdmin}
+        staffProfiles={credentialsList}
+        branches={branches}
+        opsSettings={opsSettings}
+        printerConfig={printerConfig}
+        initialCartItems={cartItems}
+        initialCustomer={selectedCustomer}
+        initialCustomerName={billingCustomerName}
+        initialCustomerPhone={billingCustomerPhone}
+        getProductStock={getProductStock}
+        onBatchCompleted={(state) => {
+          if (state?.products) setProducts(state.products);
+          if (state?.invoices) setInvoices(state.invoices);
+          if (state?.customers) setCustomers(state.customers);
+        }}
+        onPrintBatchElement={(elementId, invoiceId) =>
+          handlePrintReceipt(elementId, invoiceId)
+        }
+        onPrepareBatchSnapshot={(elementId, invoiceId) =>
+          preparePrintSnapshot(elementId, invoiceId)
+        }
+        printSandboxNotice={printSandboxNotice}
+        printTabUrl={printTabUrl}
+        triggerNotification={triggerNotification}
       />
 
       {/* PRE-PRINTED BARCODE SCANNER & RAPID INGESTION MODAL */}
