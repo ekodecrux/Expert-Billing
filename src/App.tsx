@@ -71,7 +71,13 @@ import {
   Table,
   Receipt,
   Scan,
-  Package
+  Package,
+  Bell,
+  Scale,
+  Minus,
+  BedDouble,
+  Shirt,
+  Scissors
 } from "lucide-react";
 
 import {
@@ -132,7 +138,6 @@ import {
 import SuperAdminConsole, { AccessProfile } from "./components/SuperAdminConsole";
 import StaffRegistry from "./components/StaffRegistry";
 import SettingsPanel from "./components/SettingsPanel";
-import { ExpertAidLogo } from "./components/ExpertAidLogo";
 import { ProductLabelGeneratorModal } from "./components/ProductLabelGeneratorModal";
 import { MultiCustomerBillingModal } from "./components/MultiCustomerBillingModal";
 import { BarcodeScannerModal } from "./components/BarcodeScannerModal";
@@ -141,6 +146,39 @@ import {
   resolveAutoScannedProduct, 
   QUICK_FILL_PRESET_TEMPLATES 
 } from "./utils/productCatalogResolver";
+import {
+  SECTOR_MODULE_CATALOG,
+  buildSectorConfig,
+  getSectorSampleProducts,
+  getOtherSectorDefaultCategories,
+  isProductMatchingSector
+} from "./utils/sectorModules";
+import {
+  KdsTableModuleView,
+  RxBatchModuleView,
+  AppointmentsModuleView,
+  VariantMatrixModuleView,
+  PgHostelModuleView,
+  FashionTailoringModuleView,
+  KotTicketItem,
+  ServiceAppointmentItem,
+  PgResidentRecord,
+  GarmentAlterationSlip,
+  PG_HOSTEL_ROOMS
+} from "./components/SectorWorkspaceModules";
+import {
+  KpiSparkline,
+  ProduceBasketIllustration,
+  GroceryProductThumb,
+  MedicalCrossIcon,
+  PharmaKpiIllustration,
+  PharmaProductThumb,
+  ChefHatIcon,
+  RestaurantKpiIllustration,
+  RestaurantProductThumb,
+  PgHostelProductThumb,
+  FashionProductThumb
+} from "./components/SupermarketThemeAssets";
 
 const PRESET_TENANTS: Tenant[] = [];
 
@@ -659,9 +697,7 @@ export default function App() {
     }
   };
 
-  const bgMode = getAttractiveBgClasses(attractiveMode);
-
-  const currentTheme = getThemeColorClasses(activeTenant.colorTheme);
+  // Base theme tokens resolved below after activeSectorKey and isSuperAdmin are evaluated
 
   // User credentials state for RBAC management (hydrated from MySQL)
   const [credentialsList, setCredentialsList] = useState<AccessProfile[]>(PRESET_CREDENTIALS);
@@ -717,6 +753,386 @@ export default function App() {
   const isSuperAdmin = currentUserEmail.toLowerCase() === "superadmin@expertbilling.in" ||
                        currentUserEmail.toLowerCase() === "superadmin@expertpos.com";
   const canConfigurePrintersAndFonts = isSuperAdmin || normalizeUserRole(currentRole) === UserRole.ADMIN;
+
+  const activeSectorKey: BusinessSector = activeTenant.businessSector || "SUPERMARKET";
+  const activeSectorCatalog = BUSINESS_SECTORS_CATALOG[activeSectorKey] || BUSINESS_SECTORS_CATALOG.SUPERMARKET;
+  const activeSectorModules = activeTenant.sectorConfig?.enabledModules || activeSectorCatalog.defaultModules;
+  const isDemoClient = !isSuperAdmin && (
+    activeTenant.id === "TENANT-DEMO-01" ||
+    activeTenant.subdomain === "freshmart" ||
+    currentUserEmail.toLowerCase() === "demo@freshmart.in"
+  );
+
+  const isSupermarketTheme = !isSuperAdmin && activeSectorKey === "SUPERMARKET" && attractiveMode === "mint";
+  const isPharmacyTheme = !isSuperAdmin && activeSectorKey === "PHARMACY" && attractiveMode === "mint";
+  const isRestaurantTheme = !isSuperAdmin && activeSectorKey === "RESTAURANT" && attractiveMode === "mint";
+  const isPgHostelTheme = !isSuperAdmin && activeSectorKey === "PG_HOSTEL" && attractiveMode === "mint";
+  const isFashionTheme = !isSuperAdmin && activeSectorKey === "FASHION_GARMENT" && attractiveMode === "mint";
+  const isSectorRichTheme = isSupermarketTheme || isPharmacyTheme || isRestaurantTheme || isPgHostelTheme || isFashionTheme;
+
+  const baseBgMode = getAttractiveBgClasses(attractiveMode);
+  const bgMode = isSupermarketTheme
+    ? {
+        ...baseBgMode,
+        rootBg: "bg-[#eef9f1]",
+        contentBg: "bg-gradient-to-br from-[#effaf2] via-[#f4fbf6] to-[#e9f7ed]",
+        sidebarBg: "bg-white border-emerald-100",
+        cardBg: "bg-white border-emerald-100 text-slate-800 shadow-[0_2px_12px_rgba(16,185,129,0.06)]",
+        headerBg: "bg-white/95 border-emerald-100 text-slate-800",
+        text: "text-slate-700",
+        textMuted: "text-slate-500",
+        textHeading: "text-slate-900",
+        badgeBg: "bg-emerald-50 border-emerald-200 text-[#0e6b2e]",
+        badgeText: "text-[#0e6b2e]",
+        inputBg: "bg-[#f5fbf7] border-emerald-100 text-slate-800 focus:bg-white focus:border-emerald-300",
+        border: "border-emerald-100",
+        borderAccent: "border-emerald-200",
+        innerCard: "bg-[#f7fcf9] border-emerald-100 text-slate-800"
+      }
+    : isPharmacyTheme
+    ? {
+        ...baseBgMode,
+        rootBg: "bg-[#eef6fc]",
+        contentBg: "bg-gradient-to-br from-[#eef6fc] via-[#f4f9fe] to-[#e7f1fb]",
+        sidebarBg: "bg-white border-sky-100",
+        cardBg: "bg-white border-sky-100 text-slate-800 shadow-[0_2px_12px_rgba(14,116,214,0.06)]",
+        headerBg: "bg-white/95 border-sky-100 text-slate-800",
+        text: "text-slate-700",
+        textMuted: "text-slate-500",
+        textHeading: "text-slate-900",
+        badgeBg: "bg-sky-50 border-sky-200 text-[#07569e]",
+        badgeText: "text-[#07569e]",
+        inputBg: "bg-[#f4f9fe] border-sky-100 text-slate-800 focus:bg-white focus:border-sky-300",
+        border: "border-sky-100",
+        borderAccent: "border-sky-200",
+        innerCard: "bg-[#f5faff] border-sky-100 text-slate-800"
+      }
+    : isRestaurantTheme
+    ? {
+        ...baseBgMode,
+        rootBg: "bg-[#fbf3e4]",
+        contentBg: "bg-gradient-to-br from-[#fcf5e8] via-[#faf0dd] to-[#f6e8ce]",
+        sidebarBg: "bg-[#fdf7eb] border-amber-200/70",
+        cardBg: "bg-white border-amber-200/75 text-slate-800 shadow-[0_2px_12px_rgba(122,17,26,0.06)]",
+        headerBg: "bg-white/95 border-amber-200/70 text-slate-800",
+        text: "text-slate-700",
+        textMuted: "text-slate-500",
+        textHeading: "text-slate-900",
+        badgeBg: "bg-[#fdf4e3] border-amber-200 text-[#7a111a]",
+        badgeText: "text-[#7a111a]",
+        inputBg: "bg-[#fdf8ef] border-amber-200/80 text-slate-800 focus:bg-white focus:border-amber-400",
+        border: "border-amber-200/75",
+        borderAccent: "border-amber-300",
+        innerCard: "bg-[#fdf6ea] border-amber-200/75 text-slate-800"
+      }
+    : isPgHostelTheme
+    ? {
+        ...baseBgMode,
+        rootBg: "bg-[#eef8f7]",
+        contentBg: "bg-gradient-to-br from-[#effaf9] via-[#f4fbfa] to-[#e7f5f3]",
+        sidebarBg: "bg-white border-teal-100",
+        cardBg: "bg-white border-teal-100 text-slate-800 shadow-[0_2px_12px_rgba(13,148,136,0.06)]",
+        headerBg: "bg-white/95 border-teal-100 text-slate-800",
+        text: "text-slate-700",
+        textMuted: "text-slate-500",
+        textHeading: "text-slate-900",
+        badgeBg: "bg-teal-50 border-teal-200 text-[#0f766e]",
+        badgeText: "text-[#0f766e]",
+        inputBg: "bg-[#f3fbfa] border-teal-100 text-slate-800 focus:bg-white focus:border-teal-300",
+        border: "border-teal-100",
+        borderAccent: "border-teal-200",
+        innerCard: "bg-[#f5fbfa] border-teal-100 text-slate-800"
+      }
+    : isFashionTheme
+    ? {
+        ...baseBgMode,
+        rootBg: "bg-[#fdf5f8]",
+        contentBg: "bg-gradient-to-br from-[#fdf7f9] via-[#fbf2f6] to-[#f8eaf1]",
+        sidebarBg: "bg-white border-rose-100",
+        cardBg: "bg-white border-rose-100 text-slate-800 shadow-[0_2px_12px_rgba(131,24,67,0.06)]",
+        headerBg: "bg-white/95 border-rose-100 text-slate-800",
+        text: "text-slate-700",
+        textMuted: "text-slate-500",
+        textHeading: "text-slate-900",
+        badgeBg: "bg-rose-50 border-rose-200 text-[#831843]",
+        badgeText: "text-[#831843]",
+        inputBg: "bg-[#fdf6f9] border-rose-100 text-slate-800 focus:bg-white focus:border-rose-300",
+        border: "border-rose-100",
+        borderAccent: "border-rose-200",
+        innerCard: "bg-[#fdf7f9] border-rose-100 text-slate-800"
+      }
+    : baseBgMode;
+
+  const baseCurrentTheme = getThemeColorClasses(activeTenant.colorTheme);
+  const currentTheme = isSupermarketTheme
+    ? {
+        ...baseCurrentTheme,
+        bg: "bg-gradient-to-r from-[#0e6b2e] to-[#169343]",
+        bgHover: "hover:from-[#0b5725] hover:to-[#127a37]",
+        bgLight: "bg-[#effaf2]",
+        bgLightTransparent: "bg-emerald-500/10",
+        text: "text-[#0e6b2e]",
+        textAccent: "text-[#15803d]",
+        textAccentDark: "text-[#0b4d21]",
+        hoverBg: "hover:bg-[#15803d]",
+        border: "border-emerald-200",
+        borderAccent: "border-emerald-300",
+        borderLight: "border-emerald-100",
+        glow: "shadow-emerald-600/20 hover:shadow-emerald-600/30",
+        activeTab: "bg-emerald-50 text-[#0e6b2e] border border-emerald-200"
+      }
+    : isPharmacyTheme
+    ? {
+        ...baseCurrentTheme,
+        bg: "bg-gradient-to-r from-[#07569e] to-[#0d78d6]",
+        bgHover: "hover:from-[#05417a] hover:to-[#0a66b8]",
+        bgLight: "bg-[#f0f7fe]",
+        bgLightTransparent: "bg-sky-500/10",
+        text: "text-[#07569e]",
+        textAccent: "text-[#0b66b8]",
+        textAccentDark: "text-[#05417a]",
+        hoverBg: "hover:bg-[#0b66b8]",
+        border: "border-sky-200",
+        borderAccent: "border-sky-300",
+        borderLight: "border-sky-100",
+        glow: "shadow-sky-600/20 hover:shadow-sky-600/30",
+        activeTab: "bg-sky-50 text-[#07569e] border border-sky-200"
+      }
+    : isRestaurantTheme
+    ? {
+        ...baseCurrentTheme,
+        bg: "bg-gradient-to-r from-[#6d0f17] to-[#8c1620]",
+        bgHover: "hover:from-[#570b12] hover:to-[#74111a]",
+        bgLight: "bg-[#fdf4e3]",
+        bgLightTransparent: "bg-rose-500/10",
+        text: "text-[#7a111a]",
+        textAccent: "text-[#961a24]",
+        textAccentDark: "text-[#570b12]",
+        hoverBg: "hover:bg-[#7a111a]",
+        border: "border-amber-200",
+        borderAccent: "border-amber-300",
+        borderLight: "border-amber-100",
+        glow: "shadow-rose-900/20 hover:shadow-rose-900/30",
+        activeTab: "bg-[#fdf1dc] text-[#7a111a] border border-amber-200"
+      }
+    : isPgHostelTheme
+    ? {
+        ...baseCurrentTheme,
+        bg: "bg-gradient-to-r from-[#0c5d57] to-[#0d9488]",
+        bgHover: "hover:from-[#094743] hover:to-[#0f766e]",
+        bgLight: "bg-[#effaf9]",
+        bgLightTransparent: "bg-teal-500/10",
+        text: "text-[#0f766e]",
+        textAccent: "text-[#0d9488]",
+        textAccentDark: "text-[#115e59]",
+        hoverBg: "hover:bg-[#0f766e]",
+        border: "border-teal-200",
+        borderAccent: "border-teal-300",
+        borderLight: "border-teal-100",
+        glow: "shadow-teal-700/20 hover:shadow-teal-700/30",
+        activeTab: "bg-teal-50 text-[#0f766e] border border-teal-200"
+      }
+    : isFashionTheme
+    ? {
+        ...baseCurrentTheme,
+        bg: "bg-gradient-to-r from-[#701238] to-[#9d174d]",
+        bgHover: "hover:from-[#580c2b] hover:to-[#831843]",
+        bgLight: "bg-[#fdf4f7]",
+        bgLightTransparent: "bg-rose-500/10",
+        text: "text-[#831843]",
+        textAccent: "text-[#9d174d]",
+        textAccentDark: "text-[#580c2b]",
+        hoverBg: "hover:bg-[#831843]",
+        border: "border-rose-200",
+        borderAccent: "border-rose-300",
+        borderLight: "border-rose-100",
+        glow: "shadow-rose-900/20 hover:shadow-rose-900/30",
+        activeTab: "bg-rose-50 text-[#831843] border border-rose-200"
+      }
+    : baseCurrentTheme;
+
+  // Sector-specific interactive POS state (driven dynamically by activeSectorModules)
+  const [sectorCatalogFilter, setSectorCatalogFilter] = useState<"sector" | "all">("sector");
+  const [restaurantOrderMode, setRestaurantOrderMode] = useState<"DINE_IN" | "TAKEAWAY" | "DELIVERY">("DINE_IN");
+  const [restaurantTableNo, setRestaurantTableNo] = useState<string>("Table 1");
+  const [restaurantKotNote, setRestaurantKotNote] = useState<string>("");
+  const [kotTickets, setKotTickets] = useState<KotTicketItem[]>([]);
+  const [serviceAppointments, setServiceAppointments] = useState<ServiceAppointmentItem[]>([
+    {
+      id: "APT-001",
+      customerName: "Ananya Sharma",
+      customerPhone: "+91 9845011223",
+      serviceId: "TENANT-DEMO-01-SEC-SRV-01",
+      serviceName: "Signature Haircut & Blow-Dry Styling",
+      timeSlot: "11:30 AM",
+      stylistName: "Meera K. (Senior Stylist)",
+      duration: "45 Min",
+      status: "BOOKED"
+    },
+    {
+      id: "APT-002",
+      customerName: "Rohan Verma",
+      customerPhone: "+91 9845022334",
+      serviceId: "TENANT-DEMO-01-SEC-SRV-03",
+      serviceName: "Aromatherapy Deep Tissue Spa",
+      timeSlot: "01:00 PM",
+      stylistName: "Arjun P. (Spa Lead)",
+      duration: "60 Min",
+      status: "IN_SESSION"
+    }
+  ]);
+  const [scaleProductId, setScaleProductId] = useState<string>("");
+  const [scaleWeightKg, setScaleWeightKg] = useState<string>("0.50");
+  const [rxNumber, setRxNumber] = useState<string>("");
+  const [rxDoctorName, setRxDoctorName] = useState<string>("");
+  const [rxScheduleHVerified, setRxScheduleHVerified] = useState<boolean>(false);
+  const [retailVariantSize, setRetailVariantSize] = useState<string>("M");
+  const [retailVariantColor, setRetailVariantColor] = useState<string>("Classic Black");
+  const [serviceTimeSlot, setServiceTimeSlot] = useState<string>("11:30 AM");
+  const [serviceStylist, setServiceStylist] = useState<string>("Meera K. (Senior Stylist)");
+  const [serviceDuration, setServiceDuration] = useState<string>("45 Min");
+  const [pgRoomNo, setPgRoomNo] = useState<string>("Room 101");
+  const [pgBedNo, setPgBedNo] = useState<string>("Bed A");
+  const [pgBillingMonth, setPgBillingMonth] = useState<string>("Nov 2026");
+  const [pgMessPlan, setPgMessPlan] = useState<string>("3-Meal Home Mess");
+  const [pgOccupancyType, setPgOccupancyType] = useState<string>("2-Sharing AC");
+  const [pgResidents, setPgResidents] = useState<PgResidentRecord[]>([
+    {
+      id: "RES-101",
+      name: "Aditya Kulkarni",
+      phone: "+91 9820112233",
+      idProofNo: "EMP-4421",
+      roomNo: "Room 101",
+      bedNo: "Bed A",
+      occupancyType: "2-Sharing AC",
+      messPlan: "3-Meal Home Mess",
+      monthlyRent: 8500,
+      checkInDate: "2026-07-01",
+      rentStatus: "DUE",
+      lastBilledMonth: "Oct 2026"
+    },
+    {
+      id: "RES-102",
+      name: "Nikhil Deshmukh",
+      phone: "+91 9820223344",
+      idProofNo: "STU-2026-19",
+      roomNo: "Room 102",
+      bedNo: "Bed A",
+      occupancyType: "3-Sharing Non-AC",
+      messPlan: "3-Meal Home Mess",
+      monthlyRent: 6000,
+      checkInDate: "2026-08-05",
+      rentStatus: "PAID",
+      lastBilledMonth: "Nov 2026"
+    },
+    {
+      id: "RES-103",
+      name: "Sneha Iyer",
+      phone: "+91 9820334455",
+      idProofNo: "EMP-8872",
+      roomNo: "Room 103",
+      bedNo: "Bed A",
+      occupancyType: "Single AC",
+      messPlan: "2-Meal Tiffin Plan",
+      monthlyRent: 14500,
+      checkInDate: "2026-06-15",
+      rentStatus: "DUE",
+      lastBilledMonth: "Oct 2026"
+    },
+    {
+      id: "RES-104",
+      name: "Raghavendra Rao",
+      phone: "+91 9820445566",
+      idProofNo: "STU-2026-44",
+      roomNo: "Room 201",
+      bedNo: "Bed A",
+      occupancyType: "2-Sharing AC",
+      messPlan: "3-Meal Home Mess",
+      monthlyRent: 8500,
+      checkInDate: "2026-09-01",
+      rentStatus: "PAID",
+      lastBilledMonth: "Nov 2026"
+    },
+    {
+      id: "RES-105",
+      name: "Pranav Joshi",
+      phone: "+91 9820556677",
+      idProofNo: "STU-2026-78",
+      roomNo: "Room 202",
+      bedNo: "Bed B",
+      occupancyType: "3-Sharing Non-AC",
+      messPlan: "Breakfast Only",
+      monthlyRent: 6000,
+      checkInDate: "2026-09-10",
+      rentStatus: "DUE",
+      lastBilledMonth: "Oct 2026"
+    },
+    {
+      id: "RES-106",
+      name: "Harshvardhan Patel",
+      phone: "+91 9820667788",
+      idProofNo: "STU-2026-91",
+      roomNo: "Room 203",
+      bedNo: "Bed A",
+      occupancyType: "4-Bed Dorm",
+      messPlan: "3-Meal Home Mess",
+      monthlyRent: 5200,
+      checkInDate: "2026-10-01",
+      rentStatus: "PAID",
+      lastBilledMonth: "Nov 2026"
+    }
+  ]);
+  const [fashionFit, setFashionFit] = useState<string>("Slim Fit");
+  const [fashionSeason, setFashionSeason] = useState<string>("Festive 2026");
+  const [fashionAlterationNote, setFashionAlterationNote] = useState<string>("");
+  const [fashionAlterationDate, setFashionAlterationDate] = useState<string>("2026-11-26");
+  const [garmentAlterations, setGarmentAlterations] = useState<GarmentAlterationSlip[]>([
+    {
+      id: "ALT-201",
+      customerName: "Ananya Deshmukh",
+      customerPhone: "+91 9845011229",
+      garmentName: "Royal Chanderi Embroidered Kurta Set",
+      productId: "TENANT-DEMO-01-SEC-FSH-01",
+      size: "M",
+      color: "Burgundy Rose",
+      fit: "Relaxed Ethnic",
+      alterationTask: "Kurta & Ethnic Fit",
+      measurementsNote: "Take in side waist 0.5 in; sleeve 16 in",
+      readyDate: "2026-11-25",
+      feeAmount: 250,
+      status: "READY"
+    },
+    {
+      id: "ALT-202",
+      customerName: "Siddharth Mehta",
+      customerPhone: "+91 9820499881",
+      garmentName: "Stretch Selvedge Tapered Denim Jeans",
+      productId: "TENANT-DEMO-01-SEC-FSH-03",
+      size: "32",
+      color: "Indigo Denim",
+      fit: "Slim Fit",
+      alterationTask: "Trouser Hemming",
+      measurementsNote: "Shorten inseam to 30 in with original hem",
+      readyDate: "2026-11-26",
+      feeAmount: 180,
+      status: "IN_TAILORING"
+    },
+    {
+      id: "ALT-203",
+      customerName: "Vikram Malhotra",
+      customerPhone: "+91 9811233445",
+      garmentName: "Tailored Egyptian Cotton Formal Shirt",
+      productId: "TENANT-DEMO-01-SEC-FSH-02",
+      size: "L",
+      color: "Ivory Cream",
+      fit: "Tailored Fit",
+      alterationTask: "Sleeve Length Fit",
+      measurementsNote: "Adjust cuff by 0.75 in",
+      readyDate: "2026-11-27",
+      feeAmount: 200,
+      status: "PENDING"
+    }
+  ]);
 
   // Apply tenant font size scale globally across workspace terminals when logged into a tenant
   useEffect(() => {
@@ -953,6 +1369,113 @@ export default function App() {
     } catch (e) {
       console.error("Failed to persist categories to MySQL:", e);
     }
+  };
+
+  const handleSeedSectorWorkspace = async (tenant: Tenant, seedProducts: boolean) => {
+    const secKey: BusinessSector = tenant.businessSector || "SUPERMARKET";
+    const secCatalog = BUSINESS_SECTORS_CATALOG[secKey] || BUSINESS_SECTORS_CATALOG.SUPERMARKET;
+    const mergedCats = Array.from(new Set([...productCategories, ...secCatalog.defaultCategories]));
+    setProductCategories(mergedCats);
+    await persistCategories(mergedCats);
+
+    if (seedProducts) {
+      const sampleItems = getSectorSampleProducts(secKey, tenant.id, currentBranch?.id || "B1");
+      try {
+        const res = await fetch("/api/products/bulk", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ products: sampleItems })
+        });
+        const data = await res.json();
+        if (data.success && Array.isArray(data.products)) {
+          setProducts(data.products);
+        }
+      } catch (e) {
+        console.error("Failed to seed sector sample products:", e);
+      }
+    }
+  };
+
+  const handleSwitchDemoSector = async (newSector: BusinessSector, loadSampleItems: boolean = true) => {
+    if (!activeTenant || !activeTenant.id) return;
+    const sectorCatalog = BUSINESS_SECTORS_CATALOG[newSector] || BUSINESS_SECTORS_CATALOG.SUPERMARKET;
+    const nextConfig = buildSectorConfig(newSector);
+    const updatedTenant: Tenant = {
+      ...activeTenant,
+      businessSector: newSector,
+      sectorConfig: nextConfig
+    };
+
+    setTenantsList(prev => prev.map(t => t.id === updatedTenant.id ? updatedTenant : t));
+    await persistTenantSingle(updatedTenant);
+
+    // Replace other sectors' default categories cleanly while retaining any custom categories
+    const otherSectorCats = getOtherSectorDefaultCategories(newSector);
+    const customCategories = productCategories.filter(
+      cat => !otherSectorCats.has(cat.toLowerCase())
+    );
+    const nextCategories = Array.from(new Set([...sectorCatalog.defaultCategories, ...customCategories]));
+    setProductCategories(nextCategories);
+    await persistCategories(nextCategories);
+
+    // Reset transient POS workspace inputs for the switched sector
+    setSectorCatalogFilter("sector");
+    setCategoryFilter("All");
+    setSearchQuery("");
+    setSkuSearchInput("");
+    setSelectedSkuProduct(null);
+    setCartItems([]);
+    setRestaurantKotNote("");
+    setRxNumber("");
+    setRxDoctorName("");
+    setRxScheduleHVerified(false);
+    setFashionAlterationNote("");
+
+    // Ensure active tab remains valid for the newly activated modules
+    if (
+      (activeTab === "sector-kds" && !nextConfig.enabledModules.kdsTableManagement && !nextConfig.enabledModules.kotPrinting) ||
+      (activeTab === "sector-rx" && !nextConfig.enabledModules.batchExpiryRx) ||
+      (activeTab === "sector-appointments" && !nextConfig.enabledModules.appointmentsBooking) ||
+      (activeTab === "sector-variants" && (!nextConfig.enabledModules.variantMatrix || nextConfig.enabledModules.garmentTailoring)) ||
+      (activeTab === "sector-pg-hostel" && !nextConfig.enabledModules.roomBedManagement) ||
+      (activeTab === "sector-fashion" && !nextConfig.enabledModules.garmentTailoring)
+    ) {
+      setActiveTab("pos");
+    }
+
+    const sectorSamples = getSectorSampleProducts(newSector, updatedTenant.id, currentBranch?.id || "B1");
+    if (nextConfig.enabledModules.weighingScaleScanning && sectorSamples[0]) {
+      setScaleProductId(sectorSamples[0].id);
+    } else {
+      setScaleProductId("");
+    }
+
+    if (loadSampleItems) {
+      const missingSamples = sectorSamples.filter(
+        sample => !tenantProducts.some(p => p.sku === sample.sku || p.id === sample.id)
+      );
+      if (missingSamples.length > 0) {
+        try {
+          const res = await fetch("/api/products/bulk", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ products: missingSamples })
+          });
+          const data = await res.json();
+          if (data.success && Array.isArray(data.products)) {
+            setProducts(data.products);
+          }
+        } catch (e) {
+          console.error("Failed to load demo sector sample items:", e);
+        }
+      }
+    }
+
+    const enabledCount = Object.values(nextConfig.enabledModules).filter(Boolean).length;
+    triggerNotification(
+      `Switched to ${sectorCatalog.icon} ${sectorCatalog.label} (${enabledCount} modules configured & active)!`,
+      "success"
+    );
   };
 
   const persistCashSession = async (session: CashSession) => {
@@ -1555,9 +2078,13 @@ export default function App() {
       // Add fresh
       const gstAmount = Number(((product.price * product.gstRate) / (100 + product.gstRate)).toFixed(2));
       const itemMrp = (product as any).mrp ? Number((product as any).mrp) : (product.price > 0 ? Number((product.price * 1.15).toFixed(2)) : product.price);
+      const displayName =
+        activeSectorModules.variantMatrix && activeSectorKey === "RETAIL"
+          ? `${product.name} [${retailVariantSize} / ${retailVariantColor}]`
+          : product.name;
       const newItem: InvoiceItem = {
         productId: product.id,
-        name: product.name,
+        name: displayName,
         barcode: product.barcode,
         price: product.price,
         mrp: itemMrp,
@@ -1709,6 +2236,54 @@ export default function App() {
       Math.floor(1000 + Math.random() * 9000)
     )}`;
 
+    const sectorMetadata = {
+      sector: activeSectorKey,
+      ...(activeSectorModules.kdsTableManagement || activeSectorModules.kotPrinting
+        ? {
+            orderMode: restaurantOrderMode,
+            tableNo: restaurantOrderMode === "DINE_IN" ? restaurantTableNo : restaurantOrderMode,
+            kotNote: restaurantKotNote.trim() || undefined
+          }
+        : {}),
+      ...(activeSectorModules.batchExpiryRx && activeSectorKey === "PHARMACY"
+        ? {
+            rxNumber: rxNumber.trim() || undefined,
+            rxDoctorName: rxDoctorName.trim() || undefined,
+            rxScheduleHVerified
+          }
+        : {}),
+      ...(activeSectorModules.variantMatrix
+        ? {
+            variantSize: retailVariantSize,
+            variantColor: retailVariantColor
+          }
+        : {}),
+      ...(activeSectorModules.garmentTailoring
+        ? {
+            garmentFit: fashionFit,
+            seasonCollection: fashionSeason,
+            alterationNote: fashionAlterationNote.trim() || undefined,
+            alterationDeliveryDate: fashionAlterationNote.trim() ? fashionAlterationDate : undefined
+          }
+        : {}),
+      ...(activeSectorModules.appointmentsBooking
+        ? {
+            appointmentSlot: serviceTimeSlot,
+            stylistName: serviceStylist,
+            serviceDuration
+          }
+        : {}),
+      ...(activeSectorModules.roomBedManagement
+        ? {
+            roomNo: pgRoomNo,
+            bedNo: pgBedNo,
+            billingMonth: pgBillingMonth,
+            occupancyType: pgOccupancyType,
+            messPlan: pgMessPlan
+          }
+        : {})
+    };
+
     const newInvoice: Invoice = {
       id: invoiceId,
       date: new Date().toISOString().split("T")[0],
@@ -1728,7 +2303,8 @@ export default function App() {
       changeReturned: paymentMode === PaymentMode.CASH ? changeReturned : undefined,
       cashierName: currentCashierName,
       storeBranchId: currentBranch?.id || "B1",
-      status: "PAID"
+      status: "PAID",
+      sectorMetadata
     };
 
     try {
@@ -1743,6 +2319,18 @@ export default function App() {
         setProducts(data.state.products);
         setInvoices(data.state.invoices);
         setCustomers(data.state.customers);
+
+        if (activeSectorModules.roomBedManagement) {
+          const billedResidentName = billingCustomerName.trim().toLowerCase();
+          setPgResidents((prev) =>
+            prev.map((r) =>
+              (r.roomNo === pgRoomNo && r.bedNo === pgBedNo) ||
+              (billedResidentName && r.name.toLowerCase() === billedResidentName)
+                ? { ...r, rentStatus: "PAID", lastBilledMonth: pgBillingMonth }
+                : r
+            )
+          );
+        }
         
         // Show Thermal Receipt preview
         setShowInvoicePrintPreview(newInvoice);
@@ -2685,8 +3273,15 @@ export default function App() {
     openLabelGeneratorModal(prod);
   };
 
+  // Scope catalog cleanly to active sector when in Demo Client sector view
+  const sectorScopedProducts = useMemo(() => {
+    if (!isDemoClient || sectorCatalogFilter === "all") return tenantProducts;
+    const matched = tenantProducts.filter((p) => isProductMatchingSector(p, activeSectorKey));
+    return matched.length > 0 ? matched : tenantProducts;
+  }, [isDemoClient, sectorCatalogFilter, tenantProducts, activeSectorKey]);
+
   // Active products filter categorization
-  const filteredProductsBySearch = tenantProducts.filter((p) => {
+  const filteredProductsBySearch = sectorScopedProducts.filter((p) => {
     const matchesSearch =
       p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       (p.barcode || "").includes(searchQuery) ||
@@ -2696,8 +3291,15 @@ export default function App() {
     return matchesSearch && p.category === categoryFilter;
   });
 
-  // Unique categories list
-  const productCategoriesList = ["All", ...productCategories];
+  // Unique categories list prioritized by active sector
+  const productCategoriesList = useMemo(() => {
+    if (isDemoClient && sectorCatalogFilter === "sector") {
+      const otherCats = getOtherSectorDefaultCategories(activeSectorKey);
+      const customCats = productCategories.filter((c) => !otherCats.has(c.toLowerCase()));
+      return ["All", ...Array.from(new Set([...activeSectorCatalog.defaultCategories, ...customCats]))];
+    }
+    return ["All", ...Array.from(new Set([...activeSectorCatalog.defaultCategories, ...productCategories]))];
+  }, [isDemoClient, sectorCatalogFilter, activeSectorKey, activeSectorCatalog.defaultCategories, productCategories]);
 
   // Helper function to resolve stock of a product for the currently selected branch
   const getProductStock = (p: Product) => {
@@ -3345,288 +3947,111 @@ export default function App() {
       }
     };
 
-    const activeBgConfig = LOGIN_BG_CONFIGS["classic-blue"];
-    const isDarkTheme = false;
-
     return (
-      <div className={`min-h-screen w-screen ${activeBgConfig.outerBg} flex items-center justify-center p-3 sm:p-6 md:p-8 relative overflow-y-auto font-sans selection:bg-blue-100 selection:text-blue-900`} id="secured-login-portal">
+      <div
+        className="min-h-screen w-screen bg-gradient-to-br from-[#cce2ff] via-[#e6f1ff] to-[#f4f8ff] flex items-center justify-center p-2 sm:p-5 md:p-6 relative overflow-y-auto font-sans selection:bg-blue-100 selection:text-blue-900"
+        id="secured-login-portal"
+      >
+        {notifText && (
+          <div
+            className={`fixed top-4 right-4 z-50 p-4 rounded-xl shadow-xl flex items-center gap-3 ${
+              notifType === "success"
+                ? "bg-slate-900 text-emerald-400 border border-emerald-500/20"
+                : "bg-amber-950 text-amber-200 border border-amber-500/40"
+            }`}
+          >
+            <AlertTriangle className="w-5 h-5 shrink-0" />
+            <p className="text-sm font-sans text-white font-medium">{notifText}</p>
+          </div>
+        )}
 
-        {/* Outer Split Canvas Wrapper in Slate Classic Theme */}
-        <div className={`w-full max-w-7xl ${activeBgConfig.innerBg} rounded-[2.5rem] shadow-2xl border transition-all duration-700 flex flex-col lg:flex-row overflow-hidden relative min-h-[680px] lg:min-h-[760px]`}>
-          
-          {/* Left Column (Branding, Features Grid & Beautiful UI Mockup illustration) */}
-          <div className="w-full lg:w-[56%] p-6 sm:p-10 lg:p-12 flex flex-col justify-between relative overflow-hidden select-none">
-            {/* Soft dynamic gradient ambient backgrounds in left panel */}
-            {activeBgConfig.glows.map((gClass, idx) => (
-              <div key={idx} className={gClass} />
-            ))}
-
-            <div className="relative z-10">
-              {/* ExpertAid High Fidelity SVG Logo Header */}
-              <ExpertAidLogo />
- 
-              {/* Display Header Text */}
-              <div className="mt-8">
-                <h1 className={`font-sans font-black text-3xl sm:text-4xl lg:text-[44px] tracking-tight leading-[1.08] transition-colors duration-500 ${isDarkTheme ? "text-white" : "text-[#0f172a]"}`}>
-                  Smart Billing Software
-                </h1>
-                <p className={`font-sans font-medium text-sm sm:text-base mt-2.5 max-w-lg leading-relaxed transition-colors duration-500 ${isDarkTheme ? "text-slate-300" : "text-slate-600"}`}>
-                  Manage your Business, Invoices, Inventory, GST & Reports in one place.
-                </p>
-              </div>
-
-              {/* Two-Column Features Matrix Grid exactly mimicking screenshot icons */}
-              <div className="grid grid-cols-2 gap-y-4 gap-x-5 mt-7 max-w-xl">
-                {[
-                  { label: "Invoice Management", icon: FileText },
-                  { label: "Customer Management", icon: Users },
-                  { label: "Inventory Management", icon: ShoppingBag },
-                  { label: "Sales Analytics", icon: TrendingUp },
-                  { label: "Payment Tracking", icon: CreditCard },
-                  { label: "Reports & Accounting", icon: Layers },
-                  { label: "GST Billing", icon: Percent },
-                  { label: "Role-Based Access", icon: Shield }
-                ].map((feat, i) => {
-                  const IconComp = feat.icon;
-                  return (
-                    <div key={i} className="flex items-center gap-3 hover:translate-x-1 transition-transform duration-200">
-                      <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white shadow-md shrink-0 transition-all duration-500 ${isDarkTheme ? "bg-violet-600 shadow-violet-500/20" : "bg-blue-600 shadow-blue-500/10"}`}>
-                        <IconComp className="w-4 h-4" />
-                      </div>
-                      <span className={`font-sans font-extrabold text-xs sm:text-[13px] tracking-tight transition-colors duration-500 ${isDarkTheme ? "text-slate-200" : "text-slate-800"}`}>
-                        {feat.label}
-                      </span>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Simulated Desktop Software View with Live Charts & Physical Cartoon Assets */}
-            <div className="mt-8 lg:mt-6 mb-8 lg:mb-0 relative w-full max-w-xl mx-auto h-72 hidden md:block">
-              {/* Laptop Screen Frame with shadows */}
-              <div className="w-96 h-[220px] bg-slate-900 rounded-t-2xl border-t-2 border-x-2 border-slate-700/80 shadow-[0_25px_50px_-12px_rgba(30,41,59,0.3)] relative z-20 flex flex-col overflow-hidden mx-auto">
-                {/* Simulated Screen Header */}
-                <div className="h-4.5 bg-slate-800 border-b border-slate-950 flex items-center justify-between px-2">
-                  <div className="flex gap-1.2 items-center">
-                    <span className="w-1.5 h-1.5 rounded-full bg-rose-500 block"></span>
-                    <span className="w-1.5 h-1.5 rounded-full bg-amber-500 block"></span>
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 block"></span>
-                  </div>
-                  <span className="text-[7.5px] font-mono text-slate-400 font-bold uppercase tracking-widest">Workspace Terminal</span>
-                  <div className="w-5"></div>
-                </div>
-
-                {/* Dashboard Screen Content */}
-                <div className="bg-slate-50 flex-1 p-2.5 flex flex-col gap-2 overflow-hidden select-none text-[8px]">
-                  {/* Top Header bar inside software */}
-                  <div className="flex justify-between items-center border-b border-slate-200 pb-1">
-                    <span className="font-sans font-black text-slate-800 text-[10px]">Dashboard Overview</span>
-                    <span className="bg-emerald-50 text-emerald-700 font-mono font-bold text-[6px] px-1 py-0.2 rounded uppercase border border-emerald-200/50">Node Online</span>
-                  </div>
-
-                  {/* KPI Mini Bento Grid */}
-                  <div className="grid grid-cols-4 gap-1.5">
-                    {[
-                      { title: "Total Sales", val: "₹ 45,750.00", color: "text-blue-600" },
-                      { title: "Total Invoices", val: "320", color: "text-slate-800" },
-                      { title: "Total Customers", val: "150", color: "text-slate-800" },
-                      { title: "Total Due", val: "₹ 12,540.00", color: "text-rose-500" }
-                    ].map((k, idx) => (
-                      <div key={idx} className="bg-white rounded-md border border-slate-200/70 p-1 flex flex-col justify-between shadow-3xs">
-                        <span className="text-slate-400 text-[5px] font-bold uppercase font-sans truncate">{k.title}</span>
-                        <span className={`text-[7px] font-sans font-extrabold tracking-tight truncate ${k.color}`}>{k.val}</span>
-                      </div>
-                    ))}
-                  </div>
-
-                  {/* Live SVG Graph & Donut split */}
-                  <div className="flex-1 flex gap-2 overflow-hidden">
-                    {/* Graph Panel */}
-                    <div className="bg-white rounded-md border border-slate-200/70 p-1.5 flex-1 flex flex-col justify-between relative overflow-hidden">
-                      <div className="flex justify-between items-center mb-1 relative z-10">
-                        <span className="text-slate-500 font-bold text-[5.5px] uppercase">Sales Trend</span>
-                        <span className="text-blue-600 font-mono text-[5px] font-bold">+18.4%</span>
-                      </div>
-                      
-                      {/* Interactive Sparkline path */}
-                      <div className="flex-1 w-full relative">
-                        <svg className="absolute inset-0 w-full h-full" viewBox="0 0 100 30" preserveAspectRatio="none">
-                          <defs>
-                            <linearGradient id="chartFill" x1="0" y1="0" x2="0" y2="1">
-                              <stop offset="0%" stopColor="#3b82f6" stopOpacity="0.25" />
-                              <stop offset="100%" stopColor="#3b82f6" stopOpacity="0.0" />
-                            </linearGradient>
-                          </defs>
-                          {/* Grid line guidelines */}
-                          <line x1="0" y1="10" x2="100" y2="10" stroke="#f1f5f9" strokeWidth="0.5" />
-                          <line x1="0" y1="20" x2="100" y2="20" stroke="#f1f5f9" strokeWidth="0.5" />
-                          {/* Filled area */}
-                          <path d="M0 25 L10 20 L25 24 L40 12 L55 18 L70 6 L85 15 L100 8 L100 30 L0 30 Z" fill="url(#chartFill)" />
-                          {/* Sparkline curve */}
-                          <path d="M0 25 L10 20 L25 24 L40 12 L55 18 L70 6 L85 15 L100 8" fill="none" stroke="#2563eb" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
-                          {/* Floating dots */}
-                          <circle cx="70" cy="6" r="1.5" fill="#2563eb" stroke="#ffffff" strokeWidth="0.5" />
-                          <circle cx="100" cy="8" r="1.5" fill="#10b981" stroke="#ffffff" strokeWidth="0.5" />
-                        </svg>
-                      </div>
-
-                      {/* X Axis Months */}
-                      <div className="flex justify-between text-slate-400 text-[4.5px] font-mono mt-0.5">
-                        <span>JAN</span><span>FEB</span><span>MAR</span><span>APR</span><span>MAY</span><span>JUN</span>
-                      </div>
-                    </div>
-
-                    {/* Donut Chart Panel */}
-                    <div className="bg-white rounded-md border border-slate-200/70 p-1.5 w-20 flex flex-col items-center justify-between">
-                      <span className="text-slate-500 font-bold text-[5.5px] uppercase text-center block w-full truncate">Top Products</span>
-                      <div className="relative w-10 h-10 flex items-center justify-center">
-                        {/* Ring Chart SVG */}
-                        <svg className="w-full h-full transform -rotate-90" viewBox="0 0 36 36">
-                          <circle cx="18" cy="18" r="15.915" fill="none" stroke="#f1f5f9" strokeWidth="4.2" />
-                          <circle cx="18" cy="18" r="15.915" fill="none" stroke="#3b82f6" strokeWidth="4.2" strokeDasharray="50 50" strokeDashoffset="0" />
-                          <circle cx="18" cy="18" r="15.915" fill="none" stroke="#10b981" strokeWidth="4.2" strokeDasharray="30 70" strokeDashoffset="-50" />
-                          <circle cx="18" cy="18" r="15.915" fill="none" stroke="#f59e0b" strokeWidth="4.2" strokeDasharray="20 80" strokeDashoffset="-80" />
-                        </svg>
-                        <div className="absolute flex flex-col items-center justify-center">
-                          <span className="text-[6px] font-black text-slate-800 leading-none">84%</span>
-                          <span className="text-[4px] text-slate-400 font-bold uppercase leading-none scale-90">LTV</span>
-                        </div>
-                      </div>
-                      <div className="flex justify-center gap-1 scale-90">
-                        <span className="w-1 h-1 rounded-full bg-blue-500"></span>
-                        <span className="w-1 h-1 rounded-full bg-emerald-500"></span>
-                        <span className="w-1 h-1 rounded-full bg-amber-500"></span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Heavy Duty Bezel Frame Base for Laptop */}
-              <div className="w-[430px] h-3 bg-slate-800 rounded-b-xl border-b-2 border-slate-950 shadow-[0_12px_24px_rgba(15,23,42,0.15)] absolute bottom-11 left-1/2 transform -translate-x-1/2 z-30">
-                <div className="absolute top-0 left-1/2 transform -translate-x-1/2 w-14 h-1 bg-slate-900 rounded-b-sm"></div>
-              </div>
-
-              {/* Simulated Float-over Invoice Paper Sheet (Left of laptop) */}
-              <div className="absolute left-2 lg:left-6 bottom-4 w-40 bg-white rounded-xl border border-slate-200/80 shadow-[0_15px_30px_rgba(0,0,0,0.08)] p-3 z-35 transform -rotate-6 hover:rotate-0 hover:scale-105 transition-all duration-300">
-                <div className="flex justify-between items-center border-b border-slate-100 pb-1.5 mb-1.5">
-                  <div className="flex flex-col">
-                    <span className="text-[7.5px] font-black text-slate-900 uppercase tracking-wider">TAX INVOICE</span>
-                    <span className="text-[5.5px] font-mono text-slate-400 mt-0.5">INV-2024-001</span>
-                  </div>
-                  <div className="w-5 h-5 bg-emerald-50 text-emerald-600 rounded-full flex items-center justify-center font-bold text-[8px] border border-emerald-100">
-                    ✓
-                  </div>
-                </div>
-                <div className="space-y-1">
-                  <div className="flex justify-between text-[6px] text-slate-500 font-medium">
-                    <span>A4 Printer Ink</span><span>1x</span><span>₹ 840.00</span>
-                  </div>
-                  <div className="flex justify-between text-[6px] text-slate-500 font-medium">
-                    <span>Thermal Rolls</span><span>10x</span><span>₹ 450.00</span>
-                  </div>
-                  <div className="flex justify-between text-[6px] text-slate-500 font-medium">
-                    <span>Barcode Reader</span><span>1x</span><span>₹ 1,290.00</span>
-                  </div>
-                </div>
-                <div className="border-t border-slate-100 mt-2 pt-1.5 flex justify-between items-center">
-                  <span className="text-[5px] text-slate-400 font-sans font-bold">GST & SURCHARGES INCL.</span>
-                  <span className="text-[8.5px] font-sans font-black text-slate-900">₹ 2,580.00</span>
-                </div>
-                <div className="bg-slate-50 text-[5px] text-slate-400 text-center py-1 mt-1.5 rounded uppercase font-bold tracking-wider font-mono">
-                  Thank you for your business!
-                </div>
-              </div>
-
-              {/* Simulated Cardboard boxes representing warehouses (Right of laptop) */}
-              <div className="absolute right-4 lg:right-10 bottom-6 flex flex-col items-end z-35 transform rotate-3 hover:-rotate-1 hover:scale-105 transition-transform duration-300">
-                {/* Box 3 - Top small */}
-                <div className="w-10 h-8 bg-[#d97706]/85 rounded-md border border-[#b45309] shadow-sm relative flex items-center justify-center">
-                  <div className="absolute top-0 w-full h-[3px] bg-[#92400e]/50"></div>
-                  <div className="absolute left-[40%] w-[3px] h-full bg-[#92400e]/30"></div>
-                  <span className="text-[4px] font-mono text-[#78350f] font-black uppercase">PACK-03</span>
-                </div>
-                {/* Box 2 - Middle medium */}
-                <div className="w-13 h-10 bg-[#b45309]/90 rounded-md border border-[#92400e] shadow-sm relative flex items-center justify-center -mr-2 mt-[-4px]">
-                  <div className="absolute top-0 w-full h-[4px] bg-[#78350f]/60"></div>
-                  <div className="absolute left-[45%] w-[4px] h-full bg-[#78350f]/30"></div>
-                  <span className="text-[5px] font-mono text-white/90 font-black uppercase">CARGO-02</span>
-                </div>
-                {/* Box 1 - Bottom large */}
-                <div className="w-16 h-12 bg-[#92400e]/95 rounded-md border border-[#78350f] shadow-md relative flex items-center justify-center -mr-4 mt-[-4px]">
-                  <div className="absolute top-0 w-full h-[5px] bg-[#451a03]/70"></div>
-                  <div className="absolute left-[48%] w-[5px] h-full bg-[#451a03]/30"></div>
-                  <span className="text-[6px] font-mono text-white/80 font-black uppercase tracking-wider">INV-BOX-01</span>
-                </div>
-              </div>
-
-              {/* Simulated Mini Desk Calculator */}
-              <div className="absolute right-20 bottom-3 w-11 h-15 bg-slate-800 rounded border border-slate-700 shadow-md p-1 z-40 transform -rotate-12 hover:rotate-0 transition-transform cursor-pointer">
-                <div className="h-2.5 bg-emerald-950 text-emerald-400 font-mono text-[7px] text-right pr-1 pt-0.5 rounded-xs leading-none">
-                  2580.00
-                </div>
-                <div className="grid grid-cols-3 gap-0.5 mt-1.5 text-white font-mono text-[4.5px] text-center">
-                  <span className="bg-slate-700 rounded-2xs py-0.5 font-bold">7</span>
-                  <span className="bg-slate-700 rounded-2xs py-0.5 font-bold">8</span>
-                  <span className="bg-slate-700 rounded-2xs py-0.5 font-bold">9</span>
-                  <span className="bg-slate-700 rounded-2xs py-0.5 font-bold">4</span>
-                  <span className="bg-slate-700 rounded-2xs py-0.5 font-bold">5</span>
-                  <span className="bg-slate-700 rounded-2xs py-0.5 font-bold">6</span>
-                  <span className="bg-slate-700 rounded-2xs py-0.5 font-bold">1</span>
-                  <span className="bg-slate-700 rounded-2xs py-0.5 font-bold">2</span>
-                  <span className="bg-slate-700 rounded-2xs py-0.5 font-bold">3</span>
-                  <span className="bg-[#f59e0b] rounded-2xs py-0.5 font-bold col-span-3 text-slate-900 font-black">TOTAL</span>
-                </div>
-              </div>
-
-              {/* Holographic glowing lines in background */}
-              <div className="absolute right-0 top-3 w-28 h-20 opacity-20 pointer-events-none">
-                <svg className="w-full h-full" viewBox="0 0 100 100" fill="none">
-                  <rect x="10" y="20" width="12" height="70" fill="#2563eb" />
-                  <rect x="28" y="40" width="12" height="50" fill="#2563eb" />
-                  <rect x="46" y="10" width="12" height="80" fill="#2563eb" />
-                  <rect x="64" y="30" width="12" height="60" fill="#2563eb" />
-                  <rect x="82" y="5" width="12" height="95" fill="#3b82f6" />
-                </svg>
-              </div>
-            </div>
-
-            {/* Bottom trust indicators block */}
-            <div className={`relative z-10 flex flex-wrap items-center justify-start gap-6 pt-4 border-t mt-4 md:mt-0 transition-colors duration-500 ${isDarkTheme ? "border-slate-800/80 text-slate-300" : "border-slate-200/50 text-slate-600"}`}>
-              <div className="flex items-center gap-1.5 text-xs font-bold">
-                <CheckCircle className={`w-4 h-4 ${isDarkTheme ? "text-violet-400" : "text-blue-600"}`} />
-                <span>Secure</span>
-              </div>
-              <div className="flex items-center gap-1.5 text-xs font-bold">
-                <Cloud className={`w-4 h-4 ${isDarkTheme ? "text-violet-400" : "text-blue-600"}`} />
-                <span>Reliable</span>
-              </div>
-              <div className="flex items-center gap-1.5 text-xs font-bold">
-                <Headphones className={`w-4 h-4 ${isDarkTheme ? "text-violet-400" : "text-blue-600"}`} />
-                <span>24/7 Support</span>
-              </div>
-            </div>
+        {/* Split Container Matching Attached Expert Billing Visual */}
+        <div className="w-full max-w-[1360px] rounded-[2rem] shadow-[0_28px_70px_-15px_rgba(15,40,90,0.28)] border border-white/80 overflow-hidden bg-gradient-to-br from-[#e7f1ff] via-[#f3f8ff] to-[#dbeafe] flex flex-col lg:flex-row relative lg:h-[760px]">
+          {/* Left Panel: Attached Retail POS & Expert Billing Hero Image */}
+          <div className="w-full lg:w-[57%] h-56 sm:h-72 lg:h-full relative overflow-hidden bg-[#0b3c8a] shrink-0 select-none">
+            <img
+              src="/assets/aistudio/Expert_Billing_Login_Dashboard_86cb7159.png"
+              alt="Expert Billing — Manage Your Business with Ease"
+              className="w-full h-full object-cover object-left pointer-events-none"
+            />
+            {/* Smooth Curved Blue-to-Ice Edge Divider on Desktop */}
+            <svg
+              viewBox="0 0 80 760"
+              preserveAspectRatio="none"
+              className="hidden lg:block absolute top-0 right-[-1px] h-full w-16 pointer-events-none"
+              aria-hidden="true"
+            >
+              <path
+                d="M70,0 C12,180 68,540 0,760 L80,760 L80,0 Z"
+                fill="#0284c7"
+                opacity="0.35"
+              />
+              <path
+                d="M76,0 C20,185 74,545 10,760 L80,760 L80,0 Z"
+                fill="#e9f2ff"
+              />
+            </svg>
           </div>
 
-          {/* Right Column (Prism-White Elegant Interactive Login Card Container) */}
-          <div className="w-full lg:w-[44%] bg-white p-6 sm:p-10 lg:p-12 flex flex-col justify-between relative shadow-2xl lg:shadow-none">
-            
-            {/* Top / Title header section */}
-            <div className="my-auto py-4">
-              <div className="text-center mb-8">
-                <h2 className="text-[#0f172a] text-3xl font-black tracking-tight font-sans">
-                  Welcome Back!
+          {/* Right Panel: Billing Application Interactive Login Card */}
+          <div className="w-full lg:w-[43%] flex-1 bg-gradient-to-br from-[#eaf3ff] via-[#f5f9ff] to-[#dcebff] p-5 sm:p-8 lg:p-10 flex flex-col items-center justify-center relative overflow-hidden">
+            {/* Subtle Bottom Wave Accent Matching Attached Illustration */}
+            <svg
+              viewBox="0 0 600 130"
+              preserveAspectRatio="none"
+              className="absolute bottom-0 left-0 w-full h-24 sm:h-28 pointer-events-none opacity-85"
+              aria-hidden="true"
+            >
+              <path
+                d="M0,75 C160,115 360,20 600,60 L600,130 L0,130 Z"
+                fill="#3b82f6"
+                opacity="0.18"
+              />
+              <path
+                d="M0,95 C190,45 380,120 600,35 L600,130 L0,130 Z"
+                fill="#0284c7"
+                opacity="0.28"
+              />
+            </svg>
+
+            <div className="relative z-10 w-full max-w-[420px] bg-white rounded-[1.75rem] shadow-[0_20px_50px_rgba(15,61,145,0.14)] border border-blue-100/90 px-6 sm:px-8 py-7 sm:py-8">
+              {/* Header with Speed Shopping Cart Logo */}
+              <div className="text-center">
+                <div className="inline-flex items-center justify-center mb-2">
+                  <svg
+                    viewBox="0 0 64 46"
+                    className="w-14 h-10 text-[#0074e4]"
+                    fill="none"
+                    aria-hidden="true"
+                  >
+                    <path
+                      d="M4 13H14M1 21H12M7 29H16"
+                      stroke="#0ea5e9"
+                      strokeWidth="3.2"
+                      strokeLinecap="round"
+                    />
+                    <path
+                      d="M17 7H23L27 28H50L55 13H25"
+                      stroke="currentColor"
+                      strokeWidth="3.5"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                    <circle cx="30" cy="37" r="3.5" fill="currentColor" />
+                    <circle cx="47" cy="37" r="3.5" fill="currentColor" />
+                  </svg>
+                </div>
+                <h2 className="text-[#0c2461] text-2xl sm:text-[28px] font-black tracking-tight font-sans leading-tight">
+                  Billing Application
                 </h2>
-                <p className="text-slate-500 text-sm mt-1.5 font-sans font-medium">
-                  Login to your <span className={`font-extrabold transition-colors duration-500 ${isDarkTheme ? "text-violet-600" : "text-blue-600"}`}>Expert POS</span> Billing Account
+                <p className="text-slate-600 text-sm font-semibold mt-1 font-sans">
+                  Login to Continue
                 </p>
-                {/* Centered themed accent bar */}
-                <div className={`w-12 h-1 rounded mx-auto mt-3.5 transition-all duration-500 ${isDarkTheme ? "bg-violet-600" : "bg-blue-600"}`}></div>
+                <div className="border-b border-slate-200 mt-4 mb-5" />
               </div>
 
               {loginError && (
-                <div className="mb-5 p-3.5 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-700 flex gap-2.5 items-start animate-shake">
+                <div className="mb-4 p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-700 flex gap-2.5 items-start">
                   <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
                   <div>
                     <span className="font-bold block mb-0.5">Authentication Failure</span>
@@ -3635,9 +4060,7 @@ export default function App() {
                 </div>
               )}
 
-              {/* Toggle-able Login Forms (Standard Email Password / OTP Code Login) */}
               {!otpMode ? (
-                /* 1. Standard Credential Form */
                 <form onSubmit={handleLoginSubmit} className="space-y-4">
                   <div>
                     <div className="relative">
@@ -3647,14 +4070,10 @@ export default function App() {
                         placeholder="Username / Email"
                         value={loginUserId}
                         onChange={(e) => setLoginUserId(e.target.value)}
-                        className={`w-full bg-[#f8fafc] border border-slate-200 text-slate-900 rounded-xl py-3.5 pl-11 pr-4 text-sm font-semibold placeholder-slate-400 focus:outline-none focus:bg-white focus:ring-4 transition-all shadow-3xs ${
-                          isDarkTheme 
-                            ? "focus:border-violet-500 focus:ring-violet-100" 
-                            : "focus:border-blue-500 focus:ring-blue-100"
-                        }`}
+                        className="w-full bg-[#f8fafc] border border-slate-200 text-slate-900 rounded-xl py-3.5 pl-11 pr-4 text-sm font-semibold placeholder-slate-400 focus:outline-none focus:bg-white focus:border-[#0074e4] focus:ring-4 focus:ring-blue-100 transition-all"
                         id="login-username-input"
                       />
-                      <User className="w-5 h-5 absolute left-4 top-3.5 text-slate-400" />
+                      <User className="w-5 h-5 absolute left-3.5 top-3.5 text-[#0c2461]" />
                     </div>
                   </div>
 
@@ -3666,18 +4085,14 @@ export default function App() {
                         placeholder="Password"
                         value={loginPassword}
                         onChange={(e) => setLoginPassword(e.target.value)}
-                        className={`w-full bg-[#f8fafc] border border-slate-200 text-slate-900 rounded-xl py-3.5 pl-11 pr-11 text-sm font-semibold placeholder-slate-400 focus:outline-none focus:bg-white focus:ring-4 transition-all shadow-3xs ${
-                          isDarkTheme 
-                            ? "focus:border-violet-500 focus:ring-violet-100" 
-                            : "focus:border-blue-500 focus:ring-blue-100"
-                        }`}
+                        className="w-full bg-[#f8fafc] border border-slate-200 text-slate-900 rounded-xl py-3.5 pl-11 pr-11 text-sm font-semibold placeholder-slate-400 focus:outline-none focus:bg-white focus:border-[#0074e4] focus:ring-4 focus:ring-blue-100 transition-all"
                         id="login-password-input"
                       />
-                      <Lock className="w-5 h-5 absolute left-4 top-3.5 text-slate-400" />
+                      <Lock className="w-5 h-5 absolute left-3.5 top-3.5 text-[#0c2461]" />
                       <button
                         type="button"
                         onClick={() => setShowPassword(!showPassword)}
-                        className="absolute right-4 top-3.5 text-slate-400 hover:text-slate-600 p-0.5 rounded transition-colors cursor-pointer"
+                        className="absolute right-3.5 top-3.5 text-slate-500 hover:text-slate-700 p-0.5 rounded transition-colors cursor-pointer"
                         title={showPassword ? "Hide password" : "Show password"}
                       >
                         {showPassword ? <EyeOff className="w-4.5 h-4.5" /> : <Eye className="w-4.5 h-4.5" />}
@@ -3685,18 +4100,21 @@ export default function App() {
                     </div>
                   </div>
 
-                  {/* Options row */}
-                  <div className="flex items-center justify-between text-xs font-sans font-extrabold select-none pt-1">
-                    <label className="flex items-center gap-2 text-slate-600 cursor-pointer">
+                  <button
+                    type="submit"
+                    className="w-full bg-gradient-to-r from-[#0284c7] via-[#0070e0] to-[#1d4ed8] hover:brightness-105 text-white font-bold text-sm py-3.5 px-4 rounded-xl shadow-lg shadow-blue-500/25 transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-[0.99]"
+                  >
+                    <ArrowRight className="w-4 h-4 shrink-0" />
+                    <span>Login</span>
+                  </button>
+
+                  <div className="flex items-center justify-between text-xs font-sans font-bold select-none pt-1">
+                    <label className="flex items-center gap-2 text-slate-700 cursor-pointer">
                       <input
                         type="checkbox"
                         checked={rememberMe}
                         onChange={(e) => setRememberMe(e.target.checked)}
-                        className={`rounded border-slate-300 w-4 h-4 cursor-pointer ${
-                          isDarkTheme 
-                            ? "text-violet-600 focus:ring-violet-500" 
-                            : "text-blue-600 focus:ring-blue-500"
-                        }`}
+                        className="rounded border-slate-300 w-4 h-4 text-[#0070e0] focus:ring-blue-500 cursor-pointer"
                       />
                       <span>Remember Me</span>
                     </label>
@@ -3705,71 +4123,51 @@ export default function App() {
                       onClick={() => {
                         triggerNotification("Please contact your System Super Admin to reset credentials.", "warning");
                       }}
-                      className={`transition-colors hover:underline ${
-                        isDarkTheme ? "text-violet-600 hover:text-violet-800" : "text-blue-600 hover:text-blue-800"
-                      }`}
+                      className="text-[#0066cc] hover:text-blue-800 hover:underline cursor-pointer"
                     >
                       Forgot Password?
                     </button>
                   </div>
-
-                  {/* Login Button with lock icon */}
-                  <button
-                    type="submit"
-                    className={`w-full text-white font-extrabold text-sm py-4 px-4 rounded-xl transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-98 mt-6 ${activeBgConfig.btnAccent}`}
-                  >
-                    <Lock className="w-4 h-4 shrink-0 fill-current" />
-                    <span>Login</span>
-                  </button>
                 </form>
               ) : (
-                /* 2. OTP Authenticator Form */
                 <form onSubmit={handleOtpSubmit} className="space-y-4">
-                  <div className={`rounded-xl p-3 text-xs flex gap-2 border transition-all duration-500 ${
-                    isDarkTheme ? "bg-violet-950/40 border-violet-800/40 text-violet-300" : "bg-blue-50 border-blue-100 text-blue-800"
-                  }`}>
-                    <Info className={`w-4 h-4 shrink-0 mt-0.5 ${isDarkTheme ? "text-violet-400" : "text-blue-600"}`} />
+                  <div className="rounded-xl p-3 text-xs flex gap-2 border bg-blue-50 border-blue-100 text-blue-800">
+                    <Info className="w-4 h-4 shrink-0 mt-0.5 text-blue-600" />
                     <div>
-                      <span className="font-bold block">One-Time Password Demo</span>
-                      Enter registered system OTP code to access branch nodes immediately. Use code <span className={`font-mono font-bold px-1.5 py-0.2 rounded ${
-                        isDarkTheme ? "bg-violet-900/60 text-violet-200" : "bg-blue-100 text-blue-700"
-                      }`}>123456</span> to pass.
+                      <span className="font-bold block">One-Time Password</span>
+                      Enter your 6-digit OTP code (demo code{" "}
+                      <span className="font-mono font-bold px-1.5 py-0.2 rounded bg-blue-100 text-blue-700">
+                        123456
+                      </span>
+                      ).
                     </div>
                   </div>
 
-                  <div>
-                    <div className="relative">
-                      <input
-                        type="text"
-                        required
-                        maxLength={6}
-                        placeholder="6-Digit OTP Code (e.g. 123456)"
-                        value={otpInput}
-                        onChange={(e) => setOtpInput(e.target.value.replace(/[^0-9]/g, ""))}
-                        className={`w-full bg-[#f8fafc] border border-slate-200 text-slate-900 rounded-xl py-3.5 pl-11 pr-4 text-sm font-mono font-bold tracking-widest placeholder-slate-400 focus:outline-none focus:bg-white focus:ring-4 transition-all text-center ${
-                          isDarkTheme 
-                            ? "focus:border-violet-500 focus:ring-violet-100" 
-                            : "focus:border-blue-500 focus:ring-blue-100"
-                        }`}
-                      />
-                      <Smartphone className="w-5 h-5 absolute left-4 top-3.5 text-slate-400" />
-                    </div>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      required
+                      maxLength={6}
+                      placeholder="6-Digit OTP Code (e.g. 123456)"
+                      value={otpInput}
+                      onChange={(e) => setOtpInput(e.target.value.replace(/[^0-9]/g, ""))}
+                      className="w-full bg-[#f8fafc] border border-slate-200 text-slate-900 rounded-xl py-3.5 pl-11 pr-4 text-sm font-mono font-bold tracking-widest placeholder-slate-400 focus:outline-none focus:bg-white focus:border-[#0074e4] focus:ring-4 focus:ring-blue-100 transition-all text-center"
+                    />
+                    <Smartphone className="w-5 h-5 absolute left-3.5 top-3.5 text-[#0c2461]" />
                   </div>
 
                   <div className="flex justify-between items-center text-xs">
                     <button
                       type="button"
                       onClick={() => setOtpInput("123456")}
-                      className={`font-bold hover:underline transition-colors duration-500 ${
-                        isDarkTheme ? "text-violet-400 hover:text-violet-300" : "text-blue-600 hover:text-blue-800"
-                      }`}
+                      className="font-bold text-[#0066cc] hover:underline cursor-pointer"
                     >
                       Auto Fill Demo OTP
                     </button>
                     <button
                       type="button"
                       onClick={() => setOtpMode(false)}
-                      className="text-slate-500 font-bold hover:underline"
+                      className="text-slate-500 font-bold hover:underline cursor-pointer"
                     >
                       Back to Password
                     </button>
@@ -3777,22 +4175,22 @@ export default function App() {
 
                   <button
                     type="submit"
-                    className={`w-full text-white font-extrabold text-sm py-4 px-4 rounded-xl transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-98 mt-4 ${activeBgConfig.btnAccent}`}
+                    className="w-full bg-gradient-to-r from-[#0284c7] via-[#0070e0] to-[#1d4ed8] hover:brightness-105 text-white font-bold text-sm py-3.5 px-4 rounded-xl shadow-lg shadow-blue-500/25 transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-[0.99]"
                   >
                     <Unlock className="w-4 h-4 shrink-0" />
-                    <span>Verify & Continue</span>
+                    <span>Verify &amp; Continue</span>
                   </button>
                 </form>
               )}
 
-              {/* Standard OR Divider */}
-              <div className="relative flex py-4 items-center">
-                <div className="flex-grow border-t border-slate-200"></div>
-                <span className="flex-shrink mx-4 text-slate-400 text-[10px] font-bold uppercase tracking-wider font-sans">OR</span>
-                <div className="flex-grow border-t border-slate-200"></div>
+              <div className="relative flex py-3.5 items-center">
+                <div className="flex-grow border-t border-slate-200" />
+                <span className="flex-shrink mx-3 text-slate-400 text-[10px] font-bold uppercase tracking-wider">
+                  OR
+                </span>
+                <div className="flex-grow border-t border-slate-200" />
               </div>
 
-              {/* Sign In with OTP button toggling state */}
               <button
                 type="button"
                 onClick={() => {
@@ -3800,21 +4198,13 @@ export default function App() {
                   setOtpInput("");
                   setLoginError(null);
                 }}
-                className="w-full bg-white hover:bg-slate-50 active:bg-slate-100 text-slate-800 border border-slate-200 font-extrabold text-xs py-3 px-4 rounded-xl transition-all flex items-center justify-center gap-2.5 cursor-pointer shadow-3xs active:scale-98"
+                className="w-full bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 font-bold text-xs py-2.5 px-4 rounded-xl transition-all flex items-center justify-center gap-2 cursor-pointer"
               >
-                <Smartphone className="w-4 h-4 text-slate-500" />
+                <Smartphone className="w-4 h-4 text-[#0070e0]" />
                 <span>{otpMode ? "Sign In with Password" : "Sign In with OTP"}</span>
               </button>
-
-            </div>
-
-            {/* Copyright, details, and legal footer */}
-            <div className="text-center font-sans text-slate-400 text-[11px] leading-relaxed pt-6 border-t border-slate-100 mt-8 lg:mt-0">
-              <p className="font-extrabold text-slate-500">Expert POS Technologies Pvt. Ltd.</p>
-              <p className="mt-0.5">© 2024 All Rights Reserved.</p>
             </div>
           </div>
-
         </div>
       </div>
     );
@@ -3861,6 +4251,7 @@ export default function App() {
             triggerNotification("Logged out of Super Admin Console successfully.", "success");
           }}
           onImpersonateClient={handleImpersonateClient}
+          onSeedSectorWorkspace={handleSeedSectorWorkspace}
           printerConfig={printerConfig}
           onUpdatePrinterConfig={updatePrinterConfig}
           labelPrinterConfig={labelPrinterConfig}
@@ -3901,74 +4292,311 @@ export default function App() {
 
       {/* Sidebar Navigation - Precise Sleek Theme */}
       <aside className={`fixed inset-y-0 left-0 z-50 w-64 ${bgMode.sidebarBg} flex flex-col shrink-0 border-r transition-transform duration-300 transform lg:static lg:translate-x-0 ${isMobileMenuOpen ? "translate-x-0 shadow-2xl" : "-translate-x-full"}`} id="sidebar">
-        <div className={`p-6 border-b ${bgMode.border} flex flex-col items-center text-center`}>
-          {/* Top-left Gate Badge portion for logged-in side */}
-          <div className="mb-4">
-            <span className={`inline-block ${currentTheme.bg} text-white text-[9px] font-sans font-black uppercase tracking-wider rounded-full px-2.5 py-1.5 shadow-sm`}>
-              {activeTenant.subdomain.toUpperCase()} GATE
-            </span>
-          </div>
+        {isSectorRichTheme ? (
+          <div className={`${
+            isRestaurantTheme
+              ? "bg-gradient-to-br from-[#5c0b12] via-[#7a111a] to-[#8f1822]"
+              : isPharmacyTheme
+              ? "bg-gradient-to-br from-[#064580] via-[#0a60af] to-[#1182d9]"
+              : isPgHostelTheme
+              ? "bg-gradient-to-br from-[#0a4a45] via-[#0f766e] to-[#0d9488]"
+              : isFashionTheme
+              ? "bg-gradient-to-br from-[#580c2b] via-[#831843] to-[#9d174d]"
+              : "bg-gradient-to-br from-[#0b4d21] via-[#127636] to-[#16a343]"
+          } text-white px-5 pt-5 pb-6 rounded-b-[2.25rem] shadow-md relative overflow-hidden flex flex-col items-center text-center`}>
+            <div className="absolute -right-8 -top-8 w-28 h-28 rounded-full bg-white/10 blur-xl pointer-events-none" />
+            <div className="w-full flex items-center gap-2.5 text-left mb-4 relative z-10">
+              <div className="w-9 h-9 rounded-xl bg-white/15 border border-white/30 flex items-center justify-center shrink-0 shadow-xs">
+                {isRestaurantTheme ? (
+                  <ChefHatIcon className="w-5 h-5 text-white" />
+                ) : isPharmacyTheme ? (
+                  <MedicalCrossIcon className="w-5 h-5 text-white" />
+                ) : isPgHostelTheme ? (
+                  <BedDouble className="w-5 h-5 text-white" />
+                ) : isFashionTheme ? (
+                  <Shirt className="w-5 h-5 text-white" />
+                ) : (
+                  <ShoppingCart className="w-5 h-5 text-white" />
+                )}
+              </div>
+              <div className="min-w-0">
+                <h1 className="font-display font-black text-base tracking-tight leading-tight text-white truncate" title={activeTenant.name}>
+                  {activeTenant.name}
+                </h1>
+                <p className={`text-[10px] font-medium truncate ${
+                  isRestaurantTheme ? "text-amber-100/90" : isPharmacyTheme ? "text-sky-100/90" : isPgHostelTheme ? "text-teal-100/90" : isFashionTheme ? "text-rose-100/90" : "text-emerald-100/90"
+                }`}>
+                  {isRestaurantTheme ? "Restaurant & F&B" : isPharmacyTheme ? "Pharmacy & Health Care" : isPgHostelTheme ? "PG & Hostel Management" : isFashionTheme ? "Fashion & Garment" : "Supermarket & Grocery"}
+                </p>
+              </div>
+            </div>
 
-          <div className="flex flex-col items-center space-y-3 w-full">
             {activeTenant.companyLogo ? (
-              <div className={`p-[1.5px] rounded-xl ${currentTheme.bg} shadow-md overflow-hidden transition-all hover:scale-105 ring-2 ring-slate-200 inline-block`}>
-                <div className="w-16 h-16 bg-white rounded-lg flex items-center justify-center p-2 overflow-hidden select-none">
-                  <img 
-                    src={activeTenant.companyLogo} 
-                    alt={`${activeTenant.name} Logo`} 
-                    className="w-full h-full object-contain"
-                    referrerPolicy="no-referrer"
-                  />
-                </div>
+              <div className="w-14 h-14 rounded-full border-2 border-white/80 bg-white flex items-center justify-center p-1.5 overflow-hidden shadow-md relative z-10">
+                <img
+                  src={activeTenant.companyLogo}
+                  alt={`${activeTenant.name} Logo`}
+                  className="w-full h-full object-contain"
+                  referrerPolicy="no-referrer"
+                />
               </div>
             ) : (
-              <div className={`w-16 h-16 ${currentTheme.bg} rounded-xl flex items-center justify-center shadow-md`}>
-                <span className="text-white font-display font-extrabold text-lg tracking-tighter">
-                  {activeTenant.name.replace(/[^a-zA-Z ]/g, "").split(" ").map(n => n[0]).join("").substring(0, 2).toUpperCase() || "EA"}
+              <div className="w-14 h-14 rounded-full border-2 border-white/80 bg-white/10 flex items-center justify-center shadow-md relative z-10">
+                <span className="text-white font-display font-extrabold text-lg tracking-tight">
+                  {activeTenant.name.replace(/[^a-zA-Z ]/g, "").split(" ").map(n => n[0]).join("").substring(0, 2).toUpperCase() || (isRestaurantTheme ? "FP" : isPharmacyTheme ? "MC" : isPgHostelTheme ? "PG" : isFashionTheme ? "FG" : "FM")}
                 </span>
               </div>
             )}
-            <div className="w-full">
-              <h1 className={`${bgMode.textHeading} font-display font-black text-sm tracking-tight leading-tight uppercase font-sans break-words px-2`} title={activeTenant.name}>
-                {activeTenant.name}
-              </h1>
-              <span className={`${currentTheme.text} text-[9.5px] font-mono tracking-widest font-black uppercase block mt-1.5`}>
-                {activeTenant.tier} SaaS node
+
+            <p className="text-xs font-extrabold text-white mt-2.5 truncate max-w-full relative z-10">
+              {activeTenant.name}
+            </p>
+            <span className={`text-[9px] font-mono tracking-widest uppercase mt-0.5 relative z-10 ${
+              isRestaurantTheme ? "text-amber-100/85" : isPharmacyTheme ? "text-sky-100/85" : isPgHostelTheme ? "text-teal-100/85" : isFashionTheme ? "text-rose-100/85" : "text-emerald-100/85"
+            }`}>
+              {activeTenant.tier} SaaS node
+            </span>
+            <p className={`text-[9.5px] mt-2 font-mono flex items-center justify-center gap-1 relative z-10 ${
+              isRestaurantTheme ? "text-amber-100/80" : isPharmacyTheme ? "text-sky-100/80" : isPgHostelTheme ? "text-teal-100/80" : isFashionTheme ? "text-rose-100/80" : "text-emerald-100/80"
+            }`}>
+              <Clock className={`w-3 h-3 ${isRestaurantTheme ? "text-amber-100/80" : isPharmacyTheme ? "text-sky-100/80" : isPgHostelTheme ? "text-teal-100/80" : isFashionTheme ? "text-rose-100/80" : "text-emerald-100/80"}`} /> UTC: 2026-05-22
+            </p>
+          </div>
+        ) : (
+          <div className={`p-6 border-b ${bgMode.border} flex flex-col items-center text-center`}>
+            {/* Top-left Gate Badge portion for logged-in side */}
+            <div className="mb-4">
+              <span className={`inline-block ${currentTheme.bg} text-white text-[9px] font-sans font-black uppercase tracking-wider rounded-full px-2.5 py-1.5 shadow-sm`}>
+                {activeTenant.subdomain.toUpperCase()} GATE
               </span>
             </div>
+
+            <div className="flex flex-col items-center space-y-3 w-full">
+              {activeTenant.companyLogo ? (
+                <div className={`p-[1.5px] rounded-xl ${currentTheme.bg} shadow-md overflow-hidden transition-all hover:scale-105 ring-2 ring-slate-200 inline-block`}>
+                  <div className="w-16 h-16 bg-white rounded-lg flex items-center justify-center p-2 overflow-hidden select-none">
+                    <img 
+                      src={activeTenant.companyLogo} 
+                      alt={`${activeTenant.name} Logo`} 
+                      className="w-full h-full object-contain"
+                      referrerPolicy="no-referrer"
+                    />
+                  </div>
+                </div>
+              ) : (
+                <div className={`w-16 h-16 ${currentTheme.bg} rounded-xl flex items-center justify-center shadow-md`}>
+                  <span className="text-white font-display font-extrabold text-lg tracking-tighter">
+                    {activeTenant.name.replace(/[^a-zA-Z ]/g, "").split(" ").map(n => n[0]).join("").substring(0, 2).toUpperCase() || "EA"}
+                  </span>
+                </div>
+              )}
+              <div className="w-full">
+                <h1 className={`${bgMode.textHeading} font-display font-black text-sm tracking-tight leading-tight uppercase font-sans break-words px-2`} title={activeTenant.name}>
+                  {activeTenant.name}
+                </h1>
+                <span className={`${currentTheme.text} text-[9.5px] font-mono tracking-widest font-black uppercase block mt-1.5`}>
+                  {activeTenant.tier} SaaS node
+                </span>
+              </div>
+            </div>
+            <p className={`${bgMode.textMuted} text-[9px] mt-4 font-mono flex items-center justify-center gap-1 font-sans`}>
+              <Clock className={`w-3 h-3 ${bgMode.textMuted}`} /> UTC: 2026-05-22
+            </p>
           </div>
-          <p className={`${bgMode.textMuted} text-[9px] mt-4 font-mono flex items-center justify-center gap-1 font-sans`}>
-            <Clock className={`w-3 h-3 ${bgMode.textMuted}`} /> UTC: 2026-05-22
-          </p>
-        </div>
+        )}
 
         {/* Core Menu Tabs */}
-        <nav className="flex-1 px-4 space-y-1 mt-6 overflow-y-auto">
+        <nav className={`flex-1 px-3.5 space-y-1 ${isSectorRichTheme ? "mt-4" : "mt-6"} overflow-y-auto`}>
           {!isSuperAdmin && (
             <>
               <button
                 onClick={() => setActiveTab("pos")}
-                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-colors font-sans text-xs font-medium cursor-pointer ${
+                className={`w-full flex items-center gap-3 px-3 py-2.5 ${isSectorRichTheme ? "rounded-xl" : "rounded-lg"} text-left transition-all font-sans text-xs font-medium cursor-pointer ${
                   activeTab === "pos"
                     ? `${currentTheme.bg} text-white font-bold shadow-md`
+                    : isRestaurantTheme
+                    ? "text-slate-700 hover:bg-[#fdf1dc] hover:text-[#7a111a]"
+                    : isPharmacyTheme
+                    ? "text-slate-700 hover:bg-sky-50 hover:text-[#07569e]"
+                    : isPgHostelTheme
+                    ? "text-slate-700 hover:bg-teal-50 hover:text-[#0f766e]"
+                    : isFashionTheme
+                    ? "text-slate-700 hover:bg-rose-50 hover:text-[#831843]"
+                    : isSupermarketTheme
+                    ? "text-slate-700 hover:bg-emerald-50 hover:text-[#0e6b2e]"
                     : "text-slate-600 hover:bg-slate-200/60 hover:text-slate-900"
                 }`}
               >
-                <ShoppingCart className="w-4 h-4" />
-                <span>Point of Sale (POS)</span>
+                <ShoppingCart className={`w-4 h-4 ${activeTab === "pos" ? "text-white" : isRestaurantTheme ? "text-[#8c1620]" : isPharmacyTheme ? "text-[#0b66b8]" : isPgHostelTheme ? "text-[#0f766e]" : isFashionTheme ? "text-[#831843]" : isSupermarketTheme ? "text-[#15803d]" : ""}`} />
+                <div className="flex justify-between items-center w-full">
+                  <span>Point of Sale (POS)</span>
+                  <span className={`text-[9px] px-1.5 py-0.5 rounded font-bold uppercase ${
+                    activeTab === "pos"
+                      ? "bg-white/20 text-white"
+                      : isRestaurantTheme
+                      ? "bg-amber-100 text-[#7a111a]"
+                      : isPharmacyTheme
+                      ? "bg-sky-100 text-[#07569e]"
+                      : isPgHostelTheme
+                      ? "bg-teal-100 text-[#0f766e]"
+                      : isFashionTheme
+                      ? "bg-rose-100 text-[#831843]"
+                      : "bg-emerald-100 text-emerald-700"
+                  }`}>
+                    {activeSectorCatalog.icon}
+                  </span>
+                </div>
               </button>
+
+              {(activeSectorModules.kdsTableManagement || activeSectorModules.kotPrinting) && (
+                <button
+                  onClick={() => setActiveTab("sector-kds")}
+                  className={`w-full flex items-center gap-3 px-3 py-2.5 ${isSectorRichTheme ? "rounded-xl" : "rounded-lg"} text-left transition-colors font-sans text-xs font-medium cursor-pointer ${
+                    activeTab === "sector-kds"
+                      ? `${currentTheme.bg} text-white font-bold shadow-md`
+                      : isRestaurantTheme
+                      ? "text-slate-700 hover:bg-[#fdf1dc] hover:text-[#7a111a]"
+                      : "text-amber-800 bg-amber-50/70 hover:bg-amber-100/80"
+                  }`}
+                >
+                  <Coffee className={`w-4 h-4 ${activeTab === "sector-kds" ? "text-white" : isRestaurantTheme ? "text-amber-700" : "text-amber-600"}`} />
+                  <div className="flex justify-between items-center w-full">
+                    <span>Tables &amp; Kitchen (KDS)</span>
+                    <span className={`${isRestaurantTheme ? "bg-[#7a111a] text-white" : "bg-amber-500 text-white"} text-[9px] px-1.5 py-0.5 rounded-full font-bold`}>
+                      {kotTickets.filter((k) => k.status === "PREPARING").length || "Live"}
+                    </span>
+                  </div>
+                </button>
+              )}
+
+              {activeSectorModules.batchExpiryRx && (
+                <button
+                  onClick={() => setActiveTab("sector-rx")}
+                  className={`w-full flex items-center gap-3 px-3 py-2.5 ${isSectorRichTheme ? "rounded-xl" : "rounded-lg"} text-left transition-colors font-sans text-xs font-medium cursor-pointer ${
+                    activeTab === "sector-rx"
+                      ? `${currentTheme.bg} text-white font-bold shadow-md`
+                      : isPharmacyTheme
+                      ? "text-slate-700 hover:bg-sky-50 hover:text-[#07569e]"
+                      : isSupermarketTheme
+                      ? "text-slate-700 hover:bg-emerald-50 hover:text-[#0e6b2e]"
+                      : "text-rose-800 bg-rose-50/70 hover:bg-rose-100/80"
+                  }`}
+                >
+                  <ShieldAlert className={`w-4 h-4 ${activeTab === "sector-rx" ? "text-white" : isPharmacyTheme ? "text-[#0b66b8]" : "text-rose-600"}`} />
+                  <div className="flex justify-between items-center w-full">
+                    <span>{activeSectorKey === "PHARMACY" ? "Rx & Expiry Control" : "Batch & Expiry Monitor"}</span>
+                    {nearExpiryProductsAlert.length > 0 && (
+                      <span className="bg-rose-500 text-white text-[9px] px-1.5 py-0.5 rounded-full font-bold">
+                        {nearExpiryProductsAlert.length}
+                      </span>
+                    )}
+                  </div>
+                </button>
+              )}
+
+              {activeSectorModules.appointmentsBooking && (
+                <button
+                  onClick={() => setActiveTab("sector-appointments")}
+                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-colors font-sans text-xs font-medium cursor-pointer ${
+                    activeTab === "sector-appointments"
+                      ? `${currentTheme.bg} text-white font-bold shadow-md`
+                      : "text-violet-800 bg-violet-50/70 hover:bg-violet-100/80"
+                  }`}
+                >
+                  <Calendar className="w-4 h-4 text-violet-600" />
+                  <div className="flex justify-between items-center w-full">
+                    <span>Appointments &amp; Stylists</span>
+                    <span className="bg-violet-600 text-white text-[9px] px-1.5 py-0.5 rounded-full font-bold">
+                      {serviceAppointments.length}
+                    </span>
+                  </div>
+                </button>
+              )}
+
+              {activeSectorModules.variantMatrix && !activeSectorModules.garmentTailoring && (
+                <button
+                  onClick={() => setActiveTab("sector-variants")}
+                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-colors font-sans text-xs font-medium cursor-pointer ${
+                    activeTab === "sector-variants"
+                      ? `${currentTheme.bg} text-white font-bold shadow-md`
+                      : "text-indigo-800 bg-indigo-50/70 hover:bg-indigo-100/80"
+                  }`}
+                >
+                  <Sparkles className="w-4 h-4 text-indigo-600" />
+                  <div className="flex justify-between items-center w-full">
+                    <span>Size &amp; Color Matrix</span>
+                    <span className="bg-indigo-600 text-white text-[9px] px-1.5 py-0.5 rounded-full font-bold">
+                      Variants
+                    </span>
+                  </div>
+                </button>
+              )}
+
+              {activeSectorModules.garmentTailoring && (
+                <button
+                  onClick={() => setActiveTab("sector-fashion")}
+                  className={`w-full flex items-center gap-3 px-3 py-2.5 ${isSectorRichTheme ? "rounded-xl" : "rounded-lg"} text-left transition-colors font-sans text-xs font-medium cursor-pointer ${
+                    activeTab === "sector-fashion"
+                      ? `${currentTheme.bg} text-white font-bold shadow-md`
+                      : isFashionTheme
+                      ? "text-slate-700 hover:bg-rose-50 hover:text-[#831843]"
+                      : "text-rose-800 bg-rose-50/70 hover:bg-rose-100/80"
+                  }`}
+                >
+                  <Shirt className={`w-4 h-4 ${activeTab === "sector-fashion" ? "text-white" : "text-[#831843]"}`} />
+                  <div className="flex justify-between items-center w-full">
+                    <span>Garment Matrix &amp; Tailoring</span>
+                    <span className="bg-[#831843] text-white text-[9px] px-1.5 py-0.5 rounded-full font-bold tabular-nums">
+                      {garmentAlterations.filter((a) => a.status === "PENDING" || a.status === "IN_TAILORING").length || "Studio"}
+                    </span>
+                  </div>
+                </button>
+              )}
+
+              {activeSectorModules.roomBedManagement && (
+                <button
+                  onClick={() => setActiveTab("sector-pg-hostel")}
+                  className={`w-full flex items-center gap-3 px-3 py-2.5 ${isSectorRichTheme ? "rounded-xl" : "rounded-lg"} text-left transition-colors font-sans text-xs font-medium cursor-pointer ${
+                    activeTab === "sector-pg-hostel"
+                      ? `${currentTheme.bg} text-white font-bold shadow-md`
+                      : isPgHostelTheme
+                      ? "text-slate-700 hover:bg-teal-50 hover:text-[#0f766e]"
+                      : "text-teal-800 bg-teal-50/70 hover:bg-teal-100/80"
+                  }`}
+                >
+                  <BedDouble className={`w-4 h-4 ${activeTab === "sector-pg-hostel" ? "text-white" : "text-teal-700"}`} />
+                  <div className="flex justify-between items-center w-full">
+                    <span>Rooms, Beds &amp; Rent</span>
+                    <span className="bg-teal-700 text-white text-[9px] px-1.5 py-0.5 rounded-full font-bold tabular-nums">
+                      {pgResidents.filter((r) => r.rentStatus === "DUE").length > 0
+                        ? `${pgResidents.filter((r) => r.rentStatus === "DUE").length} Due`
+                        : `${pgResidents.length} Active`}
+                    </span>
+                  </div>
+                </button>
+              )}
 
               <button
                 onClick={() => setActiveTab("inventory")}
-                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-colors font-sans text-xs font-medium cursor-pointer ${
+                className={`w-full flex items-center gap-3 px-3 py-2.5 ${isSectorRichTheme ? "rounded-xl" : "rounded-lg"} text-left transition-colors font-sans text-xs font-medium cursor-pointer ${
                   activeTab === "inventory"
                     ? `${currentTheme.bg} text-white font-bold shadow-md`
+                    : isRestaurantTheme
+                    ? "text-slate-700 hover:bg-[#fdf1dc] hover:text-[#7a111a]"
+                    : isPharmacyTheme
+                    ? "text-slate-700 hover:bg-sky-50 hover:text-[#07569e]"
+                    : isPgHostelTheme
+                    ? "text-slate-700 hover:bg-teal-50 hover:text-[#0f766e]"
+                    : isFashionTheme
+                    ? "text-slate-700 hover:bg-rose-50 hover:text-[#831843]"
+                    : isSupermarketTheme
+                    ? "text-slate-700 hover:bg-emerald-50 hover:text-[#0e6b2e]"
                     : "text-slate-600 hover:bg-slate-200/60 hover:text-slate-900"
                 }`}
               >
-                <Layers className="w-4 h-4" />
+                <Layers className={`w-4 h-4 ${activeTab === "inventory" ? "text-white" : isRestaurantTheme ? "text-[#8c1620]" : isPharmacyTheme ? "text-[#0b66b8]" : isPgHostelTheme ? "text-[#0f766e]" : isFashionTheme ? "text-[#831843]" : isSupermarketTheme ? "text-[#15803d]" : ""}`} />
                 <div className="flex justify-between items-center w-full">
-                  <span>Stock &amp; Inventory</span>
+                  <span>{activeSectorKey === "SERVICES" ? "Consumables & Stock" : activeSectorKey === "PG_HOSTEL" ? "Hostel Amenities Stock" : activeSectorKey === "FASHION_GARMENT" ? "Garment Stock & Sizing" : "Stock & Inventory"}</span>
                   {lowStockAlertProducts.length > 0 && (
                     <span className="bg-rose-500 text-white text-[9px] px-1.5 py-0.5 rounded-full font-bold">
                       {lowStockAlertProducts.length}
@@ -3979,41 +4607,93 @@ export default function App() {
 
               <button
                 onClick={() => setActiveTab("products")}
-                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-colors font-sans text-xs font-medium cursor-pointer ${
+                className={`w-full flex items-center gap-3 px-3 py-2.5 ${isSectorRichTheme ? "rounded-xl" : "rounded-lg"} text-left transition-colors font-sans text-xs font-medium cursor-pointer ${
                   activeTab === "products"
                     ? `${currentTheme.bg} text-white font-bold shadow-md`
+                    : isRestaurantTheme
+                    ? "text-slate-700 hover:bg-[#fdf1dc] hover:text-[#7a111a]"
+                    : isPharmacyTheme
+                    ? "text-slate-700 hover:bg-sky-50 hover:text-[#07569e]"
+                    : isPgHostelTheme
+                    ? "text-slate-700 hover:bg-teal-50 hover:text-[#0f766e]"
+                    : isFashionTheme
+                    ? "text-slate-700 hover:bg-rose-50 hover:text-[#831843]"
+                    : isSupermarketTheme
+                    ? "text-slate-700 hover:bg-emerald-50 hover:text-[#0e6b2e]"
                     : "text-slate-600 hover:bg-slate-200/60 hover:text-slate-900"
                 }`}
               >
-                <ShoppingBag className="w-4 h-4" />
-                <span>Product Catalogue</span>
+                <ShoppingBag className={`w-4 h-4 ${activeTab === "products" ? "text-white" : isRestaurantTheme ? "text-[#8c1620]" : isPharmacyTheme ? "text-[#0b66b8]" : isPgHostelTheme ? "text-[#0f766e]" : isFashionTheme ? "text-[#831843]" : isSupermarketTheme ? "text-[#15803d]" : ""}`} />
+                <span>
+                  {activeSectorKey === "RESTAURANT"
+                    ? "Menu & Kitchen Items"
+                    : activeSectorKey === "SERVICES"
+                    ? "Service & Package Menu"
+                    : activeSectorKey === "PHARMACY"
+                    ? "Medicine & Rx Catalog"
+                    : activeSectorKey === "PG_HOSTEL"
+                    ? "Rent, Mess & Utility Plans"
+                    : activeSectorKey === "FASHION_GARMENT"
+                    ? "Garment & Apparel Catalog"
+                    : "Product Catalogue"}
+                </span>
               </button>
 
-              <button
-                onClick={() => {
-                  openLabelGeneratorModal(null);
-                }}
-                className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-colors font-sans text-xs font-medium cursor-pointer text-slate-600 hover:bg-slate-200/60 hover:text-slate-900"
-              >
-                <Tag className="w-4 h-4 text-purple-600" />
-                <div className="flex justify-between items-center w-full">
-                  <span>Barcode &amp; Label Printing</span>
-                  <span className="bg-purple-100 text-purple-700 text-[9px] px-1.5 py-0.5 rounded-full font-bold">
-                    Thermal / A4
-                  </span>
-                </div>
-              </button>
+              {activeSectorModules.barcodeLabelPrinting && (
+                <button
+                  onClick={() => {
+                    openLabelGeneratorModal(null);
+                  }}
+                  className={`w-full flex items-center gap-3 px-3 py-2.5 ${
+                    isRestaurantTheme
+                      ? "rounded-xl text-slate-700 hover:bg-[#fdf1dc] hover:text-[#7a111a]"
+                      : isPharmacyTheme
+                      ? "rounded-xl text-slate-700 hover:bg-sky-50 hover:text-[#07569e]"
+                      : isPgHostelTheme
+                      ? "rounded-xl text-slate-700 hover:bg-teal-50 hover:text-[#0f766e]"
+                      : isFashionTheme
+                      ? "rounded-xl text-slate-700 hover:bg-rose-50 hover:text-[#831843]"
+                      : isSupermarketTheme
+                      ? "rounded-xl text-slate-700 hover:bg-emerald-50 hover:text-[#0e6b2e]"
+                      : "rounded-lg text-slate-600 hover:bg-slate-200/60 hover:text-slate-900"
+                  } text-left transition-colors font-sans text-xs font-medium cursor-pointer`}
+                >
+                  <Tag className={`w-4 h-4 ${isRestaurantTheme ? "text-[#8c1620]" : isPharmacyTheme ? "text-[#0b66b8]" : isPgHostelTheme ? "text-[#0f766e]" : isFashionTheme ? "text-[#831843]" : isSupermarketTheme ? "text-[#15803d]" : "text-purple-600"}`} />
+                  <div className="flex justify-between items-center w-full">
+                    <span>Barcode &amp; Label Printing</span>
+                    <span className={`${
+                      isRestaurantTheme
+                        ? "bg-amber-100 text-[#7a111a]"
+                        : isPharmacyTheme
+                        ? "bg-sky-100 text-[#07569e]"
+                        : isPgHostelTheme
+                        ? "bg-teal-100 text-[#0f766e]"
+                        : isSupermarketTheme
+                        ? "bg-[#169343] text-white"
+                        : "bg-purple-100 text-purple-700"
+                    } text-[9px] px-1.5 py-0.5 rounded-full font-bold`}>
+                      Thermal / A4
+                    </span>
+                  </div>
+                </button>
+              )}
 
               <button
                 onClick={() => setActiveTab("customers")}
-                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-colors font-sans text-xs font-medium cursor-pointer ${
+                className={`w-full flex items-center gap-3 px-3 py-2.5 ${isSectorRichTheme ? "rounded-xl" : "rounded-lg"} text-left transition-colors font-sans text-xs font-medium cursor-pointer ${
                   activeTab === "customers"
                     ? `${currentTheme.bg} text-white font-bold shadow-md`
+                    : isRestaurantTheme
+                    ? "text-slate-700 hover:bg-[#fdf1dc] hover:text-[#7a111a]"
+                    : isPharmacyTheme
+                    ? "text-slate-700 hover:bg-sky-50 hover:text-[#07569e]"
+                    : isSupermarketTheme
+                    ? "text-slate-700 hover:bg-emerald-50 hover:text-[#0e6b2e]"
                     : "text-slate-600 hover:bg-slate-200/60 hover:text-slate-900"
                 }`}
               >
-                <Users className="w-4 h-4" />
-                <span>CRM &amp; Loyalty</span>
+                <Users className={`w-4 h-4 ${activeTab === "customers" ? "text-white" : isRestaurantTheme ? "text-[#8c1620]" : isPharmacyTheme ? "text-[#0b66b8]" : isSupermarketTheme ? "text-[#15803d]" : ""}`} />
+                <span>{activeSectorModules.loyaltyPoints ? "CRM & Loyalty" : "Patients & Customers"}</span>
               </button>
 
               <button
@@ -4023,17 +4703,31 @@ export default function App() {
                   setIsVirtualPrinting(false);
                   setVirtualPrintDone(false);
                 }}
-                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-colors font-sans text-xs font-medium cursor-pointer ${
+                className={`w-full flex items-center gap-3 px-3 py-2.5 ${isSectorRichTheme ? "rounded-xl" : "rounded-lg"} text-left transition-colors font-sans text-xs font-medium cursor-pointer ${
                   activeTab === "saved-bills"
                     ? `${currentTheme.bg} text-white font-bold shadow-md`
+                    : isRestaurantTheme
+                    ? "text-slate-700 hover:bg-[#fdf1dc] hover:text-[#7a111a]"
+                    : isPharmacyTheme
+                    ? "text-slate-700 hover:bg-sky-50 hover:text-[#07569e]"
+                    : isSupermarketTheme
+                    ? "text-slate-700 hover:bg-emerald-50 hover:text-[#0e6b2e]"
                     : "text-slate-600 hover:bg-slate-200/60 hover:text-slate-900"
                 }`}
               >
-                <FileText className="w-4 h-4 text-emerald-500" />
+                <FileText className={`w-4 h-4 ${activeTab === "saved-bills" ? "text-white" : isRestaurantTheme ? "text-[#8c1620]" : isPharmacyTheme ? "text-[#0b66b8]" : isSupermarketTheme ? "text-[#15803d]" : "text-emerald-500"}`} />
                 <div className="flex justify-between items-center w-full">
                   <span>Saved Bills &amp; Receipts</span>
                   {invoices.length > 0 && (
-                    <span className="bg-emerald-500 text-slate-950 text-[9px] px-1.5 py-0.5 rounded-full font-bold">
+                    <span className={`${
+                      isRestaurantTheme
+                        ? "bg-[#7a111a] text-white"
+                        : isPharmacyTheme
+                        ? "bg-[#07569e] text-white"
+                        : isSupermarketTheme
+                        ? "bg-[#169343] text-white"
+                        : "bg-emerald-500 text-slate-950"
+                    } text-[9px] px-1.5 py-0.5 rounded-full font-bold`}>
                       {invoices.length}
                     </span>
                   )}
@@ -4042,13 +4736,19 @@ export default function App() {
 
               <button
                 onClick={() => setActiveTab("expenses")}
-                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-colors font-sans text-xs font-medium cursor-pointer ${
+                className={`w-full flex items-center gap-3 px-3 py-2.5 ${isSectorRichTheme ? "rounded-xl" : "rounded-lg"} text-left transition-colors font-sans text-xs font-medium cursor-pointer ${
                   activeTab === "expenses"
                     ? `${currentTheme.bg} text-white font-bold shadow-md`
+                    : isRestaurantTheme
+                    ? "text-slate-700 hover:bg-[#fdf1dc] hover:text-[#7a111a]"
+                    : isPharmacyTheme
+                    ? "text-slate-700 hover:bg-sky-50 hover:text-[#07569e]"
+                    : isSupermarketTheme
+                    ? "text-slate-700 hover:bg-emerald-50 hover:text-[#0e6b2e]"
                     : "text-slate-600 hover:bg-slate-200/60 hover:text-slate-900"
                 }`}
               >
-                <Store className="w-4 h-4" />
+                <Store className={`w-4 h-4 ${activeTab === "expenses" ? "text-white" : isRestaurantTheme ? "text-[#8c1620]" : isPharmacyTheme ? "text-[#0b66b8]" : isSupermarketTheme ? "text-[#15803d]" : ""}`} />
                 <span>Store &amp; Cash Shifts</span>
               </button>
             </>
@@ -4057,26 +4757,38 @@ export default function App() {
           {/* This tab is visible both for standard users and superadmin (as "Dashboard") */}
           <button
             onClick={() => setActiveTab("analytics")}
-            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-colors font-sans text-xs font-medium cursor-pointer ${
+            className={`w-full flex items-center gap-3 px-3 py-2.5 ${isSectorRichTheme ? "rounded-xl" : "rounded-lg"} text-left transition-colors font-sans text-xs font-medium cursor-pointer ${
               activeTab === "analytics"
                 ? `${currentTheme.bg} text-white font-bold shadow-md`
+                : isRestaurantTheme
+                ? "text-slate-700 hover:bg-[#fdf1dc] hover:text-[#7a111a]"
+                : isPharmacyTheme
+                ? "text-slate-700 hover:bg-sky-50 hover:text-[#07569e]"
+                : isSupermarketTheme
+                ? "text-slate-700 hover:bg-emerald-50 hover:text-[#0e6b2e]"
                 : "text-slate-600 hover:bg-slate-200/60 hover:text-slate-900"
             }`}
           >
-            <TrendingUp className="w-4 h-4 text-emerald-600" />
+            <TrendingUp className={`w-4 h-4 ${activeTab === "analytics" ? "text-white" : isRestaurantTheme ? "text-[#8c1620]" : isPharmacyTheme ? "text-[#0b66b8]" : "text-emerald-600"}`} />
             <span>{isSuperAdmin ? "Dashboard (Analytics)" : "Reports & Analytics"}</span>
           </button>
 
           {!isSuperAdmin && (
             <button
               onClick={() => setActiveTab("settings")}
-              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-colors font-sans text-xs font-medium cursor-pointer ${
+              className={`w-full flex items-center gap-3 px-3 py-2.5 ${isSectorRichTheme ? "rounded-xl" : "rounded-lg"} text-left transition-colors font-sans text-xs font-medium cursor-pointer ${
                 activeTab === "settings"
                   ? `${currentTheme.bg} text-white font-bold shadow-md`
+                  : isRestaurantTheme
+                  ? "text-slate-700 hover:bg-[#fdf1dc] hover:text-[#7a111a]"
+                  : isPharmacyTheme
+                  ? "text-slate-700 hover:bg-sky-50 hover:text-[#07569e]"
+                  : isSupermarketTheme
+                  ? "text-slate-700 hover:bg-emerald-50 hover:text-[#0e6b2e]"
                   : "text-slate-600 hover:bg-slate-200/60 hover:text-slate-900"
               }`}
             >
-              <Settings className="w-4 h-4 text-purple-600 font-semibold" />
+              <Settings className={`w-4 h-4 font-semibold ${activeTab === "settings" ? "text-white" : isRestaurantTheme ? "text-[#8c1620]" : isPharmacyTheme ? "text-[#0b66b8]" : isSupermarketTheme ? "text-[#15803d]" : "text-purple-600"}`} />
               <span>Settings</span>
             </button>
           )}
@@ -4085,13 +4797,19 @@ export default function App() {
           {(normalizeUserRole(currentRole) === UserRole.ADMIN || normalizeUserRole(currentRole) === UserRole.MANAGER || isSuperAdmin) && (
             <button
               onClick={() => setActiveTab("staff-registry")}
-              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-colors font-sans text-xs font-medium cursor-pointer ${
+              className={`w-full flex items-center gap-3 px-3 py-2.5 ${isSectorRichTheme ? "rounded-xl" : "rounded-lg"} text-left transition-colors font-sans text-xs font-medium cursor-pointer ${
                 activeTab === "staff-registry"
                   ? `${currentTheme.bg} text-white font-bold shadow-md`
+                  : isRestaurantTheme
+                  ? "text-slate-700 hover:bg-[#fdf1dc] hover:text-[#7a111a]"
+                  : isPharmacyTheme
+                  ? "text-slate-700 hover:bg-sky-50 hover:text-[#07569e]"
+                  : isSupermarketTheme
+                  ? "text-slate-700 hover:bg-emerald-50 hover:text-[#0e6b2e]"
                   : "text-slate-600 hover:bg-slate-200/60 hover:text-slate-900"
               }`}
             >
-              <Users className="w-4 h-4 text-purple-600 font-bold" />
+              <Users className={`w-4 h-4 font-bold ${activeTab === "staff-registry" ? "text-white" : isRestaurantTheme ? "text-[#8c1620]" : isPharmacyTheme ? "text-[#0b66b8]" : isSupermarketTheme ? "text-[#15803d]" : "text-purple-600"}`} />
               <span>{normalizeUserRole(currentRole) === UserRole.MANAGER ? "Manager Panel" : "Staff Registry (Staff Onboarding)"}</span>
             </button>
           )}
@@ -4117,9 +4835,17 @@ export default function App() {
 
         {/* User Session Metadata */}
         <div className={`p-4 mt-auto border-t ${bgMode.border}`}>
-          <div className={`${bgMode.innerCard} p-4 rounded-xl border space-y-3`}>
+          <div className={`${bgMode.innerCard} p-3.5 ${isSectorRichTheme ? "rounded-2xl" : "rounded-xl"} border space-y-3`}>
             <div className="flex items-center gap-3 overflow-hidden">
-              <div className={`w-9 h-9 rounded-full ${bgMode.inputBg} border ${bgMode.border} flex items-center justify-center ${bgMode.textHeading} text-xs font-bold shrink-0 font-sans`}>
+              <div className={`w-9 h-9 rounded-full ${
+                isRestaurantTheme
+                  ? "bg-amber-100 border-amber-200 text-[#7a111a]"
+                  : isPharmacyTheme
+                  ? "bg-sky-100 border-sky-200 text-[#07569e]"
+                  : isSupermarketTheme
+                  ? "bg-emerald-100 border-emerald-200 text-[#0e6b2e]"
+                  : `${bgMode.inputBg} ${bgMode.border} ${bgMode.textHeading}`
+              } border flex items-center justify-center text-xs font-bold shrink-0 font-sans`}>
                 {currentCashierName ? currentCashierName.split(" ").map(n => n[0]).join("") : "U"}
               </div>
               <div className="overflow-hidden">
@@ -4127,6 +4853,12 @@ export default function App() {
                 <p className={`text-[10px] truncate leading-none mt-1 font-mono font-bold uppercase tracking-wider ${
                   isSuperAdmin
                     ? "text-purple-500"
+                    : isRestaurantTheme
+                    ? "text-[#7a111a]"
+                    : isPharmacyTheme
+                    ? "text-[#0a66b8]"
+                    : isSupermarketTheme
+                    ? "text-emerald-700"
                     : bgMode.textMuted
                 }`}>
                   {isSuperAdmin ? "SUPERADMIN" : normalizeUserRole(currentRole)}
@@ -4142,7 +4874,15 @@ export default function App() {
                 setSelectedLoginRole("admin");
                 triggerNotification("Successfully logged out. All access revoked.", "warning");
               }}
-              className="w-full py-2 bg-white dark:bg-slate-800 hover:bg-rose-50 hover:text-rose-600 text-slate-600 dark:text-slate-300 rounded-lg border border-slate-200 dark:border-slate-700 hover:border-rose-200 transition-all font-sans text-[10px] flex items-center justify-center gap-1.5 cursor-pointer font-bold uppercase tracking-wider shadow-sm"
+              className={`w-full py-2 ${
+                isRestaurantTheme
+                  ? "bg-white hover:bg-amber-50 text-[#7a111a] border-amber-200 rounded-xl"
+                  : isPharmacyTheme
+                  ? "bg-white hover:bg-sky-50 text-[#07569e] border-sky-200 rounded-xl"
+                  : isSupermarketTheme
+                  ? "bg-white hover:bg-emerald-50 text-[#0e6b2e] border-emerald-200 rounded-xl"
+                  : "bg-white dark:bg-slate-800 hover:bg-rose-50 hover:text-rose-600 text-slate-600 dark:text-slate-300 rounded-lg border-slate-200 dark:border-slate-700 hover:border-rose-200"
+              } border transition-all font-sans text-[10px] flex items-center justify-center gap-1.5 cursor-pointer font-bold uppercase tracking-wider shadow-xs`}
               title="Log Out"
             >
               <LogOut className="w-3.5 h-3.5" />
@@ -4156,7 +4896,7 @@ export default function App() {
       <div className={`flex-1 flex flex-col overflow-hidden ${bgMode.contentBg}`}>
         {/* Header - Styled sleek index */}
         <header className={`h-16 ${bgMode.headerBg} border-b flex items-center justify-between px-4 md:px-8 shrink-0`}>
-          <div className="flex items-center gap-2 md:gap-6">
+          <div className="flex items-center gap-2 md:gap-4">
             <button
               type="button"
               onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
@@ -4166,13 +4906,29 @@ export default function App() {
               {isMobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
             </button>
 
-            <div className={`flex items-center gap-2 ${bgMode.textMuted}`}>
+            <div className={`flex items-center gap-2 ${
+              isRestaurantTheme
+                ? "bg-[#fdf4e3] border border-amber-200 rounded-xl px-2.5 py-1 text-[#7a111a]"
+                : isPharmacyTheme
+                ? "bg-[#f0f7fe] border border-sky-200 rounded-xl px-2.5 py-1 text-[#07569e]"
+                : isSupermarketTheme
+                ? "bg-[#effaf2] border border-emerald-200 rounded-xl px-2.5 py-1 text-[#0f6b2e]"
+                : bgMode.textMuted
+            }`}>
               <Store className={`w-4 h-4 ${currentTheme.textAccent}`} />
               {normalizeUserRole(currentRole) === UserRole.ADMIN || isSuperAdmin ? (
                 <select
                   value={currentBranch?.id}
                   onChange={(e) => handleBranchChange(e.target.value)}
-                  className={`border-none bg-transparent hover:bg-slate-100 dark:hover:bg-slate-800 p-1 rounded text-xs font-semibold ${bgMode.textHeading} focus:ring-0 outline-none cursor-pointer max-w-[130px] sm:max-w-none truncate`}
+                  className={`border-none bg-transparent ${
+                    isRestaurantTheme
+                      ? "hover:bg-amber-100/60 text-[#7a111a]"
+                      : isPharmacyTheme
+                      ? "hover:bg-sky-100/60 text-[#07569e]"
+                      : isSupermarketTheme
+                      ? "hover:bg-emerald-100/50 text-[#0e6b2e]"
+                      : `hover:bg-slate-100 ${bgMode.textHeading}`
+                  } p-1 rounded text-xs font-semibold focus:ring-0 outline-none cursor-pointer max-w-[130px] sm:max-w-none truncate`}
                 >
                   {branches.map((b) => (
                     <option key={b.id} value={b.id}>
@@ -4188,35 +4944,131 @@ export default function App() {
             </div>
             <div className="hidden sm:block h-4 w-[1px] bg-slate-200"></div>
 
-            {/* Business Sector & Domain Badge */}
-            <div className="hidden md:flex items-center gap-1.5 px-2.5 py-1 bg-white/80 dark:bg-slate-800/80 rounded-xl border border-slate-200/80 dark:border-slate-700/80 shadow-2xs text-xs font-bold shrink-0">
-              <span className="text-sm">
-                {BUSINESS_SECTORS_CATALOG[activeTenant.businessSector || "SUPERMARKET"]?.icon || "🛒"}
-              </span>
-              <span className="text-slate-800 dark:text-slate-100 font-extrabold text-[11px]">
-                {BUSINESS_SECTORS_CATALOG[activeTenant.businessSector || "SUPERMARKET"]?.label || "Supermarket"}
-              </span>
-              <span className="text-[9px] font-mono font-bold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/60 px-1.5 py-0.5 rounded border border-blue-200 dark:border-blue-800">
-                {activeTenant.subdomain}.expertbilling.in
-              </span>
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" title="Domain Active"></span>
-            </div>
+            {/* Business Sector & Domain Badge (Interactive Demo Sector Switcher for Demo Client) */}
+            {isDemoClient ? (
+              <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-xl border shadow-2xs text-xs font-bold shrink-0 ${
+                isRestaurantTheme
+                  ? "bg-[#fdf4e3] border-amber-200"
+                  : isPharmacyTheme
+                  ? "bg-[#f0f7fe] border-sky-200"
+                  : isPgHostelTheme
+                  ? "bg-[#effaf9] border-teal-200"
+                  : isFashionTheme
+                  ? "bg-[#fdf4f7] border-rose-200"
+                  : isSupermarketTheme
+                  ? "bg-[#effaf2] border-emerald-200"
+                  : "bg-indigo-50/90 dark:bg-slate-800/90 border-indigo-200 dark:border-indigo-700"
+              }`}>
+                <span className={`text-[9.5px] font-black uppercase tracking-wider hidden sm:inline ${
+                  isRestaurantTheme
+                    ? "text-[#7a111a]"
+                    : isPharmacyTheme
+                    ? "text-[#07569e]"
+                    : isPgHostelTheme
+                    ? "text-[#0f766e]"
+                    : isFashionTheme
+                    ? "text-[#831843]"
+                    : isSupermarketTheme
+                    ? "text-[#0e6b2e]"
+                    : "text-indigo-600 dark:text-indigo-400"
+                }`}>
+                  Demo Sector:
+                </span>
+                <select
+                  aria-label="Switch Demo Business Sector"
+                  value={activeSectorKey}
+                  onChange={(e) => void handleSwitchDemoSector(e.target.value as BusinessSector, true)}
+                  className={`bg-transparent border-none font-extrabold text-[11px] outline-none cursor-pointer pr-1 ${
+                    isRestaurantTheme ? "text-[#5c0b12]" : isPharmacyTheme ? "text-[#05417a]" : isPgHostelTheme ? "text-[#0a4a45]" : isFashionTheme ? "text-[#580c2b]" : isSupermarketTheme ? "text-[#0b4d21]" : "text-slate-900 dark:text-slate-100"
+                  }`}
+                  title="Switch Business Sector to test different sector modules & workflows"
+                >
+                  {(Object.keys(BUSINESS_SECTORS_CATALOG) as BusinessSector[]).map((secKey) => (
+                    <option key={secKey} value={secKey} className="text-slate-900 bg-white">
+                      {BUSINESS_SECTORS_CATALOG[secKey].icon} {BUSINESS_SECTORS_CATALOG[secKey].label}
+                    </option>
+                  ))}
+                </select>
+                <span className={`w-1.5 h-1.5 rounded-full ${isRestaurantTheme ? "bg-[#8c1620]" : isPharmacyTheme ? "bg-[#0d78d6]" : isPgHostelTheme ? "bg-[#0d9488]" : isFashionTheme ? "bg-[#9d174d]" : "bg-emerald-500"}`} title="Sector Active"></span>
+              </div>
+            ) : (
+              <div className={`hidden md:flex items-center gap-1.5 px-2.5 py-1 rounded-xl border shadow-2xs text-xs font-bold shrink-0 ${
+                isRestaurantTheme
+                  ? "bg-[#fdf4e3] border-amber-200"
+                  : isPharmacyTheme
+                  ? "bg-[#f0f7fe] border-sky-200"
+                  : isPgHostelTheme
+                  ? "bg-[#effaf9] border-teal-200"
+                  : isFashionTheme
+                  ? "bg-[#fdf4f7] border-rose-200"
+                  : isSupermarketTheme
+                  ? "bg-[#effaf2] border-emerald-200"
+                  : "bg-white/80 dark:bg-slate-800/80 border-slate-200/80 dark:border-slate-700/80"
+              }`}>
+                <span className="text-sm">
+                  {activeSectorCatalog.icon}
+                </span>
+                <span className="text-slate-800 dark:text-slate-100 font-extrabold text-[11px]">
+                  {activeSectorCatalog.label}
+                </span>
+                <span className={`text-[9px] font-mono font-bold px-1.5 py-0.5 rounded border ${
+                  isRestaurantTheme
+                    ? "text-[#7a111a] bg-white border-amber-200"
+                    : isPharmacyTheme
+                    ? "text-[#07569e] bg-white border-sky-200"
+                    : isPgHostelTheme
+                    ? "text-[#0f766e] bg-white border-teal-200"
+                    : isFashionTheme
+                    ? "text-[#831843] bg-white border-rose-200"
+                    : isSupermarketTheme
+                    ? "text-[#0e6b2e] bg-white border-emerald-200"
+                    : "text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/60 border-blue-200 dark:border-blue-800"
+                }`}>
+                  {activeTenant.subdomain}.expertbilling.in
+                </span>
+                <span className={`w-1.5 h-1.5 rounded-full ${isRestaurantTheme ? "bg-[#8c1620]" : isPharmacyTheme ? "bg-[#0d78d6]" : isPgHostelTheme ? "bg-[#0d9488]" : isFashionTheme ? "bg-[#9d174d]" : "bg-emerald-500"}`} title="Domain Active"></span>
+              </div>
+            )}
             
             {/* Quick checkout search simulator */}
             <form onSubmit={handleBarcodeSubmit} className="relative hidden sm:block">
               <input
                 type="text"
-                placeholder="Scan item barcode (e.g. 5449000133335)..."
+                placeholder={
+                  isRestaurantTheme
+                    ? "Search products, food items, or categories..."
+                    : isPharmacyTheme
+                    ? "Search medicines, healthcare products, brand or barcode..."
+                    : isPgHostelTheme
+                    ? "Search room rent, mess plans, deposits, or utilities..."
+                    : isFashionTheme
+                    ? "Search kurtas, shirts, denim, footwear or SKU..."
+                    : isSupermarketTheme
+                    ? "Search products, barcode or keywords..."
+                    : "Scan item barcode (e.g. 5449000133335)..."
+                }
                 value={barcodeSearch}
                 onChange={(e) => setBarcodeSearch(e.target.value)}
-                className={`w-48 md:w-72 lg:w-96 pl-9 pr-4 py-1.5 ${bgMode.inputBg} border border-transparent rounded-lg text-xs transition-all outline-none focus:bg-white dark:focus:bg-slate-800 focus:border-slate-300`}
+                className={`w-48 md:w-64 lg:w-80 pl-9 pr-4 py-1.5 ${bgMode.inputBg} border ${
+                  isRestaurantTheme
+                    ? "rounded-full border-amber-200/80 focus:border-amber-400"
+                    : isPharmacyTheme
+                    ? "rounded-full border-sky-100 focus:border-sky-300"
+                    : isPgHostelTheme
+                    ? "rounded-full border-teal-100 focus:border-teal-300"
+                    : isFashionTheme
+                    ? "rounded-full border-rose-200/80 focus:border-rose-400"
+                    : isSupermarketTheme
+                    ? "rounded-full border-emerald-100 focus:border-emerald-300"
+                    : "rounded-lg border-transparent focus:border-slate-300"
+                } text-xs transition-all outline-none focus:bg-white dark:focus:bg-slate-800`}
               />
               <Search className="w-3.5 h-3.5 absolute left-3 top-2.5 text-slate-400" />
               <button type="submit" className="hidden" />
             </form>
           </div>
 
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3">
             {/* Quick alert indicator logs */}
             {lowStockAlertProducts.length > 0 && (
               <button
@@ -4224,23 +5076,55 @@ export default function App() {
                   setActiveTab("inventory");
                   triggerNotification("Filter through current near-critical warning lists below", "success");
                 }}
-                className="flex items-center gap-1.5 bg-rose-50 dark:bg-rose-950/30 text-rose-600 dark:text-rose-400 px-3 py-1.5 rounded-lg text-xs font-bold border border-rose-100 dark:border-rose-900/30 flex-row shrink-0"
+                className={
+                  isRestaurantTheme
+                    ? "relative flex items-center gap-1.5 bg-[#fdf4e3] hover:bg-amber-100/70 text-slate-700 px-3 py-1.5 rounded-full text-xs font-bold border border-amber-200 shrink-0 cursor-pointer transition-colors"
+                    : isPharmacyTheme
+                    ? "relative flex items-center gap-1.5 bg-[#f4f9fe] hover:bg-sky-50 text-slate-700 px-3 py-1.5 rounded-full text-xs font-bold border border-sky-200 shrink-0 cursor-pointer transition-colors"
+                    : isPgHostelTheme
+                    ? "relative flex items-center gap-1.5 bg-[#effaf9] hover:bg-teal-50 text-slate-700 px-3 py-1.5 rounded-full text-xs font-bold border border-teal-200 shrink-0 cursor-pointer transition-colors"
+                    : isFashionTheme
+                    ? "relative flex items-center gap-1.5 bg-[#fdf4f7] hover:bg-rose-50 text-slate-700 px-3 py-1.5 rounded-full text-xs font-bold border border-rose-200 shrink-0 cursor-pointer transition-colors"
+                    : isSupermarketTheme
+                    ? "relative flex items-center gap-1.5 bg-[#f4fbf6] hover:bg-emerald-50 text-slate-700 px-3 py-1.5 rounded-full text-xs font-bold border border-emerald-200 shrink-0 cursor-pointer transition-colors"
+                    : "flex items-center gap-1.5 bg-rose-50 dark:bg-rose-950/30 text-rose-600 dark:text-rose-400 px-3 py-1.5 rounded-lg text-xs font-bold border border-rose-100 dark:border-rose-900/30 flex-row shrink-0"
+                }
+                title={`Low Stock Warning (${lowStockAlertProducts.length} items)`}
               >
-                <span className="relative flex h-2 w-2">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-2 w-2 bg-rose-500"></span>
-                </span>
-                Low Stock Warning ({lowStockAlertProducts.length})
+                {isSectorRichTheme ? (
+                  <>
+                    <Bell className={`w-4 h-4 ${isRestaurantTheme ? "text-[#7a111a]" : isPharmacyTheme ? "text-[#07569e]" : isPgHostelTheme ? "text-[#0f766e]" : isFashionTheme ? "text-[#831843]" : "text-[#0e6b2e]"}`} />
+                    <span className="bg-rose-500 text-white text-[9px] font-black px-1.5 py-0.5 rounded-full leading-none">
+                      {lowStockAlertProducts.length}
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    <span className="relative flex h-2 w-2">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-2 w-2 bg-rose-500"></span>
+                    </span>
+                    Low Stock Warning ({lowStockAlertProducts.length})
+                  </>
+                )}
               </button>
             )}
 
-            {/* Expiring count alerts */}
-            {nearExpiryProductsAlert.length > 0 && (
+            {/* Expiring count alerts (active when Batch/Expiry module is enabled) */}
+            {activeSectorModules.batchExpiryRx && nearExpiryProductsAlert.length > 0 && (
               <button
                 onClick={() => {
                   setActiveTab("inventory");
                 }}
-                className="flex items-center gap-1.5 bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-400 px-3 py-1.5 rounded-lg text-xs font-bold border border-amber-100 dark:border-amber-900/30 shrink-0"
+                className={`flex items-center gap-1.5 px-3 py-1.5 ${
+                  isRestaurantTheme
+                    ? "rounded-full bg-amber-50 text-[#7a111a] border-amber-200"
+                    : isPharmacyTheme
+                    ? "rounded-full bg-sky-50 text-[#07569e] border-sky-200"
+                    : isSupermarketTheme
+                    ? "rounded-full bg-amber-50 text-amber-800 border-amber-200"
+                    : "rounded-lg bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-400 border-amber-100 dark:border-amber-900/30"
+                } text-xs font-bold border shrink-0 cursor-pointer`}
               >
                 Near Expiry ({nearExpiryProductsAlert.length})
               </button>
@@ -4273,13 +5157,57 @@ export default function App() {
             </div>
 
             {/* Terminal Log In Active Session Badge */}
-            <div className="flex items-center gap-2 bg-slate-900 border border-slate-800 text-slate-100 rounded-lg p-1.5 px-3 shadow-sm shrink-0">
-              <div className="flex flex-col text-right pr-2.5 border-r border-slate-800 shrink-0">
-                <span className="text-[8px] text-slate-500 font-mono font-bold leading-none mb-0.5 tracking-wider">ACTIVE SESSION</span>
+            <div className={`flex items-center gap-2 ${
+              isRestaurantTheme
+                ? "bg-[#6d0f17] border border-[#4d090f] text-white rounded-full px-3.5 py-1.5"
+                : isPharmacyTheme
+                ? "bg-[#07569e] border border-[#05417a] text-white rounded-full px-3.5 py-1.5"
+                : isPgHostelTheme
+                ? "bg-[#0c5d57] border border-[#094743] text-white rounded-full px-3.5 py-1.5"
+                : isFashionTheme
+                ? "bg-[#701238] border border-[#580c2b] text-white rounded-full px-3.5 py-1.5"
+                : isSupermarketTheme
+                ? "bg-[#0d4d23] border border-[#093819] text-white rounded-full px-3.5 py-1.5"
+                : "bg-slate-900 border border-slate-800 text-slate-100 rounded-lg p-1.5 px-3"
+            } shadow-sm shrink-0`}>
+              <div className={`flex flex-col text-right pr-2.5 border-r ${
+                isRestaurantTheme
+                  ? "border-amber-200/30"
+                  : isPharmacyTheme
+                  ? "border-sky-400/40"
+                  : isPgHostelTheme
+                  ? "border-teal-400/40"
+                  : isFashionTheme
+                  ? "border-rose-300/35"
+                  : isSupermarketTheme
+                  ? "border-emerald-700/80"
+                  : "border-slate-800"
+              } shrink-0`}>
+                <span className={`text-[8px] font-mono font-bold leading-none mb-0.5 tracking-wider ${
+                  isRestaurantTheme
+                    ? "text-amber-200/85"
+                    : isPharmacyTheme
+                    ? "text-sky-200/85"
+                    : isPgHostelTheme
+                    ? "text-teal-200/85"
+                    : isFashionTheme
+                    ? "text-rose-200/85"
+                    : isSupermarketTheme
+                    ? "text-emerald-200/80"
+                    : "text-slate-500"
+                }`}>ACTIVE SESSION</span>
                 <span className={`text-[10px] font-bold leading-none uppercase ${
                   isSuperAdmin
                     ? "text-purple-400"
-                    : "text-emerald-400"
+                    : isRestaurantTheme
+                    ? "text-amber-100"
+                    : isPharmacyTheme
+                    ? "text-sky-100"
+                    : isPgHostelTheme
+                    ? "text-teal-100"
+                    : isFashionTheme
+                    ? "text-rose-100"
+                    : "text-emerald-300"
                 }`}>
                   {isSuperAdmin ? "SUPERADMIN" : normalizeUserRole(currentRole)}
                 </span>
@@ -4293,7 +5221,19 @@ export default function App() {
                   setSelectedLoginRole("admin");
                   triggerNotification("Successfully logged out. All access revoked.", "warning");
                 }}
-                className="p-1 hover:bg-slate-800 text-slate-400 hover:text-rose-400 rounded transition-colors shrink-0"
+                className={`p-1 ${
+                  isRestaurantTheme
+                    ? "hover:bg-[#570b12] text-amber-200 hover:text-white"
+                    : isPharmacyTheme
+                    ? "hover:bg-[#05417a] text-sky-200 hover:text-white"
+                    : isPgHostelTheme
+                    ? "hover:bg-[#094743] text-teal-200 hover:text-white"
+                    : isFashionTheme
+                    ? "hover:bg-[#580c2b] text-rose-200 hover:text-white"
+                    : isSupermarketTheme
+                    ? "hover:bg-emerald-800 text-emerald-200 hover:text-white"
+                    : "hover:bg-slate-800 text-slate-400 hover:text-rose-400"
+                } rounded transition-colors shrink-0 cursor-pointer`}
                 title="Log Out"
               >
                 <LogOut className="w-3.5 h-3.5" />
@@ -4301,8 +5241,10 @@ export default function App() {
             </div>
 
             <div className="text-right hidden xl:block shrink-0">
-              <p className={`text-xs font-mono font-medium ${bgMode.textMuted}`}>Branch Offline Mode</p>
-              <p className={`text-[10px] ${bgMode.textMuted} font-mono opacity-80`}>Sync State: Secure Local (Cloud Vault Enabled)</p>
+              <p className={`text-xs font-mono font-medium ${isSectorRichTheme ? "text-slate-700" : bgMode.textMuted}`}>
+                Sync Status: <span className={isSectorRichTheme ? "text-[#15803d] font-bold" : ""}>{isSectorRichTheme ? "Online" : "Local"}</span>
+              </p>
+              <p className={`text-[10px] ${bgMode.textMuted} font-mono opacity-80`}>Secure Local (Cloud Vault Enabled)</p>
             </div>
           </div>
         </header>
@@ -4316,47 +5258,991 @@ export default function App() {
               {/* Product Grid selection & Filtering */}
               <div className="flex-1 space-y-6">
                 {/* Statistics line */}
-                <div className="grid grid-cols-4 gap-4">
-                  <div className={`p-4 rounded-xl shadow-xs border ${bgMode.cardBg}`}>
-                    <p className={`text-[10px] font-bold ${bgMode.textMuted} uppercase tracking-wider mb-1`}>Today's Total Sale</p>
-                    <h3 className={`text-xl font-bold font-mono ${bgMode.textHeading}`}>₹{totalInvoicedRevenue.toFixed(2)}</h3>
-                    <p className="text-[9px] text-emerald-500 font-bold mt-1">✓ Live Session Sales</p>
+                {isRestaurantTheme ? (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+                    <div className={`p-4 rounded-2xl border ${bgMode.cardBg} flex items-center justify-between gap-2 relative overflow-hidden`}>
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="w-11 h-11 rounded-full bg-rose-100 text-[#7a111a] flex items-center justify-center shrink-0">
+                          <TrendingUp className="w-5 h-5" />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Today&apos;s Total Sale</p>
+                          <h3 className="text-xl font-black font-mono text-slate-900 leading-tight mt-0.5">₹{totalInvoicedRevenue.toFixed(2)}</h3>
+                          <p className="text-[10px] text-emerald-600 font-bold mt-0.5">↑ Live Session Sales</p>
+                        </div>
+                      </div>
+                      <KpiSparkline variant="wave-orange" />
+                    </div>
+
+                    <div className={`p-4 rounded-2xl border ${bgMode.cardBg} flex items-center justify-between gap-2 relative overflow-hidden`}>
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="w-11 h-11 rounded-full bg-orange-100 text-orange-600 flex items-center justify-center shrink-0">
+                          <FileText className="w-5 h-5" />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Invoice Count</p>
+                          <h3 className="text-xl font-black font-mono text-slate-900 leading-tight mt-0.5">{invoices.length}</h3>
+                          <p className="text-[10px] text-emerald-600 font-bold mt-0.5 truncate">Avg: ₹{(totalInvoicedRevenue / Math.max(1, invoices.length)).toFixed(0)}</p>
+                        </div>
+                      </div>
+                      <KpiSparkline variant="bars-orange" />
+                    </div>
+
+                    <div className={`p-4 rounded-2xl border ${bgMode.cardBg} flex items-center justify-between gap-2 relative overflow-hidden`}>
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="w-11 h-11 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center shrink-0">
+                          <Tag className="w-5 h-5" />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Tax Liability (GST)</p>
+                          <h3 className="text-xl font-black font-mono text-slate-900 leading-tight mt-0.5">₹{totalTaxGSTLiability.toFixed(2)}</h3>
+                          <p className="text-[10px] text-emerald-600 font-bold mt-0.5">Tax logs registered</p>
+                        </div>
+                      </div>
+                      <KpiSparkline variant="wave-green" />
+                    </div>
+
+                    <div className={`p-4 rounded-2xl border ${bgMode.cardBg} flex items-center justify-between gap-2 relative overflow-hidden`}>
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="w-11 h-11 rounded-full bg-purple-100 text-purple-600 flex items-center justify-center shrink-0">
+                          <Users className="w-5 h-5" />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Active Customers &amp; Staff</p>
+                          <h3 className="text-base font-black text-slate-900 leading-tight mt-0.5 truncate">{currentCashierName}</h3>
+                          <p className="text-[10px] text-emerald-600 font-bold mt-0.5 truncate">{customers.length} Diners • {normalizeUserRole(currentRole)}</p>
+                        </div>
+                      </div>
+                      <RestaurantKpiIllustration />
+                    </div>
                   </div>
-                  <div className={`p-4 rounded-xl shadow-xs border ${bgMode.cardBg}`}>
-                    <p className={`text-[10px] font-bold ${bgMode.textMuted} uppercase tracking-wider mb-1`}>Invoice Count</p>
-                    <h3 className={`text-xl font-bold font-mono ${bgMode.textHeading}`}>{invoices.length} checkouts</h3>
-                    <p className={`text-[9px] ${bgMode.textMuted} mt-1`}>Avg basket: ₹{(totalInvoicedRevenue / Math.max(1, invoices.length)).toFixed(2)}</p>
+                ) : isPharmacyTheme ? (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+                    <div className={`p-4 rounded-2xl border ${bgMode.cardBg} flex items-center justify-between gap-2 relative overflow-hidden`}>
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="w-11 h-11 rounded-full bg-sky-100 text-[#07569e] flex items-center justify-center shrink-0">
+                          <ShoppingCart className="w-5 h-5" />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Today&apos;s Total Sale</p>
+                          <h3 className="text-xl font-black font-mono text-slate-900 leading-tight mt-0.5">₹{totalInvoicedRevenue.toFixed(2)}</h3>
+                          <p className="text-[10px] text-emerald-600 font-bold mt-0.5">↑ Live Session Sales</p>
+                        </div>
+                      </div>
+                      <KpiSparkline variant="wave-blue" />
+                    </div>
+
+                    <div className={`p-4 rounded-2xl border ${bgMode.cardBg} flex items-center justify-between gap-2 relative overflow-hidden`}>
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="w-11 h-11 rounded-full bg-blue-100 text-[#0284c7] flex items-center justify-center shrink-0">
+                          <FileText className="w-5 h-5" />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Invoice Count</p>
+                          <h3 className="text-xl font-black font-mono text-slate-900 leading-tight mt-0.5">{invoices.length}</h3>
+                          <p className="text-[10px] text-emerald-600 font-bold mt-0.5 truncate">Avg: ₹{(totalInvoicedRevenue / Math.max(1, invoices.length)).toFixed(0)}</p>
+                        </div>
+                      </div>
+                      <KpiSparkline variant="bars-blue" />
+                    </div>
+
+                    <div className={`p-4 rounded-2xl border ${bgMode.cardBg} flex items-center justify-between gap-2 relative overflow-hidden`}>
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="w-11 h-11 rounded-full bg-teal-100 text-teal-600 flex items-center justify-center shrink-0">
+                          <Tag className="w-5 h-5" />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Tax Liability (GST)</p>
+                          <h3 className="text-xl font-black font-mono text-slate-900 leading-tight mt-0.5">₹{totalTaxGSTLiability.toFixed(2)}</h3>
+                          <p className="text-[10px] text-emerald-600 font-bold mt-0.5">Tax logs registered</p>
+                        </div>
+                      </div>
+                      <KpiSparkline variant="wave-teal" />
+                    </div>
+
+                    <div className={`p-4 rounded-2xl border ${bgMode.cardBg} flex items-center justify-between gap-2 relative overflow-hidden`}>
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="w-11 h-11 rounded-full bg-sky-100 text-[#07569e] flex items-center justify-center shrink-0">
+                          <Users className="w-5 h-5" />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Active Customers &amp; Staff</p>
+                          <h3 className="text-base font-black text-slate-900 leading-tight mt-0.5 truncate">{currentCashierName}</h3>
+                          <p className="text-[10px] text-emerald-600 font-bold mt-0.5 truncate">{customers.length} Patients • {normalizeUserRole(currentRole)}</p>
+                        </div>
+                      </div>
+                      <PharmaKpiIllustration />
+                    </div>
                   </div>
-                  <div className={`p-4 rounded-xl shadow-xs border ${bgMode.cardBg}`}>
-                    <p className={`text-[10px] font-bold ${bgMode.textMuted} uppercase tracking-wider mb-1`}>Tax Liability (GST)</p>
-                    <h3 className="text-xl font-bold font-mono text-emerald-500">₹{totalTaxGSTLiability.toFixed(2)}</h3>
-                    <p className={`text-[9px] ${bgMode.textMuted} mt-1`}>Tax logs registered</p>
+                ) : isSupermarketTheme ? (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+                    <div className={`p-4 rounded-2xl border ${bgMode.cardBg} flex items-center justify-between gap-2 relative overflow-hidden`}>
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="w-11 h-11 rounded-full bg-emerald-100 text-[#15803d] flex items-center justify-center shrink-0">
+                          <ShoppingCart className="w-5 h-5" />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Today&apos;s Total Sale</p>
+                          <h3 className="text-xl font-black font-mono text-slate-900 leading-tight mt-0.5">₹{totalInvoicedRevenue.toFixed(2)}</h3>
+                          <p className="text-[10px] text-[#15803d] font-bold mt-0.5">↑ Live Session Sales</p>
+                        </div>
+                      </div>
+                      <KpiSparkline variant="wave-green" />
+                    </div>
+
+                    <div className={`p-4 rounded-2xl border ${bgMode.cardBg} flex items-center justify-between gap-2 relative overflow-hidden`}>
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="w-11 h-11 rounded-full bg-amber-100 text-amber-600 flex items-center justify-center shrink-0">
+                          <Package className="w-5 h-5" />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Invoice Count</p>
+                          <h3 className="text-xl font-black font-mono text-slate-900 leading-tight mt-0.5">{invoices.length}</h3>
+                          <p className="text-[10px] text-[#15803d] font-bold mt-0.5 truncate">Avg: ₹{(totalInvoicedRevenue / Math.max(1, invoices.length)).toFixed(0)}</p>
+                        </div>
+                      </div>
+                      <KpiSparkline variant="bars-amber" />
+                    </div>
+
+                    <div className={`p-4 rounded-2xl border ${bgMode.cardBg} flex items-center justify-between gap-2 relative overflow-hidden`}>
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="w-11 h-11 rounded-full bg-green-100 text-green-600 flex items-center justify-center shrink-0">
+                          <Tag className="w-5 h-5" />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Tax Liability (GST)</p>
+                          <h3 className="text-xl font-black font-mono text-slate-900 leading-tight mt-0.5">₹{totalTaxGSTLiability.toFixed(2)}</h3>
+                          <p className="text-[10px] text-[#15803d] font-bold mt-0.5">Tax logs registered</p>
+                        </div>
+                      </div>
+                      <KpiSparkline variant="wave-emerald" />
+                    </div>
+
+                    <div className={`p-4 rounded-2xl border ${bgMode.cardBg} flex items-center justify-between gap-2 relative overflow-hidden`}>
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="w-11 h-11 rounded-full bg-teal-100 text-teal-600 flex items-center justify-center shrink-0">
+                          <Users className="w-5 h-5" />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Active Customers &amp; Staff</p>
+                          <h3 className="text-base font-black text-slate-900 leading-tight mt-0.5 truncate">{currentCashierName}</h3>
+                          <p className="text-[10px] text-[#15803d] font-bold mt-0.5 truncate">{customers.length} Loyalty • {normalizeUserRole(currentRole)}</p>
+                        </div>
+                      </div>
+                      <KpiSparkline variant="wave-teal" />
+                    </div>
                   </div>
-                  <div className={`p-4 rounded-xl shadow-xs border ${bgMode.cardBg}`}>
-                    <p className={`text-[10px] font-bold ${bgMode.textMuted} uppercase tracking-wider mb-1`}>Active Cashier</p>
-                    <h3 className={`text-base font-bold truncate ${bgMode.textHeading}`}>{currentCashierName}</h3>
-                    <p className={`text-[9px] ${bgMode.textMuted} mt-1`}>
-                      {isSuperAdmin ? "SUPERADMIN" : normalizeUserRole(currentRole)} privilege
-                    </p>
+                ) : isPgHostelTheme ? (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+                    <div className={`p-4 rounded-2xl border ${bgMode.cardBg} flex items-center justify-between gap-2 relative overflow-hidden`}>
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="w-11 h-11 rounded-full bg-teal-100 text-[#0f766e] flex items-center justify-center shrink-0">
+                          <BedDouble className="w-5 h-5" />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Rent &amp; Mess Collection</p>
+                          <h3 className="text-xl font-black font-mono text-slate-900 leading-tight mt-0.5 tabular-nums">₹{totalInvoicedRevenue.toFixed(2)}</h3>
+                          <p className="text-[10px] text-[#0f766e] font-bold mt-0.5">↑ Live Session Receipts</p>
+                        </div>
+                      </div>
+                      <KpiSparkline variant="wave-teal" />
+                    </div>
+
+                    <div className={`p-4 rounded-2xl border ${bgMode.cardBg} flex items-center justify-between gap-2 relative overflow-hidden`}>
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="w-11 h-11 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">
+                          <FileText className="w-5 h-5" />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Rent Receipts</p>
+                          <h3 className="text-xl font-black font-mono text-slate-900 leading-tight mt-0.5 tabular-nums">{invoices.length}</h3>
+                          <p className="text-[10px] text-[#0f766e] font-bold mt-0.5 truncate tabular-nums">Avg: ₹{(totalInvoicedRevenue / Math.max(1, invoices.length)).toFixed(0)}</p>
+                        </div>
+                      </div>
+                      <KpiSparkline variant="bars-blue" />
+                    </div>
+
+                    <div className={`p-4 rounded-2xl border ${bgMode.cardBg} flex items-center justify-between gap-2 relative overflow-hidden`}>
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="w-11 h-11 rounded-full bg-sky-100 text-sky-700 flex items-center justify-center shrink-0">
+                          <Tag className="w-5 h-5" />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Tax Liability (GST)</p>
+                          <h3 className="text-xl font-black font-mono text-slate-900 leading-tight mt-0.5 tabular-nums">₹{totalTaxGSTLiability.toFixed(2)}</h3>
+                          <p className="text-[10px] text-[#0f766e] font-bold mt-0.5">Tax logs registered</p>
+                        </div>
+                      </div>
+                      <KpiSparkline variant="wave-emerald" />
+                    </div>
+
+                    <div className={`p-4 rounded-2xl border ${bgMode.cardBg} flex items-center justify-between gap-2 relative overflow-hidden`}>
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="w-11 h-11 rounded-full bg-amber-100 text-amber-700 flex items-center justify-center shrink-0">
+                          <Users className="w-5 h-5" />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Bed Occupancy</p>
+                          <h3 className="text-xl font-black font-mono text-slate-900 leading-tight mt-0.5 tabular-nums">
+                            {pgResidents.length}/{PG_HOSTEL_ROOMS.reduce((acc, r) => acc + r.capacity, 0)} Beds
+                          </h3>
+                          <p className="text-[10px] text-amber-700 font-bold mt-0.5 truncate tabular-nums">
+                            {pgResidents.filter((r) => r.rentStatus === "DUE").length} Rent Due • {normalizeUserRole(currentRole)}
+                          </p>
+                        </div>
+                      </div>
+                      <KpiSparkline variant="wave-amber" />
+                    </div>
                   </div>
+                ) : isFashionTheme ? (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+                    <div className={`p-4 rounded-2xl border ${bgMode.cardBg} flex items-center justify-between gap-2 relative overflow-hidden`}>
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="w-11 h-11 rounded-full bg-rose-100 text-[#831843] flex items-center justify-center shrink-0">
+                          <Shirt className="w-5 h-5" />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Boutique Apparel Sales</p>
+                          <h3 className="text-xl font-black font-mono text-slate-900 leading-tight mt-0.5 tabular-nums">₹{totalInvoicedRevenue.toFixed(2)}</h3>
+                          <p className="text-[10px] text-[#831843] font-bold mt-0.5">↑ Live Session Sales</p>
+                        </div>
+                      </div>
+                      <KpiSparkline variant="wave-orange" />
+                    </div>
+
+                    <div className={`p-4 rounded-2xl border ${bgMode.cardBg} flex items-center justify-between gap-2 relative overflow-hidden`}>
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="w-11 h-11 rounded-full bg-amber-100 text-amber-700 flex items-center justify-center shrink-0">
+                          <FileText className="w-5 h-5" />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Garment Bills</p>
+                          <h3 className="text-xl font-black font-mono text-slate-900 leading-tight mt-0.5 tabular-nums">{invoices.length}</h3>
+                          <p className="text-[10px] text-[#831843] font-bold mt-0.5 truncate tabular-nums">Avg: ₹{(totalInvoicedRevenue / Math.max(1, invoices.length)).toFixed(0)}</p>
+                        </div>
+                      </div>
+                      <KpiSparkline variant="bars-amber" />
+                    </div>
+
+                    <div className={`p-4 rounded-2xl border ${bgMode.cardBg} flex items-center justify-between gap-2 relative overflow-hidden`}>
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="w-11 h-11 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">
+                          <Tag className="w-5 h-5" />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Tax Liability (GST)</p>
+                          <h3 className="text-xl font-black font-mono text-slate-900 leading-tight mt-0.5 tabular-nums">₹{totalTaxGSTLiability.toFixed(2)}</h3>
+                          <p className="text-[10px] text-emerald-700 font-bold mt-0.5">Apparel GST registered</p>
+                        </div>
+                      </div>
+                      <KpiSparkline variant="wave-emerald" />
+                    </div>
+
+                    <div className={`p-4 rounded-2xl border ${bgMode.cardBg} flex items-center justify-between gap-2 relative overflow-hidden`}>
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="w-11 h-11 rounded-full bg-fuchsia-100 text-fuchsia-800 flex items-center justify-center shrink-0">
+                          <Scissors className="w-5 h-5" />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Alteration Slips</p>
+                          <h3 className="text-xl font-black font-mono text-slate-900 leading-tight mt-0.5 tabular-nums">
+                            {garmentAlterations.filter((a) => a.status !== "DELIVERED").length} Active
+                          </h3>
+                          <p className="text-[10px] text-amber-700 font-bold mt-0.5 truncate tabular-nums">
+                            {garmentAlterations.filter((a) => a.status === "READY").length} Ready • {fashionSeason}
+                          </p>
+                        </div>
+                      </div>
+                      <KpiSparkline variant="wave-purple" />
+                    </div>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-4 gap-4">
+                    <div className={`p-4 rounded-xl shadow-xs border ${bgMode.cardBg}`}>
+                      <p className={`text-[10px] font-bold ${bgMode.textMuted} uppercase tracking-wider mb-1`}>Today&apos;s Total Sale</p>
+                      <h3 className={`text-xl font-bold font-mono ${bgMode.textHeading}`}>₹{totalInvoicedRevenue.toFixed(2)}</h3>
+                      <p className="text-[9px] text-emerald-500 font-bold mt-1">✓ Live Session Sales</p>
+                    </div>
+                    <div className={`p-4 rounded-xl shadow-xs border ${bgMode.cardBg}`}>
+                      <p className={`text-[10px] font-bold ${bgMode.textMuted} uppercase tracking-wider mb-1`}>Invoice Count</p>
+                      <h3 className={`text-xl font-bold font-mono ${bgMode.textHeading}`}>{invoices.length} checkouts</h3>
+                      <p className={`text-[9px] ${bgMode.textMuted} mt-1`}>Avg basket: ₹{(totalInvoicedRevenue / Math.max(1, invoices.length)).toFixed(2)}</p>
+                    </div>
+                    <div className={`p-4 rounded-xl shadow-xs border ${bgMode.cardBg}`}>
+                      <p className={`text-[10px] font-bold ${bgMode.textMuted} uppercase tracking-wider mb-1`}>Tax Liability (GST)</p>
+                      <h3 className="text-xl font-bold font-mono text-emerald-500">₹{totalTaxGSTLiability.toFixed(2)}</h3>
+                      <p className={`text-[9px] ${bgMode.textMuted} mt-1`}>Tax logs registered</p>
+                    </div>
+                    <div className={`p-4 rounded-xl shadow-xs border ${bgMode.cardBg}`}>
+                      <p className={`text-[10px] font-bold ${bgMode.textMuted} uppercase tracking-wider mb-1`}>Active Cashier</p>
+                      <h3 className={`text-base font-bold truncate ${bgMode.textHeading}`}>{currentCashierName}</h3>
+                      <p className={`text-[9px] ${bgMode.textMuted} mt-1`}>
+                        {isSuperAdmin ? "SUPERADMIN" : normalizeUserRole(currentRole)} privilege
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                {/* ACTIVE BUSINESS SECTOR MODULES & DEMO SECTOR TESTER */}
+                <div className={`p-4 ${
+                  isRestaurantTheme
+                    ? "rounded-2xl border-amber-200/80"
+                    : isPharmacyTheme
+                    ? "rounded-2xl border-sky-100"
+                    : isPgHostelTheme
+                    ? "rounded-2xl border-teal-100"
+                    : isFashionTheme
+                    ? "rounded-2xl border-rose-100"
+                    : isSupermarketTheme
+                    ? "rounded-2xl border-emerald-100"
+                    : "rounded-xl border-indigo-500/30"
+                } border space-y-3 ${bgMode.cardBg} shadow-sm`} id="sector-modules-workspace">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                    <div className="flex items-center gap-3">
+                      <div className={
+                        isRestaurantTheme
+                          ? "w-10 h-10 rounded-xl bg-[#fdf4e3] border border-amber-200 flex items-center justify-center text-xl shrink-0"
+                          : isPharmacyTheme
+                          ? "w-10 h-10 rounded-xl bg-[#f0f7fe] border border-sky-200 flex items-center justify-center text-xl shrink-0"
+                          : isPgHostelTheme
+                          ? "w-10 h-10 rounded-xl bg-[#effaf9] border border-teal-200 flex items-center justify-center text-xl shrink-0"
+                          : isFashionTheme
+                          ? "w-10 h-10 rounded-xl bg-[#fdf4f7] border border-rose-200 flex items-center justify-center text-xl shrink-0"
+                          : isSupermarketTheme
+                          ? "w-10 h-10 rounded-xl bg-[#effaf2] border border-emerald-200 flex items-center justify-center text-xl shrink-0"
+                          : "text-xl leading-none"
+                      }>
+                        {activeSectorCatalog.icon}
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <h3 className={`text-xs font-black uppercase tracking-wider ${bgMode.textHeading}`}>
+                            {activeSectorCatalog.label} Mode
+                          </h3>
+                          <span className={`text-[9.5px] font-mono font-bold px-2.5 py-0.5 rounded-full border ${
+                            isRestaurantTheme
+                              ? "bg-rose-100 text-[#7a111a] border-rose-200"
+                              : isPharmacyTheme
+                              ? "bg-[#e0f2fe] text-[#07569e] border-[#bae6fd]"
+                              : isPgHostelTheme
+                              ? "bg-[#ccfbf1] text-[#0f766e] border-[#99f6e4]"
+                              : isFashionTheme
+                              ? "bg-rose-100 text-[#831843] border-rose-200"
+                              : isSupermarketTheme
+                              ? "bg-[#dcfce7] text-[#15803d] border-[#bbf7d0]"
+                              : "bg-indigo-500/10 text-indigo-600 border-indigo-500/20"
+                          }`}>
+                            {activeTenant.sectorConfig?.posMode || activeSectorCatalog.posMode}
+                          </span>
+                        </div>
+                        <p className={`text-[10.5px] ${bgMode.textMuted} mt-0.5`}>
+                          Active Modules:{" "}
+                          {SECTOR_MODULE_CATALOG.filter((m) => activeSectorModules[m.key])
+                            .map((m) => m.shortLabel)
+                            .join(" • ") || "Core POS"}
+                        </p>
+                      </div>
+                    </div>
+
+                    {isDemoClient && (
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        {(Object.keys(BUSINESS_SECTORS_CATALOG) as BusinessSector[]).map((secKey) => {
+                          const sec = BUSINESS_SECTORS_CATALOG[secKey];
+                          const isCurrent = activeSectorKey === secKey;
+                          return (
+                            <button
+                              key={secKey}
+                              type="button"
+                              onClick={() => void handleSwitchDemoSector(secKey, true)}
+                              className={`px-2.5 py-1 rounded-xl text-[10px] font-bold transition-all cursor-pointer border ${
+                                isCurrent
+                                  ? isRestaurantTheme
+                                    ? "bg-gradient-to-r from-[#6d0f17] to-[#8c1620] text-white border-transparent shadow-sm"
+                                    : isPharmacyTheme
+                                    ? "bg-gradient-to-r from-[#07569e] to-[#0d78d6] text-white border-transparent shadow-sm"
+                                    : isPgHostelTheme
+                                    ? "bg-gradient-to-r from-[#0c5d57] to-[#0d9488] text-white border-transparent shadow-sm"
+                                    : isFashionTheme
+                                    ? "bg-gradient-to-r from-[#701238] to-[#9d174d] text-white border-transparent shadow-sm"
+                                    : isSupermarketTheme
+                                    ? "bg-gradient-to-r from-[#0e6b2e] to-[#169343] text-white border-transparent shadow-sm"
+                                    : "bg-indigo-600 text-white border-indigo-600 shadow-xs"
+                                  : isRestaurantTheme
+                                  ? "bg-[#fdf5e6] hover:bg-amber-100/70 text-[#5c0b12] border-amber-200"
+                                  : isPharmacyTheme
+                                  ? "bg-[#f4f9fe] hover:bg-sky-50 text-slate-700 border-sky-100"
+                                  : isPgHostelTheme
+                                  ? "bg-[#f3fbfa] hover:bg-teal-50 text-slate-700 border-teal-100"
+                                  : isFashionTheme
+                                  ? "bg-[#fdf6f9] hover:bg-rose-50 text-[#831843] border-rose-100"
+                                  : isSupermarketTheme
+                                  ? "bg-[#f8fcfa] hover:bg-emerald-50 text-slate-700 border-emerald-100"
+                                  : "bg-slate-100/80 hover:bg-indigo-50 text-slate-700 border-slate-200"
+                              }`}
+                              title={`Switch demo client to ${sec.label}`}
+                            >
+                              {sec.icon} {sec.label.split(" ")[0]}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Restaurant & F&B: Table, Order Mode & KOT Kitchen Ticket Module */}
+                  {(activeSectorModules.kdsTableManagement || activeSectorModules.kotPrinting) && (
+                    <div className={`p-3 rounded-xl space-y-2.5 text-xs border ${
+                      isRestaurantTheme
+                        ? "bg-gradient-to-r from-[#fdf2dc] via-[#fbe8c3] to-[#f9dfb0] border-amber-200/90"
+                        : "bg-amber-50/80 border-amber-200"
+                    }`}>
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <span className={`font-extrabold text-[11px] uppercase tracking-wider ${
+                          isRestaurantTheme ? "text-[#5c0b12]" : "text-amber-900"
+                        }`}>
+                          🍽️ Restaurant Table &amp; KOT Kitchen Dispatch
+                        </span>
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          {(["DINE_IN", "TAKEAWAY", "DELIVERY"] as const).map((m) => (
+                            <button
+                              key={m}
+                              type="button"
+                              onClick={() => setRestaurantOrderMode(m)}
+                              className={`px-2.5 py-0.5 rounded-lg text-[10px] font-bold cursor-pointer border transition-colors ${
+                                restaurantOrderMode === m
+                                  ? isRestaurantTheme
+                                    ? "bg-[#7a111a] text-white border-[#7a111a]"
+                                    : "bg-amber-600 text-white border-amber-600"
+                                  : isRestaurantTheme
+                                  ? "bg-white text-[#5c0b12] border-amber-200 hover:bg-amber-50"
+                                  : "bg-white text-amber-900 border-amber-200"
+                              }`}
+                            >
+                              {m.replace("_", "-")}
+                            </button>
+                          ))}
+                          <button
+                            type="button"
+                            onClick={() => setActiveTab("sector-kds")}
+                            className={`px-2.5 py-0.5 rounded-lg text-[10px] font-bold cursor-pointer text-white ml-1 transition-colors ${
+                              isRestaurantTheme ? "bg-[#5c0b12] hover:bg-[#42070c]" : "bg-slate-900 hover:bg-slate-800"
+                            }`}
+                          >
+                            Open Floor &amp; KDS Board →
+                          </button>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                        {restaurantOrderMode === "DINE_IN" && (
+                          <select
+                            value={restaurantTableNo}
+                            onChange={(e) => setRestaurantTableNo(e.target.value)}
+                            className="bg-white border border-amber-300 rounded-lg px-2.5 py-1.5 text-xs font-bold text-slate-800 outline-none"
+                          >
+                            {["Table 1", "Table 2", "Table 3", "Table 4", "Table 5", "Table 6", "VIP Booth 1", "Patio 2"].map((t) => (
+                              <option key={t} value={t}>{t}</option>
+                            ))}
+                          </select>
+                        )}
+                        <input
+                          type="text"
+                          value={restaurantKotNote}
+                          onChange={(e) => setRestaurantKotNote(e.target.value)}
+                          placeholder="Kitchen cooking note (e.g. Less spicy, No onion)"
+                          className="bg-white border border-amber-300 rounded-lg px-2.5 py-1.5 text-xs text-slate-800 sm:col-span-1 outline-none"
+                        />
+                        {activeSectorModules.kotPrinting && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (cartItems.length === 0) {
+                                triggerNotification("Add menu items to cart before sending a KOT to kitchen.", "warning");
+                                return;
+                              }
+                              const kotId = `KOT-${String(kotTickets.length + 1).padStart(3, "0")}`;
+                              const summary = cartItems.map((i) => `${i.quantity}x ${i.name}`).join(", ");
+                              setKotTickets((prev) => [
+                                {
+                                  id: kotId,
+                                  table: restaurantOrderMode === "DINE_IN" ? restaurantTableNo : restaurantOrderMode,
+                                  mode: restaurantOrderMode,
+                                  itemsSummary: summary,
+                                  note: restaurantKotNote || "Standard prep",
+                                  time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+                                  status: "PREPARING"
+                                },
+                                ...prev
+                              ]);
+                              setRestaurantKotNote("");
+                              triggerNotification(`Kitchen Order Ticket ${kotId} spooled for ${restaurantOrderMode === "DINE_IN" ? restaurantTableNo : restaurantOrderMode}!`, "success");
+                            }}
+                            className={`px-3 py-1.5 ${
+                              isRestaurantTheme ? "bg-[#7a111a] hover:bg-[#5c0b12]" : "bg-amber-600 hover:bg-amber-700"
+                            } text-white font-bold rounded-lg text-[11px] cursor-pointer transition-all`}
+                          >
+                            Send KOT to Kitchen ({cartItems.length})
+                          </button>
+                        )}
+                      </div>
+                      {kotTickets.length > 0 && (
+                        <div className="flex flex-wrap gap-1.5 pt-1">
+                          {kotTickets.slice(0, 4).map((k) => (
+                            <button
+                              key={k.id}
+                              type="button"
+                              onClick={() =>
+                                setKotTickets((prev) =>
+                                  prev.map((item) =>
+                                    item.id === k.id
+                                      ? { ...item, status: item.status === "PREPARING" ? "READY" : "PREPARING" }
+                                      : item
+                                  )
+                                )
+                              }
+                              className={`px-2 py-1 rounded-lg border text-[10px] font-bold cursor-pointer ${
+                                k.status === "READY"
+                                  ? "bg-emerald-100 border-emerald-300 text-emerald-800"
+                                  : isRestaurantTheme
+                                  ? "bg-white border-amber-300 text-[#7a111a]"
+                                  : "bg-white border-amber-300 text-amber-900"
+                              }`}
+                              title={`${k.itemsSummary} (${k.note}) — click to toggle status`}
+                            >
+                              {k.id} • {k.table} [{k.status}]
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Supermarket: Weighing Scale & MRP Savings Module */}
+                  {activeSectorModules.weighingScaleScanning && (
+                    <div className={`${
+                      isSupermarketTheme
+                        ? "px-3.5 py-2.5 bg-gradient-to-r from-[#eefaf0] via-[#e4f7e8] to-[#d9f3df] border border-emerald-200 rounded-xl flex items-center justify-between gap-2 text-xs relative overflow-hidden"
+                        : "p-3 bg-emerald-50/80 border border-emerald-200 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs"
+                    }`}>
+                      <div className="flex items-center gap-2 flex-wrap relative z-10">
+                        <span className="font-extrabold text-[#0b4d21] text-[11px] uppercase tracking-wider inline-flex items-center gap-1.5">
+                          <Scale className="w-4 h-4 text-[#0e6b2e]" />
+                          Electronic Weighing Scale:
+                        </span>
+                        <select
+                          value={scaleProductId}
+                          onChange={(e) => setScaleProductId(e.target.value)}
+                          className="bg-white border border-emerald-200 rounded-lg px-2.5 py-1.5 text-[11px] font-bold text-slate-800 max-w-[180px] shadow-2xs"
+                        >
+                          <option value="">-- Select Loose Item --</option>
+                          {sectorScopedProducts.map((p) => (
+                            <option key={p.id} value={p.id}>{p.name} (₹{p.price})</option>
+                          ))}
+                        </select>
+                        <input
+                          type="number"
+                          step="0.05"
+                          min="0.05"
+                          value={scaleWeightKg}
+                          onChange={(e) => setScaleWeightKg(e.target.value)}
+                          className="w-20 bg-white border border-emerald-200 rounded-lg px-2 py-1.5 text-[11px] font-mono font-bold text-slate-800 shadow-2xs"
+                        />
+                        <span className="text-[10.5px] font-bold text-[#0e6b2e]">Kg / Units</span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const prod = sectorScopedProducts.find((p) => p.id === scaleProductId) || sectorScopedProducts[0];
+                            const wt = Math.max(0.05, Number(scaleWeightKg) || 1);
+                            if (!prod) return;
+                            const subtotal = Number((prod.price * wt).toFixed(2));
+                            const gstAmount = Number(((subtotal * prod.gstRate) / (100 + prod.gstRate)).toFixed(2));
+                            setCartItems((prev) => [
+                              ...prev.filter((i) => i.productId !== prod.id),
+                              {
+                                productId: prod.id,
+                                name: `${prod.name} (${wt} Kg)`,
+                                barcode: prod.barcode,
+                                price: prod.price,
+                                mrp: prod.mrp || prod.price,
+                                quantity: wt,
+                                unit: prod.unit,
+                                gstRate: prod.gstRate,
+                                gstAmount,
+                                subtotal
+                              }
+                            ]);
+                            triggerNotification(`Scale weight ${wt} Kg applied for ${prod.name} (₹${subtotal.toFixed(2)})`, "success");
+                          }}
+                          className="px-3 py-1.5 bg-[#0d5c28] hover:bg-[#09431d] text-white rounded-lg text-[10.5px] font-bold cursor-pointer shadow-xs transition-colors"
+                        >
+                          Add Weighed Qty
+                        </button>
+                        {cartItems.length > 0 && (
+                          <span className="text-[10.5px] font-mono font-black text-[#0d4d23] bg-white/95 px-2.5 py-1 rounded-lg border border-emerald-200 shrink-0 shadow-2xs">
+                            MRP Savings: ₹{cartItems.reduce((acc, i) => acc + Math.max(0, ((i.mrp || i.price) - i.price) * i.quantity), 0).toFixed(2)}
+                          </span>
+                        )}
+                      </div>
+                      {isSupermarketTheme && <ProduceBasketIllustration />}
+                    </div>
+                  )}
+
+                  {/* Pharmacy: Prescription (Rx), Doctor & Batch Expiry Control */}
+                  {activeSectorModules.batchExpiryRx && activeSectorKey === "PHARMACY" && (
+                    <div className={`p-3 rounded-xl space-y-2 text-xs border ${
+                      isPharmacyTheme
+                        ? "bg-gradient-to-r from-[#eef7fe] via-[#f4faff] to-[#e7f3fd] border-sky-200"
+                        : "bg-rose-50/80 border-rose-200"
+                    }`}>
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <span className={`font-extrabold text-[11px] uppercase tracking-wider ${
+                          isPharmacyTheme ? "text-[#07569e]" : "text-rose-900"
+                        }`}>
+                          💊 Pharmacy Prescription (Rx) &amp; Batch Compliance
+                        </span>
+                        <div className="flex items-center gap-2">
+                          <label className={`flex items-center gap-1.5 text-[10.5px] font-bold cursor-pointer ${
+                            isPharmacyTheme ? "text-[#07569e]" : "text-rose-800"
+                          }`}>
+                            <input
+                              type="checkbox"
+                              checked={rxScheduleHVerified}
+                              onChange={(e) => setRxScheduleHVerified(e.target.checked)}
+                              className={isPharmacyTheme ? "accent-[#07569e]" : "accent-rose-600"}
+                            />
+                            <span>Schedule H / Batch Verified</span>
+                          </label>
+                          <button
+                            type="button"
+                            onClick={() => setActiveTab("sector-rx")}
+                            className={`px-2.5 py-1 rounded-lg text-[10px] font-bold cursor-pointer text-white transition-colors ${
+                              isPharmacyTheme ? "bg-[#07569e] hover:bg-[#05417a]" : "bg-rose-700 hover:bg-rose-800"
+                            }`}
+                          >
+                            Open Rx &amp; Expiry Control →
+                          </button>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        <input
+                          type="text"
+                          value={rxNumber}
+                          onChange={(e) => setRxNumber(e.target.value)}
+                          placeholder="Prescription Rx No. (e.g. RX-2026-441)"
+                          className={`bg-white border ${isPharmacyTheme ? "border-sky-200 focus:border-[#07569e]" : "border-rose-300"} rounded-lg px-2.5 py-1.5 text-xs font-mono text-slate-800 outline-none`}
+                        />
+                        <input
+                          type="text"
+                          value={rxDoctorName}
+                          onChange={(e) => setRxDoctorName(e.target.value)}
+                          placeholder="Prescribing Doctor (e.g. Dr. K. Rao, MD)"
+                          className={`bg-white border ${isPharmacyTheme ? "border-sky-200 focus:border-[#07569e]" : "border-rose-300"} rounded-lg px-2.5 py-1.5 text-xs text-slate-800 outline-none`}
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Retail & Apparel: Size & Color Variant Matrix */}
+                  {activeSectorModules.variantMatrix && !activeSectorModules.garmentTailoring && (
+                    <div className="p-3 bg-blue-50/80 border border-blue-200 rounded-xl flex flex-wrap items-center justify-between gap-2 text-xs">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-extrabold text-blue-900 text-[11px] uppercase tracking-wider">
+                          🛍️ Apparel / Variant Matrix:
+                        </span>
+                        <select
+                          value={retailVariantSize}
+                          onChange={(e) => setRetailVariantSize(e.target.value)}
+                          className="bg-white border border-blue-300 rounded-lg px-2 py-1 text-[11px] font-bold text-slate-800"
+                        >
+                          {["XS", "S", "M", "L", "XL", "XXL", "UK 8", "UK 9", "Free Size"].map((sz) => (
+                            <option key={sz} value={sz}>Size: {sz}</option>
+                          ))}
+                        </select>
+                        <select
+                          value={retailVariantColor}
+                          onChange={(e) => setRetailVariantColor(e.target.value)}
+                          className="bg-white border border-blue-300 rounded-lg px-2 py-1 text-[11px] font-bold text-slate-800"
+                        >
+                          {["Classic Black", "Navy Blue", "Ivory White", "Olive Green", "Burgundy"].map((clr) => (
+                            <option key={clr} value={clr}>Color: {clr}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] font-bold text-blue-700 bg-white px-2 py-0.5 rounded border border-blue-200">
+                          Active Tag: {retailVariantSize} / {retailVariantColor}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setActiveTab("sector-variants")}
+                          className="px-2 py-0.5 rounded text-[10px] font-bold cursor-pointer bg-indigo-600 text-white hover:bg-indigo-700"
+                        >
+                          Open Variant Matrix →
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Fashion & Garment: Size, Shade, Fit, Season & Tailoring Bar */}
+                  {activeSectorModules.garmentTailoring && (
+                    <div className={`p-3 rounded-xl space-y-2 text-xs border ${
+                      isFashionTheme
+                        ? "bg-gradient-to-r from-[#fdf2f6] via-[#fcf5f8] to-[#f8eaf1] border-rose-200"
+                        : "bg-rose-50/80 border-rose-200"
+                    }`}>
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <span className="font-extrabold text-[#831843] text-[11px] uppercase tracking-wider">
+                          👗 Fashion &amp; Garment Size, Shade, Fit &amp; Tailoring
+                        </span>
+                        <div className="flex items-center gap-2">
+                          <span className="text-[10px] font-bold text-[#831843] bg-white px-2 py-0.5 rounded border border-rose-200">
+                            {retailVariantSize} • {retailVariantColor} • {fashionFit}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => setActiveTab("sector-fashion")}
+                            className="px-2.5 py-0.5 rounded-lg text-[10px] font-bold cursor-pointer bg-[#831843] text-white hover:bg-[#580c2b] transition-colors"
+                          >
+                            Open Garment &amp; Tailoring Studio →
+                          </button>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 sm:grid-cols-6 gap-2">
+                        <select
+                          value={retailVariantSize}
+                          onChange={(e) => setRetailVariantSize(e.target.value)}
+                          className="bg-white border border-rose-200 rounded-lg px-2 py-1.5 text-[11px] font-bold text-slate-800 outline-none"
+                        >
+                          {["XS", "S", "M", "L", "XL", "XXL", "3XL", "28", "30", "32", "34", "36"].map((sz) => (
+                            <option key={sz} value={sz}>Size: {sz}</option>
+                          ))}
+                        </select>
+                        <select
+                          value={retailVariantColor}
+                          onChange={(e) => setRetailVariantColor(e.target.value)}
+                          className="bg-white border border-rose-200 rounded-lg px-2 py-1.5 text-[11px] font-bold text-slate-800 outline-none"
+                        >
+                          {["Ivory Cream", "Midnight Navy", "Burgundy Rose", "Olive Sage", "Jet Black", "Indigo Denim", "Mustard Gold"].map((clr) => (
+                            <option key={clr} value={clr}>{clr}</option>
+                          ))}
+                        </select>
+                        <select
+                          value={fashionFit}
+                          onChange={(e) => setFashionFit(e.target.value)}
+                          className="bg-white border border-rose-200 rounded-lg px-2 py-1.5 text-[11px] font-bold text-slate-800 outline-none"
+                        >
+                          {["Slim Fit", "Regular Fit", "Tailored Fit", "Relaxed Ethnic"].map((f) => (
+                            <option key={f} value={f}>{f}</option>
+                          ))}
+                        </select>
+                        <select
+                          value={fashionSeason}
+                          onChange={(e) => setFashionSeason(e.target.value)}
+                          className="bg-white border border-rose-200 rounded-lg px-2 py-1.5 text-[11px] font-bold text-slate-800 outline-none"
+                        >
+                          {["SS 2026", "Festive 2026", "AW 2026"].map((s) => (
+                            <option key={s} value={s}>{s}</option>
+                          ))}
+                        </select>
+                        <input
+                          type="text"
+                          value={fashionAlterationNote}
+                          onChange={(e) => setFashionAlterationNote(e.target.value)}
+                          placeholder="Alteration note (optional)"
+                          className="bg-white border border-rose-200 rounded-lg px-2 py-1.5 text-[11px] font-medium text-slate-800 outline-none"
+                        />
+                        <input
+                          type="date"
+                          value={fashionAlterationDate}
+                          onChange={(e) => setFashionAlterationDate(e.target.value)}
+                          title="Alteration Ready Date"
+                          className="bg-white border border-rose-200 rounded-lg px-2 py-1.5 text-[11px] font-mono font-semibold text-slate-800 outline-none"
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Services & Salon: Appointment Slot & Stylist Assignment */}
+                  {activeSectorModules.appointmentsBooking && (
+                    <div className="p-3 bg-purple-50/80 border border-purple-200 rounded-xl space-y-2 text-xs">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="font-extrabold text-purple-900 text-[11px] uppercase tracking-wider block">
+                          ✂️ Salon / Service Appointment &amp; Stylist Assignment
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setActiveTab("sector-appointments")}
+                          className="px-2 py-0.5 rounded text-[10px] font-bold cursor-pointer bg-violet-700 text-white hover:bg-violet-800"
+                        >
+                          Open Appointment Board →
+                        </button>
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                        <select
+                          value={serviceTimeSlot}
+                          onChange={(e) => setServiceTimeSlot(e.target.value)}
+                          className="bg-white border border-purple-300 rounded-lg px-2.5 py-1.5 text-xs font-bold text-slate-800"
+                        >
+                          {["10:00 AM", "11:30 AM", "01:00 PM", "03:30 PM", "05:00 PM", "06:30 PM"].map((slot) => (
+                            <option key={slot} value={slot}>Slot: {slot}</option>
+                          ))}
+                        </select>
+                        <select
+                          value={serviceStylist}
+                          onChange={(e) => setServiceStylist(e.target.value)}
+                          className="bg-white border border-purple-300 rounded-lg px-2.5 py-1.5 text-xs font-bold text-slate-800"
+                        >
+                          {["Meera K. (Senior Stylist)", "Vikram S. (Hair Specialist)", "Riya D. (Skin Therapist)", "Arjun P. (Spa Lead)"].map((st) => (
+                            <option key={st} value={st}>{st}</option>
+                          ))}
+                        </select>
+                        <select
+                          value={serviceDuration}
+                          onChange={(e) => setServiceDuration(e.target.value)}
+                          className="bg-white border border-purple-300 rounded-lg px-2.5 py-1.5 text-xs font-bold text-slate-800"
+                        >
+                          {["30 Min", "45 Min", "60 Min", "90 Min", "120 Min"].map((d) => (
+                            <option key={d} value={d}>Duration: {d}</option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+                  )}
+                  {/* PG & Hostel: Room, Bed & Monthly Rent Billing Bar */}
+                  {activeSectorModules.roomBedManagement && (
+                    <div className={`p-3 rounded-xl space-y-2 text-xs border ${
+                      isPgHostelTheme
+                        ? "bg-gradient-to-r from-[#eaf8f6] via-[#f1fbf9] to-[#e4f5f3] border-teal-200"
+                        : "bg-teal-50/80 border-teal-200"
+                    }`}>
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <span className="font-extrabold text-[#0f766e] text-[11px] uppercase tracking-wider">
+                          🛏️ PG &amp; Hostel Room, Bed &amp; Monthly Rent Assignment
+                        </span>
+                        <div className="flex items-center gap-2">
+                          <span className="text-[10px] font-bold text-[#0f766e] bg-white px-2 py-0.5 rounded border border-teal-200">
+                            {pgRoomNo} / {pgBedNo} • {pgOccupancyType}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => setActiveTab("sector-pg-hostel")}
+                            className="px-2.5 py-0.5 rounded-lg text-[10px] font-bold cursor-pointer bg-[#0f766e] text-white hover:bg-[#0c5d57] transition-colors"
+                          >
+                            Open Room &amp; Resident Board →
+                          </button>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-4 gap-2">
+                        <select
+                          value={pgRoomNo}
+                          onChange={(e) => {
+                            const nextRoom = e.target.value;
+                            setPgRoomNo(nextRoom);
+                            const roomObj = PG_HOSTEL_ROOMS.find((r) => r.roomNo === nextRoom);
+                            if (roomObj) {
+                              setPgOccupancyType(roomObj.occupancyType);
+                              if (!roomObj.beds.includes(pgBedNo)) {
+                                setPgBedNo(roomObj.beds[0]);
+                              }
+                            }
+                          }}
+                          className="bg-white border border-teal-200 rounded-lg px-2.5 py-1.5 text-xs font-bold text-slate-800 outline-none"
+                        >
+                          {PG_HOSTEL_ROOMS.map((r) => (
+                            <option key={r.roomNo} value={r.roomNo}>{r.roomNo} ({r.occupancyType})</option>
+                          ))}
+                        </select>
+                        <select
+                          value={pgBedNo}
+                          onChange={(e) => setPgBedNo(e.target.value)}
+                          className="bg-white border border-teal-200 rounded-lg px-2.5 py-1.5 text-xs font-bold text-slate-800 outline-none"
+                        >
+                          {(PG_HOSTEL_ROOMS.find((r) => r.roomNo === pgRoomNo)?.beds || ["Bed A", "Bed B"]).map((b) => (
+                            <option key={b} value={b}>{b}</option>
+                          ))}
+                        </select>
+                        <select
+                          value={pgBillingMonth}
+                          onChange={(e) => setPgBillingMonth(e.target.value)}
+                          className="bg-white border border-teal-200 rounded-lg px-2.5 py-1.5 text-xs font-bold text-slate-800 outline-none"
+                        >
+                          {["Oct 2026", "Nov 2026", "Dec 2026", "Jan 2027"].map((m) => (
+                            <option key={m} value={m}>Month: {m}</option>
+                          ))}
+                        </select>
+                        <select
+                          value={pgMessPlan}
+                          onChange={(e) => setPgMessPlan(e.target.value)}
+                          className="bg-white border border-teal-200 rounded-lg px-2.5 py-1.5 text-xs font-bold text-slate-800 outline-none"
+                        >
+                          {["3-Meal Home Mess", "2-Meal Tiffin Plan", "Breakfast Only", "Room Only (No Mess)"].map((plan) => (
+                            <option key={plan} value={plan}>{plan}</option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {/* ⚡ SKU CODE DIRECT SEARCH & BILLING PANEL */}
-                <div className={`p-4 rounded-xl border space-y-3 ${bgMode.cardBg} border-emerald-500/40 shadow-md relative bg-gradient-to-r from-emerald-500/5 via-transparent to-blue-500/5`} id="sku-billing-search-panel">
+                <div className={`p-4 ${
+                  isRestaurantTheme
+                    ? "rounded-2xl border-amber-200/80 bg-white shadow-xs"
+                    : isPharmacyTheme
+                    ? "rounded-2xl border-sky-100 bg-white shadow-xs"
+                    : isPgHostelTheme
+                    ? "rounded-2xl border-teal-100 bg-white shadow-xs"
+                    : isFashionTheme
+                    ? "rounded-2xl border-rose-100 bg-white shadow-xs"
+                    : isSupermarketTheme
+                    ? "rounded-2xl border-emerald-100 bg-white shadow-xs"
+                    : "rounded-xl border-emerald-500/40 shadow-md bg-gradient-to-r from-emerald-500/5 via-transparent to-blue-500/5"
+                } border space-y-3 ${!isSectorRichTheme ? bgMode.cardBg : ""} relative`} id="sku-billing-search-panel">
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                     <div className="flex items-center gap-2.5">
-                      <div className="p-2 bg-emerald-500/10 text-emerald-600 rounded-lg shrink-0">
+                      <div className={`p-2.5 ${
+                        isRestaurantTheme
+                          ? "bg-rose-50 text-[#7a111a] rounded-xl"
+                          : isPharmacyTheme
+                          ? "bg-sky-100 text-[#07569e] rounded-xl"
+                          : isPgHostelTheme
+                          ? "bg-teal-100 text-[#0f766e] rounded-xl"
+                          : isFashionTheme
+                          ? "bg-rose-100 text-[#831843] rounded-xl"
+                          : isSupermarketTheme
+                          ? "bg-emerald-100 text-[#0e6b2e] rounded-xl"
+                          : "bg-emerald-500/10 text-emerald-600 rounded-lg"
+                      } shrink-0`}>
                         <Barcode className="w-5 h-5" />
                       </div>
                       <div>
                         <h3 className={`text-sm font-black flex items-center gap-2 ${bgMode.textHeading}`}>
-                          SKU Code Search &amp; Billing Selection
-                          <span className="text-[9px] font-mono bg-emerald-500 text-slate-900 font-extrabold px-2 py-0.5 rounded-full uppercase tracking-wider">
+                          {isPgHostelTheme ? "Select Fee Plan / Room Rent or Scan SKU" : isFashionTheme ? "Scan Garment Hang-Tag or Select Style SKU" : isSectorRichTheme ? "Scan or Select Product to Add" : "SKU Code Search & Billing Selection"}
+                          <span className={`text-[9px] font-mono font-extrabold px-2 py-0.5 rounded-full uppercase tracking-wider ${
+                            isRestaurantTheme
+                              ? "bg-rose-100 text-[#7a111a]"
+                              : isPharmacyTheme
+                              ? "bg-[#e0f2fe] text-[#07569e]"
+                              : isPgHostelTheme
+                              ? "bg-[#ccfbf1] text-[#0f766e]"
+                              : isFashionTheme
+                              ? "bg-rose-100 text-[#831843]"
+                              : isSupermarketTheme
+                              ? "bg-[#dcfce7] text-[#15803d]"
+                              : "bg-emerald-500 text-slate-900"
+                          }`}>
                             Instant Add
                           </span>
                         </h3>
                         <p className={`text-[11px] ${bgMode.textMuted}`}>
-                          Scan or enter SKU code to auto-identify Product Name, Price, Stock &amp; GST details for immediate billing.
+                          {isRestaurantTheme
+                            ? "Scan barcode or search food items, beverages, or menu combos by name or SKU."
+                            : isPharmacyTheme
+                            ? "Scan barcode or search medicine, healthcare product by name, SKU, or batch."
+                            : isPgHostelTheme
+                            ? "Select monthly room rent, mess meal plan, security deposit, electricity meter, or laundry fee by SKU."
+                            : isFashionTheme
+                            ? "Scan garment hang-tag or search kurtas, shirts, denim, footwear, and tailoring fees by SKU."
+                            : "Scan or enter SKU code to auto-identify Product Name, Price, Stock & GST details for immediate billing."}
                         </p>
                       </div>
                     </div>
@@ -4366,14 +6252,26 @@ export default function App() {
                       <button
                         type="button"
                         onClick={() => setIsMultiBillModalOpen(true)}
-                        className="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-[11px] font-bold inline-flex items-center gap-1.5 shadow-sm transition-all cursor-pointer mr-1"
+                        className={`px-3 py-1.5 ${
+                          isRestaurantTheme
+                            ? "bg-[#7a111a] hover:bg-[#5c0b12] rounded-xl"
+                            : isPharmacyTheme
+                            ? "bg-[#07569e] hover:bg-[#05417a] rounded-xl"
+                            : isPgHostelTheme
+                            ? "bg-[#0f766e] hover:bg-[#0c5d57] rounded-xl"
+                            : isFashionTheme
+                            ? "bg-[#831843] hover:bg-[#580c2b] rounded-xl"
+                            : isSupermarketTheme
+                            ? "bg-[#0d4d23] hover:bg-[#093819] rounded-xl"
+                            : "bg-slate-900 hover:bg-slate-800 rounded-lg"
+                        } text-white text-[11px] font-bold inline-flex items-center gap-1.5 shadow-sm transition-all cursor-pointer mr-1`}
                         title="Create and print bills & official receipts for multiple customers simultaneously"
                       >
-                        <Users className="w-3.5 h-3.5 text-emerald-400" />
+                        <Users className={`w-3.5 h-3.5 ${isRestaurantTheme ? "text-amber-200" : isPharmacyTheme ? "text-sky-200" : isPgHostelTheme ? "text-teal-200" : isFashionTheme ? "text-rose-200" : "text-emerald-300"}`} />
                         <span>Multi-Customer Bills &amp; Receipts</span>
                       </button>
                       <span className="text-[10px] font-mono text-slate-400 font-semibold">Quick SKUs:</span>
-                      {tenantProducts.slice(0, 5).map((p) => (
+                      {sectorScopedProducts.slice(0, 5).map((p) => (
                         <button
                           key={p.id}
                           type="button"
@@ -4381,7 +6279,19 @@ export default function App() {
                             setSkuSearchInput(p.sku);
                             setSelectedSkuProduct(p);
                           }}
-                          className="px-2 py-0.5 text-[10px] font-mono bg-slate-100 dark:bg-slate-800 hover:bg-emerald-600 hover:text-white rounded text-slate-700 dark:text-slate-300 transition-all border border-slate-200/60 cursor-pointer font-bold"
+                          className={`px-2 py-0.5 text-[10px] font-mono ${isPharmacyTheme ? "rounded-full" : "rounded-lg"} transition-all border cursor-pointer font-bold ${
+                            isRestaurantTheme
+                              ? "bg-[#fdf4e3] hover:bg-[#7a111a] hover:text-white text-[#7a111a] border-amber-200"
+                              : isPharmacyTheme
+                              ? "bg-[#f0f7fe] hover:bg-[#07569e] hover:text-white text-[#07569e] border-sky-200"
+                              : isPgHostelTheme
+                              ? "bg-[#effaf9] hover:bg-[#0f766e] hover:text-white text-[#0f766e] border-teal-200"
+                              : isFashionTheme
+                              ? "bg-[#fdf4f7] hover:bg-[#831843] hover:text-white text-[#831843] border-rose-200"
+                              : isSupermarketTheme
+                              ? "bg-[#effaf2] hover:bg-[#169343] hover:text-white text-[#0f5132] border-emerald-200"
+                              : "bg-slate-100 dark:bg-slate-800 hover:bg-emerald-600 hover:text-white text-slate-700 dark:text-slate-300 border-slate-200/60"
+                          }`}
                           title={`Click to preview ${p.name}`}
                         >
                           {p.sku}
@@ -4396,7 +6306,17 @@ export default function App() {
                       <div className="relative flex-1">
                         <input
                           type="text"
-                          placeholder="Enter or scan SKU Code (e.g. BEV-COL-ZC, GRN-BAS-R5, DRY-BUT-AM)..."
+                          placeholder={
+                            isRestaurantTheme
+                              ? "Enter or scan SKU Code (e.g. F&B-001, FOOD-001, BEV-001)..."
+                              : isPharmacyTheme
+                              ? "Enter or scan SKU Code (e.g. MED-001, SUP-002, HC-003)..."
+                              : isPgHostelTheme
+                              ? "Enter SKU Code (e.g. PG-RNT-2AC, PG-MES-01, PG-DEP-01)..."
+                              : isFashionTheme
+                              ? "Enter or scan SKU Code (e.g. FSH-ETH-01, FSH-SHT-02, FSH-DNM-03)..."
+                              : "Enter or scan SKU Code (e.g. BEV-COL-ZC, GRN-BAS-R5, DRY-BUT-AM)..."
+                          }
                           value={skuSearchInput}
                           onChange={(e) => {
                             const val = e.target.value;
@@ -4408,9 +6328,19 @@ export default function App() {
                               setSelectedSkuProduct(null);
                             }
                           }}
-                          className={`w-full pl-9 pr-8 py-2.5 text-xs font-mono font-bold border rounded-xl outline-none focus:ring-2 focus:ring-emerald-500/40 transition-all ${bgMode.inputBg} ${bgMode.border}`}
+                          className={`w-full pl-9 pr-8 py-2.5 text-xs font-mono font-bold border rounded-xl outline-none focus:ring-2 ${
+                            isRestaurantTheme
+                              ? "focus:ring-rose-500/30"
+                              : isPharmacyTheme
+                              ? "focus:ring-sky-500/35"
+                              : isPgHostelTheme
+                              ? "focus:ring-teal-500/35"
+                              : isFashionTheme
+                              ? "focus:ring-rose-500/35"
+                              : "focus:ring-emerald-500/40"
+                          } transition-all ${bgMode.inputBg} ${bgMode.border}`}
                         />
-                        <Barcode className="w-4 h-4 absolute left-3 top-3 text-emerald-500" />
+                        <Barcode className={`w-4 h-4 absolute left-3 top-3 ${isRestaurantTheme ? "text-[#7a111a]" : isPharmacyTheme ? "text-[#07569e]" : isPgHostelTheme ? "text-[#0f766e]" : isFashionTheme ? "text-[#831843]" : "text-[#169343]"}`} />
                         {skuSearchInput && (
                           <button
                             type="button"
@@ -4426,21 +6356,47 @@ export default function App() {
                       </div>
 
                       <div className="flex items-center gap-2 shrink-0">
-                        <div className="flex items-center border rounded-xl overflow-hidden bg-slate-50 dark:bg-slate-800 border-slate-200/80">
-                          <span className="px-2 text-[10px] font-mono font-bold text-slate-400 uppercase">Qty</span>
+                        <div className={`flex items-center border rounded-xl overflow-hidden ${
+                          isRestaurantTheme
+                            ? "bg-[#fdf8ef] border-amber-200"
+                            : isPharmacyTheme
+                            ? "bg-[#f4f9fe] border-sky-200"
+                            : isPgHostelTheme
+                            ? "bg-[#f3fbfa] border-teal-200"
+                            : isFashionTheme
+                            ? "bg-[#fdf6f9] border-rose-200"
+                            : isSupermarketTheme
+                            ? "bg-[#f5fbf7] border-emerald-200"
+                            : "bg-slate-50 dark:bg-slate-800 border-slate-200/80"
+                        }`}>
+                          <span className="px-2.5 text-[10px] font-mono font-bold text-slate-500 uppercase">Qty</span>
                           <input
                             type="number"
                             min={1}
                             max={999}
                             value={skuQuantityInput}
                             onChange={(e) => setSkuQuantityInput(Math.max(1, parseInt(e.target.value) || 1))}
-                            className="w-12 py-2 text-center text-xs font-mono font-bold bg-transparent outline-none border-l border-slate-200/80"
+                            className={`w-12 py-2 text-center text-xs font-mono font-bold bg-transparent outline-none border-l ${
+                              isRestaurantTheme ? "border-amber-200" : isPharmacyTheme ? "border-sky-200" : isPgHostelTheme ? "border-teal-200" : isFashionTheme ? "border-rose-200" : isSupermarketTheme ? "border-emerald-200" : "border-slate-200/80"
+                            }`}
                           />
                         </div>
 
                         <button
                           type="submit"
-                          className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold flex items-center gap-2 shadow-md hover:shadow-lg transition-all cursor-pointer shrink-0"
+                          className={`px-4 py-2.5 ${
+                            isRestaurantTheme
+                              ? "bg-gradient-to-r from-[#6d0f17] to-[#8c1620] hover:from-[#570b12] hover:to-[#74111a]"
+                              : isPharmacyTheme
+                              ? "bg-gradient-to-r from-[#07569e] to-[#0d78d6] hover:from-[#05417a] hover:to-[#0a66b8]"
+                              : isPgHostelTheme
+                              ? "bg-gradient-to-r from-[#0c5d57] to-[#0d9488] hover:from-[#094743] hover:to-[#0f766e]"
+                              : isFashionTheme
+                              ? "bg-gradient-to-r from-[#701238] to-[#9d174d] hover:from-[#580c2b] hover:to-[#831843]"
+                              : isSupermarketTheme
+                              ? "bg-[#169343] hover:bg-[#127a37]"
+                              : "bg-emerald-600 hover:bg-emerald-700"
+                          } text-white rounded-xl text-xs font-bold flex items-center gap-2 shadow-md hover:shadow-lg transition-all cursor-pointer shrink-0`}
                         >
                           <PlusCircle className="w-4 h-4" />
                           <span>Add to Cart</span>
@@ -4553,20 +6509,106 @@ export default function App() {
                 </div>
 
                 {/* Local Inventory Filters */}
-                <div className={`p-4 rounded-xl border space-y-4 ${bgMode.cardBg}`}>
-                  <div className="flex items-center justify-between">
-                    <h3 className={`text-sm font-bold flex items-center gap-2 ${bgMode.textHeading}`}>
-                      <ShoppingBag className="w-4 h-4 text-emerald-500" />
-                      Browse Catalogue / Click item to Add to Cart
-                    </h3>
-                    <div className="flex gap-1">
+                <div className={`p-4 ${isSectorRichTheme ? "rounded-2xl" : "rounded-xl"} border space-y-4 ${bgMode.cardBg}`}>
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <h3 className={`text-sm font-bold flex items-center gap-2 ${bgMode.textHeading}`}>
+                        <ShoppingBag className={`w-4 h-4 ${isRestaurantTheme ? "text-[#7a111a]" : isPharmacyTheme ? "text-[#07569e]" : isPgHostelTheme ? "text-[#0f766e]" : isFashionTheme ? "text-[#831843]" : isSupermarketTheme ? "text-[#169343]" : "text-emerald-500"}`} />
+                        {isPgHostelTheme ? "Browse Rent, Mess & Fee Plans / Click to Add" : isFashionTheme ? "Browse Garment Collections / Click Style to Add" : isSectorRichTheme ? "Browse Categories / Click item to Add to Cart" : "Browse Catalogue / Click item to Add to Cart"}
+                      </h3>
+                      {isDemoClient && (
+                        <div className={`flex items-center gap-1 p-0.5 rounded-lg border ${
+                          isRestaurantTheme
+                            ? "bg-[#fdf4e3] border-amber-200"
+                            : isPharmacyTheme
+                            ? "bg-[#f0f7fe] border-sky-200"
+                            : isPgHostelTheme
+                            ? "bg-[#effaf9] border-teal-200"
+                            : isFashionTheme
+                            ? "bg-[#fdf4f7] border-rose-200"
+                            : isSupermarketTheme
+                            ? "bg-[#effaf2] border-emerald-200"
+                            : "bg-slate-100 border-slate-200"
+                        }`}>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSectorCatalogFilter("sector");
+                              setCategoryFilter("All");
+                            }}
+                            className={`px-2 py-0.5 rounded text-[10px] font-bold cursor-pointer ${
+                              sectorCatalogFilter === "sector"
+                                ? isRestaurantTheme
+                                  ? "bg-[#7a111a] text-white"
+                                  : isPharmacyTheme
+                                  ? "bg-[#07569e] text-white"
+                                  : isPgHostelTheme
+                                  ? "bg-[#0f766e] text-white"
+                                  : isFashionTheme
+                                  ? "bg-[#831843] text-white"
+                                  : isSupermarketTheme
+                                  ? "bg-[#169343] text-white"
+                                  : "bg-indigo-600 text-white"
+                                : "text-slate-600 hover:text-slate-900"
+                            }`}
+                          >
+                            {activeSectorCatalog.icon} Sector Items
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSectorCatalogFilter("all");
+                              setCategoryFilter("All");
+                            }}
+                            className={`px-2 py-0.5 rounded text-[10px] font-bold cursor-pointer ${
+                              sectorCatalogFilter === "all"
+                                ? isRestaurantTheme
+                                  ? "bg-[#5c0b12] text-white"
+                                  : isPharmacyTheme
+                                  ? "bg-[#05417a] text-white"
+                                  : isPgHostelTheme
+                                  ? "bg-[#0a4a45] text-white"
+                                  : isFashionTheme
+                                  ? "bg-[#580c2b] text-white"
+                                  : isSupermarketTheme
+                                  ? "bg-[#0d4d23] text-white"
+                                  : "bg-slate-900 text-white"
+                                : "text-slate-600 hover:text-slate-900"
+                            }`}
+                          >
+                            All ({tenantProducts.length})
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex flex-wrap gap-1.5">
                       {productCategoriesList.map((cat) => (
                         <button
                           key={cat}
                           onClick={() => setCategoryFilter(cat)}
-                          className={`px-3 py-1 rounded-full text-xs font-medium cursor-pointer ${
+                          className={`px-3 py-1 rounded-full text-xs font-semibold cursor-pointer transition-colors ${
                             categoryFilter === cat
-                              ? "bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900"
+                              ? isRestaurantTheme
+                                ? "bg-[#7a111a] text-white shadow-2xs"
+                                : isPharmacyTheme
+                                ? "bg-[#07569e] text-white shadow-2xs"
+                                : isPgHostelTheme
+                                ? "bg-[#0f766e] text-white shadow-2xs"
+                                : isFashionTheme
+                                ? "bg-[#831843] text-white shadow-2xs"
+                                : isSupermarketTheme
+                                ? "bg-[#0d4d23] text-white shadow-2xs"
+                                : "bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900"
+                              : isRestaurantTheme
+                              ? "bg-[#fdf4e3] text-[#5c0b12] hover:bg-amber-100/90"
+                              : isPharmacyTheme
+                              ? "bg-[#f0f7fe] text-slate-700 hover:bg-sky-100/80"
+                              : isPgHostelTheme
+                              ? "bg-[#effaf9] text-slate-700 hover:bg-teal-100/80"
+                              : isFashionTheme
+                              ? "bg-[#fdf4f7] text-[#831843] hover:bg-rose-100/80"
+                              : isSupermarketTheme
+                              ? "bg-[#f2f9f4] text-slate-700 hover:bg-emerald-100/80"
                               : `${bgMode.inputBg} ${bgMode.textMuted} hover:opacity-80`
                           }`}
                         >
@@ -4581,30 +6623,218 @@ export default function App() {
                     <div className="relative flex-1">
                       <input
                         type="text"
-                        placeholder="Search barcode, description, SKU..."
+                        placeholder="Search products, description, SKU..."
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
-                        className={`w-full pl-9 pr-4 py-2 border rounded-lg text-xs outline-none ${bgMode.inputBg} ${bgMode.border}`}
+                        className={`w-full pl-9 pr-4 py-2 border ${isSectorRichTheme ? "rounded-xl" : "rounded-lg"} text-xs outline-none ${bgMode.inputBg} ${bgMode.border}`}
                       />
                       <Search className={`w-3.5 h-3.5 absolute left-3 top-3 ${bgMode.textMuted}`} />
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => openLabelGeneratorModal(null)}
-                      className="px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 shrink-0 transition-colors cursor-pointer shadow-sm"
-                      title="Open Product Barcode & Shelf Label Generator"
-                    >
-                      <Tag className="w-3.5 h-3.5" />
-                      <span>Print Labels</span>
-                    </button>
+                    {activeSectorModules.barcodeLabelPrinting && (
+                      <button
+                        type="button"
+                        onClick={() => openLabelGeneratorModal(null)}
+                        className={`px-3.5 py-2 ${
+                          isRestaurantTheme
+                            ? "bg-[#7a111a] hover:bg-[#5c0b12] rounded-xl"
+                            : isPharmacyTheme
+                            ? "bg-[#07569e] hover:bg-[#05417a] rounded-xl"
+                            : isPgHostelTheme
+                            ? "bg-[#0f766e] hover:bg-[#0c5d57] rounded-xl"
+                            : isFashionTheme
+                            ? "bg-[#831843] hover:bg-[#580c2b] rounded-xl"
+                            : isSupermarketTheme
+                            ? "bg-[#169343] hover:bg-[#127a37] rounded-xl"
+                            : "bg-emerald-600 hover:bg-emerald-700 rounded-lg"
+                        } text-white text-xs font-bold flex items-center gap-1.5 shrink-0 transition-colors cursor-pointer shadow-sm`}
+                        title="Open Product Barcode & Shelf Label Generator"
+                      >
+                        <Tag className="w-3.5 h-3.5" />
+                        <span>{isFashionTheme ? "Print Hang Tags" : "Print Labels"}</span>
+                      </button>
+                    )}
                   </div>
 
                   {/* Catalogue Grid */}
-                  <div className="grid grid-cols-3 gap-3 overflow-y-auto max-h-[360px] pr-2">
+                  <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 overflow-y-auto max-h-[380px] pr-1">
                     {filteredProductsBySearch.length > 0 ? (
                       filteredProductsBySearch.map((product) => {
                         const localStock = getProductStock(product);
                         const isLowStock = localStock <= product.minStockAlert;
+                        const discountPct =
+                          product.mrp && product.mrp > product.price
+                            ? Math.round(((product.mrp - product.price) / product.mrp) * 100)
+                            : 0;
+                        const cartEntry = cartItems.find((i) => i.productId === product.id);
+                        const qtyInCart = cartEntry ? cartEntry.quantity : 0;
+
+                        if (isSectorRichTheme) {
+                          return (
+                            <div
+                              key={product.id}
+                              onClick={() => handleAddToCart(product)}
+                              className={`p-3.5 rounded-2xl bg-white border ${
+                                isRestaurantTheme
+                                  ? "border-amber-200/75 hover:border-[#7a111a]/45"
+                                  : isPharmacyTheme
+                                  ? "border-sky-100 hover:border-sky-400"
+                                  : isPgHostelTheme
+                                  ? "border-teal-100 hover:border-teal-400"
+                                  : isFashionTheme
+                                  ? "border-rose-100 hover:border-rose-400"
+                                  : "border-emerald-100 hover:border-emerald-400"
+                              } cursor-pointer transition-all hover:shadow-md relative group flex flex-col justify-between`}
+                            >
+                              <div className="flex items-start gap-3">
+                                {isRestaurantTheme ? (
+                                  <RestaurantProductThumb name={product.name} category={product.category} />
+                                ) : isPharmacyTheme ? (
+                                  <PharmaProductThumb name={product.name} category={product.category} />
+                                ) : isPgHostelTheme ? (
+                                  <PgHostelProductThumb name={product.name} category={product.category} />
+                                ) : isFashionTheme ? (
+                                  <FashionProductThumb name={product.name} category={product.category} />
+                                ) : (
+                                  <GroceryProductThumb name={product.name} category={product.category} />
+                                )}
+                                <div className="min-w-0 flex-1">
+                                  <div className="flex items-start justify-between gap-1.5">
+                                    <h4 className={`text-xs font-extrabold text-slate-900 line-clamp-2 ${
+                                      isRestaurantTheme
+                                        ? "group-hover:text-[#7a111a]"
+                                        : isPharmacyTheme
+                                        ? "group-hover:text-[#07569e]"
+                                        : isPgHostelTheme
+                                        ? "group-hover:text-[#0f766e]"
+                                        : isFashionTheme
+                                        ? "group-hover:text-[#831843]"
+                                        : "group-hover:text-[#0e6b2e]"
+                                    } transition-colors leading-snug`}>
+                                      {product.name}
+                                    </h4>
+                                    {discountPct > 0 && (
+                                      <span className="shrink-0 text-[9px] font-black px-1.5 py-0.5 rounded-full bg-rose-50 text-rose-600 border border-rose-200">
+                                        {discountPct}% OFF
+                                      </span>
+                                    )}
+                                  </div>
+                                  <p className="text-[10px] font-mono text-slate-500 mt-1 truncate">
+                                    SKU: {product.sku}
+                                  </p>
+                                  <p className="text-[10px] font-mono text-slate-400 truncate">
+                                    {isRestaurantTheme || isPgHostelTheme || isFashionTheme ? `Category: ${product.category}` : `Barcode: ${product.barcode}`}
+                                  </p>
+                                </div>
+                              </div>
+
+                              <div className={`mt-3 pt-2.5 border-t ${
+                                isRestaurantTheme ? "border-amber-100" : isPharmacyTheme ? "border-sky-50" : isPgHostelTheme ? "border-teal-50" : isFashionTheme ? "border-rose-50" : "border-emerald-50"
+                              } flex items-center justify-between gap-2`}>
+                                <div>
+                                  <div className="flex items-baseline gap-1.5">
+                                    <span className="text-sm font-black font-mono text-slate-900">
+                                      ₹{product.price.toFixed(2)}
+                                    </span>
+                                    {product.mrp && product.mrp > product.price && (
+                                      <span className="text-[10px] font-mono line-through text-slate-400">
+                                        ₹{product.mrp.toFixed(0)}
+                                      </span>
+                                    )}
+                                  </div>
+                                  <span className={`text-[10px] font-bold block ${isLowStock ? "text-rose-500" : "text-[#169343]"}`}>
+                                    {isPgHostelTheme ? `Available (${localStock} ${product.unit})` : isLowStock ? `Low (${localStock} ${product.unit})` : `In Stock (${localStock})`}
+                                  </span>
+                                </div>
+
+                                <div className="flex items-center gap-1.5">
+                                  {qtyInCart > 0 && (
+                                    <div
+                                      onClick={(e) => e.stopPropagation()}
+                                      className={`flex items-center border rounded-lg px-1 py-0.5 text-[11px] font-mono font-bold text-slate-800 ${
+                                        isRestaurantTheme
+                                          ? "bg-[#fdf4e3] border-amber-200"
+                                          : isPharmacyTheme
+                                          ? "bg-[#f0f7fe] border-sky-200"
+                                          : isPgHostelTheme
+                                          ? "bg-[#effaf9] border-teal-200"
+                                          : isFashionTheme
+                                          ? "bg-[#fdf4f7] border-rose-200"
+                                          : "bg-[#f2f9f4] border-emerald-200"
+                                      }`}
+                                    >
+                                      <button
+                                        type="button"
+                                        onClick={() => handleUpdateCartQuantity(product.id, -1)}
+                                        className="p-0.5 hover:text-rose-600 cursor-pointer"
+                                        title="Decrease quantity"
+                                      >
+                                        <Minus className="w-3 h-3" />
+                                      </button>
+                                      <span className="px-1.5">{qtyInCart}</span>
+                                      <button
+                                        type="button"
+                                        onClick={() => handleAddToCart(product)}
+                                        className={`p-0.5 cursor-pointer ${
+                                          isRestaurantTheme ? "hover:text-[#7a111a]" : isPharmacyTheme ? "hover:text-[#07569e]" : isPgHostelTheme ? "hover:text-[#0f766e]" : isFashionTheme ? "hover:text-[#831843]" : "hover:text-[#169343]"
+                                        }`}
+                                        title="Increase quantity"
+                                      >
+                                        <Plus className="w-3 h-3" />
+                                      </button>
+                                    </div>
+                                  )}
+
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleAddToCart(product);
+                                    }}
+                                    className={`px-2.5 py-1.5 rounded-lg ${
+                                      isRestaurantTheme
+                                        ? "bg-[#7a111a] hover:bg-[#5c0b12]"
+                                        : isPharmacyTheme
+                                        ? "bg-[#07569e] hover:bg-[#05417a]"
+                                        : isPgHostelTheme
+                                        ? "bg-[#0f766e] hover:bg-[#0c5d57]"
+                                        : isFashionTheme
+                                        ? "bg-[#831843] hover:bg-[#580c2b]"
+                                        : "bg-[#169343] hover:bg-[#127a37]"
+                                    } text-white text-[11px] font-bold inline-flex items-center gap-1 shadow-xs cursor-pointer transition-colors`}
+                                  >
+                                    <ShoppingCart className="w-3 h-3" />
+                                    <span>Add</span>
+                                  </button>
+
+                                  {activeSectorModules.barcodeLabelPrinting && (
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        openLabelGeneratorModal(product);
+                                      }}
+                                      className={`p-1.5 rounded-lg transition-colors border cursor-pointer ${
+                                        isRestaurantTheme
+                                          ? "bg-[#fdf4e3] hover:bg-[#7a111a] hover:text-white text-[#7a111a] border-amber-200"
+                                          : isPharmacyTheme
+                                          ? "bg-[#f0f7fe] hover:bg-[#07569e] hover:text-white text-[#07569e] border-sky-200"
+                                          : isPgHostelTheme
+                                          ? "bg-[#effaf9] hover:bg-[#0f766e] hover:text-white text-[#0f766e] border-teal-200"
+                                          : isFashionTheme
+                                          ? "bg-[#fdf4f7] hover:bg-[#831843] hover:text-white text-[#831843] border-rose-200"
+                                          : "bg-[#effaf2] hover:bg-[#0d4d23] hover:text-white text-[#0e6b2e] border-emerald-200"
+                                      }`}
+                                      title="Generate & print barcode label for this product"
+                                    >
+                                      <Tag className="w-3 h-3" />
+                                    </button>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        }
+
                         return (
                           <div
                             key={product.id}
@@ -4634,17 +6864,19 @@ export default function App() {
                                 <span className="text-[10px] bg-emerald-500/10 text-emerald-400 px-1 rounded font-bold">
                                   GST {product.gstRate}%
                                 </span>
-                                <button
-                                  type="button"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    openLabelGeneratorModal(product);
-                                  }}
-                                  className="p-1 rounded bg-slate-100 dark:bg-slate-800 hover:bg-emerald-500 hover:text-white transition-colors text-slate-500 cursor-pointer"
-                                  title="Generate & print barcode label for this product"
-                                >
-                                  <Tag className="w-3 h-3" />
-                                </button>
+                                {activeSectorModules.barcodeLabelPrinting && (
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      openLabelGeneratorModal(product);
+                                    }}
+                                    className="p-1 rounded bg-slate-100 dark:bg-slate-800 hover:bg-emerald-500 hover:text-white transition-colors text-slate-500 cursor-pointer"
+                                    title="Generate & print barcode label for this product"
+                                  >
+                                    <Tag className="w-3 h-3" />
+                                  </button>
+                                )}
                               </div>
                             </div>
                           </div>
@@ -4668,7 +6900,7 @@ export default function App() {
                       Scan product quickly using ready test inputs. Type or click below:
                     </p>
                     <div className="flex flex-wrap gap-1.5">
-                      {tenantProducts.slice(0, 6).map((p) => (
+                      {sectorScopedProducts.slice(0, 6).map((p) => (
                         <button
                           key={p.id}
                           onClick={() => {
@@ -4806,24 +7038,62 @@ export default function App() {
               </div>
 
               {/* ACTIVE CART DRAWER (RIGHT PANEL) - Exact Sleek Style */}
-              <div className={`w-80 shrink-0 border rounded-2xl shadow-xl flex flex-col h-[750px] ${bgMode.cardBg}`}>
-                <div className="bg-slate-900 p-4 text-white rounded-t-2xl">
+              <div className={`w-80 shrink-0 border rounded-2xl shadow-xl flex flex-col h-[750px] overflow-hidden ${bgMode.cardBg}`}>
+                <div className={`${
+                  isRestaurantTheme
+                    ? "bg-gradient-to-r from-[#4d090f] via-[#7a111a] to-[#8c1620]"
+                    : isPharmacyTheme
+                    ? "bg-gradient-to-r from-[#064580] via-[#0a60af] to-[#0d78d6]"
+                    : isPgHostelTheme
+                    ? "bg-gradient-to-r from-[#0a4a45] via-[#0f766e] to-[#0d9488]"
+                    : isFashionTheme
+                    ? "bg-gradient-to-r from-[#580c2b] via-[#831843] to-[#9d174d]"
+                    : isSupermarketTheme
+                    ? "bg-gradient-to-r from-[#0b4d21] via-[#0f6b2e] to-[#169343]"
+                    : "bg-slate-900"
+                } p-4 text-white rounded-t-2xl`}>
                   <div className="flex justify-between items-center">
                     <h4 className="font-display font-bold text-sm tracking-tight flex items-center gap-1.5">
-                      <ShoppingCart className="w-4 h-4 text-emerald-400" />
-                      Active Checkout Cart
+                      {isRestaurantTheme ? (
+                        <ChefHatIcon className="w-4 h-4 text-amber-200" />
+                      ) : isPharmacyTheme ? (
+                        <MedicalCrossIcon className="w-4 h-4 text-sky-200" />
+                      ) : isPgHostelTheme ? (
+                        <BedDouble className="w-4 h-4 text-teal-200" />
+                      ) : isFashionTheme ? (
+                        <Shirt className="w-4 h-4 text-rose-200" />
+                      ) : (
+                        <ShoppingCart className={`w-4 h-4 ${isSupermarketTheme ? "text-emerald-200" : "text-emerald-400"}`} />
+                      )}
+                      {isPharmacyTheme ? "Checkout Cart" : isPgHostelTheme ? "Rent & Fee Cart" : isFashionTheme ? "Boutique Checkout Cart" : "Active Checkout Cart"}
                     </h4>
-                    <span className="text-[9px] font-mono px-2 py-0.5 bg-emerald-500 text-slate-900 font-bold rounded">
-                      SESSION #{invoices.length + 120}
+                    <span className={`text-[9px] font-mono px-2.5 py-0.5 font-bold rounded-full ${
+                      isRestaurantTheme
+                        ? "bg-[#eab308] text-[#4d090f]"
+                        : isPharmacyTheme
+                        ? "bg-[#2196f3] text-white"
+                        : isPgHostelTheme
+                        ? "bg-[#14b8a6] text-white"
+                        : isFashionTheme
+                        ? "bg-rose-400 text-[#4d090f]"
+                        : isSupermarketTheme
+                        ? "bg-[#22c55e] text-white"
+                        : "bg-emerald-500 text-slate-900"
+                    }`}>
+                      {isSectorRichTheme ? `#${invoices.length + 10020}` : `SESSION #${invoices.length + 120}`}
                     </span>
                   </div>
-                  <p className="text-[11px] text-slate-400 mt-1">
+                  <p className={`text-[11px] mt-1 ${
+                    isRestaurantTheme ? "text-amber-100/90" : isPharmacyTheme ? "text-sky-100/90" : isPgHostelTheme ? "text-teal-100/90" : isFashionTheme ? "text-rose-100/90" : isSupermarketTheme ? "text-emerald-100/90" : "text-slate-400"
+                  }`}>
                     Cashier: {currentCashierName} • Branch: {currentBranch?.id}
                   </p>
                 </div>
 
                 {/* Quick SKU Entry Bar inside Cart Drawer */}
-                <div className={`p-2.5 border-b bg-emerald-500/5 ${bgMode.border}`}>
+                <div className={`p-2.5 border-b ${
+                  isRestaurantTheme ? "bg-[#fdf8ef]" : isPharmacyTheme ? "bg-[#f4f9fe]" : isPgHostelTheme ? "bg-[#f3fbfa]" : isFashionTheme ? "bg-[#fdf6f9]" : isSupermarketTheme ? "bg-[#f4fbf6]" : "bg-emerald-500/5"
+                } ${bgMode.border}`}>
                   <form
                     onSubmit={(e) => {
                       e.preventDefault();
@@ -4842,13 +7112,27 @@ export default function App() {
                           const exact = tenantProducts.find((p) => p.sku.toLowerCase() === val.trim().toLowerCase());
                           if (exact) setSelectedSkuProduct(exact);
                         }}
-                        className={`w-full pl-7 pr-2 py-1.5 text-xs font-mono font-bold border rounded-lg ${bgMode.inputBg} ${bgMode.border} outline-none focus:ring-1 focus:ring-emerald-500/50`}
+                        className={`w-full pl-7 pr-2 py-1.5 text-xs font-mono font-bold border rounded-lg ${bgMode.inputBg} ${bgMode.border} outline-none focus:ring-1 ${
+                          isRestaurantTheme ? "focus:ring-rose-500/40" : isPharmacyTheme ? "focus:ring-sky-500/50" : isPgHostelTheme ? "focus:ring-teal-500/50" : isFashionTheme ? "focus:ring-rose-500/50" : "focus:ring-emerald-500/50"
+                        }`}
                       />
-                      <Barcode className="w-3.5 h-3.5 absolute left-2 top-2.5 text-emerald-500" />
+                      <Barcode className={`w-3.5 h-3.5 absolute left-2 top-2.5 ${isRestaurantTheme ? "text-[#7a111a]" : isPharmacyTheme ? "text-[#07569e]" : isPgHostelTheme ? "text-[#0f766e]" : isFashionTheme ? "text-[#831843]" : "text-[#169343]"}`} />
                     </div>
                     <button
                       type="submit"
-                      className="px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold font-mono transition-all cursor-pointer shrink-0 shadow-xs flex items-center gap-1"
+                      className={`px-2.5 py-1.5 ${
+                        isRestaurantTheme
+                          ? "bg-[#7a111a] hover:bg-[#5c0b12]"
+                          : isPharmacyTheme
+                          ? "bg-[#07569e] hover:bg-[#05417a]"
+                          : isPgHostelTheme
+                          ? "bg-[#0f766e] hover:bg-[#0c5d57]"
+                          : isFashionTheme
+                          ? "bg-[#831843] hover:bg-[#580c2b]"
+                          : isSupermarketTheme
+                          ? "bg-[#169343] hover:bg-[#127a37]"
+                          : "bg-emerald-600 hover:bg-emerald-700"
+                      } text-white rounded-lg text-xs font-bold font-mono transition-all cursor-pointer shrink-0 shadow-xs flex items-center gap-1`}
                       title="Add item matching SKU to billing cart"
                     >
                       <Plus className="w-3 h-3" />
@@ -4861,14 +7145,16 @@ export default function App() {
                 <div className={`p-3 border-b space-y-2 ${bgMode.innerCard} ${bgMode.border}`}>
                   <div className="flex justify-between items-center">
                     <label className={`text-[10px] font-mono font-bold uppercase flex items-center gap-1 ${bgMode.textHeading}`}>
-                      <User className="w-3.5 h-3.5 text-emerald-500 shrink-0" /> Billing Customer
+                      <User className={`w-3.5 h-3.5 shrink-0 ${isRestaurantTheme ? "text-[#7a111a]" : isPharmacyTheme ? "text-[#07569e]" : isPgHostelTheme ? "text-[#0f766e]" : isFashionTheme ? "text-[#831843]" : "text-emerald-500"}`} /> {isPgHostelTheme ? "Billing Resident" : "Billing Customer"}
                     </label>
                     <button
                       onClick={() => {
                         setActiveTab("customers");
                         triggerNotification("Redirected to Loyalty registration form", "success");
                       }}
-                      className="text-[10px] text-emerald-500 font-bold hover:underline"
+                      className={`text-[10px] font-bold hover:underline cursor-pointer ${
+                        isRestaurantTheme ? "text-[#7a111a]" : isPharmacyTheme ? "text-[#0a66b8]" : isPgHostelTheme ? "text-[#0f766e]" : isFashionTheme ? "text-[#831843]" : "text-emerald-500"
+                      }`}
                     >
                       + Register Client
                     </button>
@@ -4942,7 +7228,7 @@ export default function App() {
                     </div>
                   </div>
 
-                  {selectedCustomer && (
+                  {selectedCustomer && activeSectorModules.loyaltyPoints && (
                     <div className="p-1 px-2 bg-emerald-500/10 border border-emerald-500/30 rounded text-[9px] text-emerald-500 flex justify-between items-center font-mono">
                       <span>Points: <b>{selectedCustomer.loyaltyPoints}</b></span>
                       <span>Credit: <b>₹{selectedCustomer.creditBalance}</b></span>
@@ -5001,28 +7287,42 @@ export default function App() {
                   )}
                 </div>
 
-                {/* Coupon handling entry */}
-                <div className={`p-3 border-t space-y-2 ${bgMode.innerCard} ${bgMode.border}`}>
-                  <div className="flex gap-2">
-                    <input
-                      type="text"
-                      placeholder="Coupon (e.g. WELCOME5)"
-                      value={couponCode}
-                      onChange={(e) => setCouponCode(e.target.value)}
-                      className={`flex-1 text-xs border rounded px-2 py-1 outline-none uppercase font-mono ${bgMode.inputBg} ${bgMode.border}`}
-                    />
-                    <button
-                      onClick={handleApplyCoupon}
-                      className="px-3 py-1 bg-slate-950 text-white rounded text-xs font-bold font-display hover:bg-slate-800 transition-colors cursor-pointer"
-                    >
-                      Apply
-                    </button>
+                {/* Coupon handling entry (enabled when Discount Rules module is active) */}
+                {activeSectorModules.discountRules && (
+                  <div className={`p-3 border-t space-y-2 ${bgMode.innerCard} ${bgMode.border}`}>
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        placeholder="Coupon (e.g. WELCOME5)"
+                        value={couponCode}
+                        onChange={(e) => setCouponCode(e.target.value)}
+                        className={`flex-1 text-xs border rounded-lg px-2 py-1.5 outline-none uppercase font-mono ${bgMode.inputBg} ${bgMode.border}`}
+                      />
+                      <button
+                        onClick={handleApplyCoupon}
+                        className={`px-3 py-1.5 ${
+                          isRestaurantTheme
+                            ? "bg-[#7a111a] hover:bg-[#5c0b12]"
+                            : isPharmacyTheme
+                            ? "bg-[#07569e] hover:bg-[#05417a]"
+                            : isPgHostelTheme
+                            ? "bg-[#0f766e] hover:bg-[#0c5d57]"
+                            : isFashionTheme
+                            ? "bg-[#831843] hover:bg-[#580c2b]"
+                            : isSupermarketTheme
+                            ? "bg-[#0d4d23] hover:bg-[#093819]"
+                            : "bg-slate-950 hover:bg-slate-800"
+                        } text-white rounded-lg text-xs font-bold font-display transition-colors cursor-pointer`}
+                      >
+                        Apply
+                      </button>
+                    </div>
+                    <div className={`flex justify-between text-[10px] font-mono ${bgMode.text || "text-slate-400"}`}>
+                      <span>Try: <b>WELCOME5</b> (5% off) </span>
+                      <span><b>FESTIVE10</b> (10% off)</span>
+                    </div>
                   </div>
-                  <div className={`flex justify-between text-[10px] font-mono ${bgMode.text || "text-slate-400"}`}>
-                    <span>Try: <b>WELCOME5</b> (5% off) </span>
-                    <span><b>FESTIVE10</b> (10% off)</span>
-                  </div>
-                </div>
+                )}
 
                 {/* Financial Summary */}
                 <div className={`p-4 border-t space-y-2 font-mono text-xs ${bgMode.innerCard} ${bgMode.border}`}>
@@ -5035,7 +7335,7 @@ export default function App() {
                     <span>₹{taxAmountOfCart.toFixed(2)}</span>
                   </div>
                   {appliedDiscountPercent > 0 && (
-                    <div className="flex justify-between text-emerald-500 font-bold">
+                    <div className="flex justify-between text-emerald-600 font-bold">
                       <span>Discount ({appliedDiscountPercent}%)</span>
                       <span>-₹{discountAmount.toFixed(2)}</span>
                     </div>
@@ -5049,14 +7349,34 @@ export default function App() {
 
                 {/* Checkout selection & Cash trigger */}
                 <div className={`p-4 border-t space-y-3 ${bgMode.innerCard} ${bgMode.border}`}>
-                  <div className="grid grid-cols-4 gap-1">
+                  <div className="grid grid-cols-4 gap-1.5">
                     {Object.values(PaymentMode).map((mode) => (
                       <button
                         key={mode}
                         onClick={() => setPaymentMode(mode)}
-                        className={`py-1 rounded text-[9px] font-bold border transition-all cursor-pointer ${
+                        className={`py-1.5 rounded-lg text-[9px] font-bold border transition-all cursor-pointer ${
                           paymentMode === mode
-                            ? `${currentTheme.bg} text-white border-transparent shadow-md`
+                            ? isRestaurantTheme
+                              ? "bg-[#7a111a] text-white border-[#7a111a] shadow-sm"
+                              : isPharmacyTheme
+                              ? "bg-[#07569e] text-white border-[#07569e] shadow-sm"
+                              : isPgHostelTheme
+                              ? "bg-[#0f766e] text-white border-[#0f766e] shadow-sm"
+                              : isFashionTheme
+                              ? "bg-[#831843] text-white border-[#831843] shadow-sm"
+                              : isSupermarketTheme
+                              ? "bg-[#0d4d23] text-white border-[#0d4d23] shadow-sm"
+                              : `${currentTheme.bg} text-white border-transparent shadow-md`
+                            : isRestaurantTheme
+                            ? "bg-white border-amber-200 text-slate-700 hover:bg-[#fdf4e3]"
+                            : isPharmacyTheme
+                            ? "bg-white border-sky-200 text-slate-700 hover:bg-sky-50"
+                            : isPgHostelTheme
+                            ? "bg-white border-teal-200 text-slate-700 hover:bg-teal-50"
+                            : isFashionTheme
+                            ? "bg-white border-rose-200 text-slate-700 hover:bg-rose-50"
+                            : isSupermarketTheme
+                            ? "bg-white border-emerald-200 text-slate-700 hover:bg-emerald-50"
                             : `border-slate-350 ${bgMode.inputBg} ${bgMode.text} hover:opacity-95`
                         }`}
                       >
@@ -5097,15 +7417,17 @@ export default function App() {
                     className={`w-full py-3 ${currentTheme.bg} ${currentTheme.bgHover} text-white rounded-xl font-bold font-display shadow-lg ${currentTheme.glow} active:scale-95 transition-all text-xs flex items-center justify-center gap-2 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed`}
                   >
                     <CreditCard className="w-4 h-4" />
-                    Checkout Store Invoice
+                    {isPgHostelTheme ? "Generate Rent Receipt" : "Checkout Store Invoice"}
                   </button>
 
                   <button
                     type="button"
                     onClick={() => setIsMultiBillModalOpen(true)}
-                    className={`w-full py-2 rounded-xl font-bold text-[11px] flex items-center justify-center gap-1.5 border transition-all cursor-pointer ${bgMode.inputBg} ${bgMode.border} hover:border-emerald-500`}
+                    className={`w-full py-2 rounded-xl font-bold text-[11px] flex items-center justify-center gap-1.5 border transition-all cursor-pointer ${bgMode.inputBg} ${bgMode.border} ${
+                      isRestaurantTheme ? "hover:border-[#7a111a]" : isPharmacyTheme ? "hover:border-[#07569e]" : isPgHostelTheme ? "hover:border-[#0f766e]" : isFashionTheme ? "hover:border-[#831843]" : "hover:border-emerald-500"
+                    }`}
                   >
-                    <Users className="w-3.5 h-3.5 text-emerald-500" />
+                    <Users className={`w-3.5 h-3.5 ${isRestaurantTheme ? "text-[#7a111a]" : isPharmacyTheme ? "text-[#07569e]" : isPgHostelTheme ? "text-[#0f766e]" : isFashionTheme ? "text-[#831843]" : "text-emerald-500"}`} />
                     <span>Multi-Customer Simultaneous Billing</span>
                   </button>
                   
@@ -5236,15 +7558,17 @@ export default function App() {
                       <span>Scan Pre-Printed Barcodes</span>
                     </button>
 
-                    <button
-                      type="button"
-                      onClick={() => openLabelGeneratorModal(null)}
-                      className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 shrink-0 transition-colors cursor-pointer shadow-sm"
-                      title="Generate and print shelf barcode labels"
-                    >
-                      <Tag className="w-3.5 h-3.5" />
-                      <span>Print Labels</span>
-                    </button>
+                    {activeSectorModules.barcodeLabelPrinting && (
+                      <button
+                        type="button"
+                        onClick={() => openLabelGeneratorModal(null)}
+                        className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 shrink-0 transition-colors cursor-pointer shadow-sm"
+                        title="Generate and print shelf barcode labels"
+                      >
+                        <Tag className="w-3.5 h-3.5" />
+                        <span>Print Labels</span>
+                      </button>
+                    )}
                   </div>
                 </div>
 
@@ -5549,173 +7873,196 @@ export default function App() {
               </div>
 
               {/* Inter-Branch Inventory Transfers */}
-              <div className="bg-slate-50 p-6 rounded-xl border border-slate-200 mt-6 space-y-6">
-                <div>
-                  <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
-                    <RefreshCw className="w-4 h-4 text-emerald-600 animate-spin-slow" />
-                    Inter-Branch Stock Transfers &amp; Approvals Tracking
-                  </h3>
-                  <p className="text-xs text-slate-400 mt-0.5">Ship inventory surplus between regional outlets with structural safety checks and balance transfers.</p>
-                </div>
-
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 font-sans">
-                  {/* Left Column: Initiate Form */}
-                  <div className="bg-white p-5 rounded-lg border border-slate-200 shadow-sm space-y-4">
-                    <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wide">Request New Stock Transfer</h4>
-                    <form onSubmit={handleCreateTransferSubmit} className="space-y-3 text-xs">
-                      <div>
-                        <label className="block text-slate-500 font-mono font-semibold mb-1">Select Product</label>
-                        <select
-                          value={newTransferForm.productId}
-                          onChange={(e) => setNewTransferForm({ ...newTransferForm, productId: e.target.value })}
-                          className="w-full border border-slate-200 rounded p-2"
-                        >
-                          <option value="">-- Choose Product --</option>
-                          {tenantProducts.map((p) => (
-                            <option key={p.id} value={p.id}>
-                              {p.name} (Global SKU: {p.sku})
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-3">
-                        <div>
-                          <label className="block text-slate-500 font-mono font-semibold mb-1">From Branch</label>
-                          <select
-                            value={newTransferForm.fromBranchId}
-                            onChange={(e) => setNewTransferForm({ ...newTransferForm, fromBranchId: e.target.value })}
-                            className="w-full border border-slate-200 rounded p-2"
-                          >
-                            <option value="">-- Origin --</option>
-                            {branches.map((b) => (
-                              <option key={b.id} value={b.id}>{b.name}</option>
-                            ))}
-                          </select>
-                        </div>
-                        <div>
-                          <label className="block text-slate-500 font-mono font-semibold mb-1">To Branch</label>
-                          <select
-                            value={newTransferForm.toBranchId}
-                            onChange={(e) => setNewTransferForm({ ...newTransferForm, toBranchId: e.target.value })}
-                            className="w-full border border-slate-200 rounded p-2"
-                          >
-                            <option value="">-- Destination --</option>
-                            {branches.map((b) => (
-                              <option key={b.id} value={b.id}>{b.name}</option>
-                            ))}
-                          </select>
-                        </div>
-                      </div>
-
-                      <div>
-                        <label className="block text-slate-500 font-mono font-semibold mb-1">Transfer Qty</label>
-                        <input
-                          type="number"
-                          value={newTransferForm.quantity}
-                          onChange={(e) => setNewTransferForm({ ...newTransferForm, quantity: Number(e.target.value) })}
-                          min="1"
-                          className="w-full border border-slate-200 rounded p-2 font-mono"
-                        />
-                      </div>
-
-                      <div>
-                        <label className="block text-slate-500 font-mono font-semibold mb-1">Reason / Shift Notes</label>
-                        <input
-                          type="text"
-                          placeholder="e.g. Stock replenishment, High Demand"
-                          value={newTransferForm.remarks}
-                          onChange={(e) => setNewTransferForm({ ...newTransferForm, remarks: e.target.value })}
-                          className="w-full border border-slate-200 rounded p-2"
-                        />
-                      </div>
-
-                      <button
-                        type="submit"
-                        className="w-full py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg transition-colors text-xs cursor-pointer text-center"
-                      >
-                        File Transfer Proposal
-                      </button>
-                    </form>
+              {activeSectorModules.stockTransfers ? (
+                <div className="bg-slate-50 p-6 rounded-xl border border-slate-200 mt-6 space-y-6">
+                  <div>
+                    <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
+                      <RefreshCw className="w-4 h-4 text-emerald-600 animate-spin-slow" />
+                      Inter-Branch Stock Transfers &amp; Approvals Tracking
+                    </h3>
+                    <p className="text-xs text-slate-400 mt-0.5">Ship inventory surplus between regional outlets with structural safety checks and balance transfers.</p>
                   </div>
 
-                  {/* Right Column: Ledger List / Actions */}
-                  <div className="bg-white p-5 rounded-lg border border-slate-200 shadow-sm col-span-2 space-y-4">
-                    <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wide">Branch Stock Shifting Ledger ({transfers.length} requests)</h4>
-                    <div className="space-y-3 max-h-[360px] overflow-y-auto pr-2">
-                      {transfers.slice().reverse().map((t) => {
-                        const fromName = branches.find((b) => b.id === t.fromBranchId)?.name || t.fromBranchId;
-                        const toName = branches.find((b) => b.id === t.toBranchId)?.name || t.toBranchId;
-                        const pDetail = tenantProducts.find((p) => p.id === t.productId);
-                        const fromBranchStock = pDetail && pDetail.branchStocks ? (pDetail.branchStocks[t.fromBranchId] ?? 0) : 0;
-
-                        return (
-                          <div key={t.id} className="p-3.5 bg-slate-50 rounded-xl border border-slate-200 text-xs shadow-xs flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                            <div className="space-y-1">
-                              <div className="flex items-center gap-2">
-                                <span className="bg-slate-200 text-slate-700 font-black font-mono text-[9px] px-1.5 py-0.5 rounded leading-none">
-                                  {t.id}
-                                </span>
-                                <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded uppercase leading-none ${
-                                  t.status === "PENDING" ? "bg-amber-100 text-amber-800" :
-                                  t.status === "APPROVED" ? "bg-emerald-100 text-emerald-800 font-bold" :
-                                  "bg-rose-100 text-rose-800"
-                                }`}>
-                                  {t.status}
-                                </span>
-                              </div>
-                              <p className="font-bold text-slate-800 text-[12px]">{t.productName}</p>
-                              <p className="text-[10px] text-slate-500">
-                                Path: <span className="font-semibold text-slate-700 font-mono">{fromName}</span> &rarr; <span className="font-semibold text-slate-700 font-mono">{toName}</span>
-                              </p>
-                              <p className="text-[9px] text-slate-400">
-                                Requested by: {t.requestedBy || "Staff Member"} on {t.requestedDate || "Today"}
-                              </p>
-                              {t.comments && (
-                                <p className="text-[10px] bg-slate-100 border border-slate-200/50 p-1 rounded font-mono text-slate-500 mt-1">
-                                  Response Note: "{t.comments}"
-                                </p>
-                              )}
-                            </div>
-
-                            <div className="text-right shrink-0 flex flex-col items-end gap-1">
-                              <p className="text-[10px] text-slate-400 font-medium">Shipment payload</p>
-                              <p className="text-slate-900 font-black font-mono text-base">
-                                {t.quantity} <span className="text-xs font-normal text-slate-500">units</span>
-                              </p>
-                              <p className="text-[9px] font-mono text-slate-400">
-                                (Origin Stock: {fromBranchStock} units)
-                              </p>
-
-                              {t.status === "PENDING" && (
-                                <div className="flex gap-1 mt-1">
-                                  <button
-                                    onClick={() => handleProcessTransfer(t.id, "APPROVED", "Accepted & cleared by store overseer")}
-                                    className="px-2 py-0.5 text-[10px] bg-emerald-50 hover:bg-emerald-600 text-emerald-700 hover:text-white border border-emerald-200 rounded cursor-pointer font-bold"
-                                  >
-                                    Approve
-                                  </button>
-                                  <button
-                                    onClick={() => handleProcessTransfer(t.id, "REJECTED", "Denied due to local stock shortage")}
-                                    className="px-2 py-0.5 text-[10px] bg-rose-50 hover:bg-rose-600 text-rose-700 hover:text-white border border-rose-200 rounded cursor-pointer font-bold"
-                                  >
-                                    Reject
-                                  </button>
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                        );
-                      })}
-                      {transfers.length === 0 && (
-                        <div className="text-center py-12 text-slate-400 text-xs">
-                          ⚠️ No branch-wise stock transfers filed yet.
+                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 font-sans">
+                    {/* Left Column: Initiate Form */}
+                    <div className="bg-white p-5 rounded-lg border border-slate-200 shadow-sm space-y-4">
+                      <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wide">Request New Stock Transfer</h4>
+                      <form onSubmit={handleCreateTransferSubmit} className="space-y-3 text-xs">
+                        <div>
+                          <label className="block text-slate-500 font-mono font-semibold mb-1">Select Product</label>
+                          <select
+                            value={newTransferForm.productId}
+                            onChange={(e) => setNewTransferForm({ ...newTransferForm, productId: e.target.value })}
+                            className="w-full border border-slate-200 rounded p-2"
+                          >
+                            <option value="">-- Choose Product --</option>
+                            {tenantProducts.map((p) => (
+                              <option key={p.id} value={p.id}>
+                                {p.name} (Global SKU: {p.sku})
+                              </option>
+                            ))}
+                          </select>
                         </div>
-                      )}
+
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <label className="block text-slate-500 font-mono font-semibold mb-1">From Branch</label>
+                            <select
+                              value={newTransferForm.fromBranchId}
+                              onChange={(e) => setNewTransferForm({ ...newTransferForm, fromBranchId: e.target.value })}
+                              className="w-full border border-slate-200 rounded p-2"
+                            >
+                              <option value="">-- Origin --</option>
+                              {branches.map((b) => (
+                                <option key={b.id} value={b.id}>{b.name}</option>
+                              ))}
+                            </select>
+                          </div>
+                          <div>
+                            <label className="block text-slate-500 font-mono font-semibold mb-1">To Branch</label>
+                            <select
+                              value={newTransferForm.toBranchId}
+                              onChange={(e) => setNewTransferForm({ ...newTransferForm, toBranchId: e.target.value })}
+                              className="w-full border border-slate-200 rounded p-2"
+                            >
+                              <option value="">-- Destination --</option>
+                              {branches.map((b) => (
+                                <option key={b.id} value={b.id}>{b.name}</option>
+                              ))}
+                            </select>
+                          </div>
+                        </div>
+
+                        <div>
+                          <label className="block text-slate-500 font-mono font-semibold mb-1">Transfer Qty</label>
+                          <input
+                            type="number"
+                            value={newTransferForm.quantity}
+                            onChange={(e) => setNewTransferForm({ ...newTransferForm, quantity: Number(e.target.value) })}
+                            min="1"
+                            className="w-full border border-slate-200 rounded p-2 font-mono"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-slate-500 font-mono font-semibold mb-1">Reason / Shift Notes</label>
+                          <input
+                            type="text"
+                            placeholder="e.g. Stock replenishment, High Demand"
+                            value={newTransferForm.remarks}
+                            onChange={(e) => setNewTransferForm({ ...newTransferForm, remarks: e.target.value })}
+                            className="w-full border border-slate-200 rounded p-2"
+                          />
+                        </div>
+
+                        <button
+                          type="submit"
+                          className="w-full py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg transition-colors text-xs cursor-pointer text-center"
+                        >
+                          File Transfer Proposal
+                        </button>
+                      </form>
+                    </div>
+
+                    {/* Right Column: Ledger List / Actions */}
+                    <div className="bg-white p-5 rounded-lg border border-slate-200 shadow-sm col-span-2 space-y-4">
+                      <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wide">Branch Stock Shifting Ledger ({transfers.length} requests)</h4>
+                      <div className="space-y-3 max-h-[360px] overflow-y-auto pr-2">
+                        {transfers.slice().reverse().map((t) => {
+                          const fromName = branches.find((b) => b.id === t.fromBranchId)?.name || t.fromBranchId;
+                          const toName = branches.find((b) => b.id === t.toBranchId)?.name || t.toBranchId;
+                          const pDetail = tenantProducts.find((p) => p.id === t.productId);
+                          const fromBranchStock = pDetail && pDetail.branchStocks ? (pDetail.branchStocks[t.fromBranchId] ?? 0) : 0;
+
+                          return (
+                            <div key={t.id} className="p-3.5 bg-slate-50 rounded-xl border border-slate-200 text-xs shadow-xs flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                              <div className="space-y-1">
+                                <div className="flex items-center gap-2">
+                                  <span className="bg-slate-200 text-slate-700 font-black font-mono text-[9px] px-1.5 py-0.5 rounded leading-none">
+                                    {t.id}
+                                  </span>
+                                  <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded uppercase leading-none ${
+                                    t.status === "PENDING" ? "bg-amber-100 text-amber-800" :
+                                    t.status === "APPROVED" ? "bg-emerald-100 text-emerald-800 font-bold" :
+                                    "bg-rose-100 text-rose-800"
+                                  }`}>
+                                    {t.status}
+                                  </span>
+                                </div>
+                                <p className="font-bold text-slate-800 text-[12px]">{t.productName}</p>
+                                <p className="text-[10px] text-slate-500">
+                                  Path: <span className="font-semibold text-slate-700 font-mono">{fromName}</span> &rarr; <span className="font-semibold text-slate-700 font-mono">{toName}</span>
+                                </p>
+                                <p className="text-[9px] text-slate-400">
+                                  Requested by: {t.requestedBy || "Staff Member"} on {t.requestedDate || "Today"}
+                                </p>
+                                {t.comments && (
+                                  <p className="text-[10px] bg-slate-100 border border-slate-200/50 p-1 rounded font-mono text-slate-500 mt-1">
+                                    Response Note: "{t.comments}"
+                                  </p>
+                                )}
+                              </div>
+
+                              <div className="text-right shrink-0 flex flex-col items-end gap-1">
+                                <p className="text-[10px] text-slate-400 font-medium">Shipment payload</p>
+                                <p className="text-slate-900 font-black font-mono text-base">
+                                  {t.quantity} <span className="text-xs font-normal text-slate-500">units</span>
+                                </p>
+                                <p className="text-[9px] font-mono text-slate-400">
+                                  (Origin Stock: {fromBranchStock} units)
+                                </p>
+
+                                {t.status === "PENDING" && (
+                                  <div className="flex gap-1 mt-1">
+                                    <button
+                                      onClick={() => handleProcessTransfer(t.id, "APPROVED", "Accepted & cleared by store overseer")}
+                                      className="px-2 py-0.5 text-[10px] bg-emerald-50 hover:bg-emerald-600 text-emerald-700 hover:text-white border border-emerald-200 rounded cursor-pointer font-bold"
+                                    >
+                                      Approve
+                                    </button>
+                                    <button
+                                      onClick={() => handleProcessTransfer(t.id, "REJECTED", "Denied due to local stock shortage")}
+                                      className="px-2 py-0.5 text-[10px] bg-rose-50 hover:bg-rose-600 text-rose-700 hover:text-white border border-rose-200 rounded cursor-pointer font-bold"
+                                    >
+                                      Reject
+                                    </button>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
+                        {transfers.length === 0 && (
+                          <div className="text-center py-12 text-slate-400 text-xs">
+                            ⚠️ No branch-wise stock transfers filed yet.
+                          </div>
+                        )}
+                      </div>
                     </div>
                   </div>
                 </div>
-              </div>
+              ) : (
+                <div className="bg-slate-50 p-5 rounded-xl border border-dashed border-slate-300 mt-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div>
+                    <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wide flex items-center gap-2">
+                      <RefreshCw className="w-4 h-4 text-slate-400" />
+                      Inter-Branch Stock Transfers Module Disabled
+                    </h3>
+                    <p className="text-xs text-slate-500 mt-0.5">
+                      Inter-Branch Stock Transfers are not enabled for the active <span className="font-semibold text-slate-700">{activeSectorCatalog.label}</span> sector configuration.
+                    </p>
+                  </div>
+                  {isDemoClient && (
+                    <button
+                      type="button"
+                      onClick={() => handleSwitchDemoSector("RETAIL", true)}
+                      className="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-xs font-bold cursor-pointer shrink-0"
+                    >
+                      Switch Demo to Retail / Supermarket
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
           )}
 
@@ -7040,35 +9387,6 @@ export default function App() {
                                 })}
                               </div>
 
-                              {/* Biller Details directly under the product section */}
-                              <div data-receipt-biller="true" className="border-t border-dashed border-slate-400 pt-2 space-y-0.5 text-[0.88em] font-bold text-slate-950">
-                                <p className="font-black uppercase tracking-wide text-[0.92em] text-slate-950">
-                                  Biller Details
-                                </p>
-                                <div className="flex justify-between gap-2" data-receipt-biller-row="true">
-                                  <span className="font-bold">Biller / Cashier:</span>
-                                  <span className="font-black text-right">{selectedInv.cashierName || currentCashierName}</span>
-                                </div>
-                                <div className="flex justify-between gap-2" data-receipt-biller-row="true">
-                                  <span className="font-bold">Billed By:</span>
-                                  <span className="font-bold text-right">
-                                    {activeTenant.name} ({branches.find(b => b.id === selectedInv.storeBranchId)?.name || currentBranch?.name || selectedInv.storeBranchId})
-                                  </span>
-                                </div>
-                                <div className="flex justify-between gap-2" data-receipt-biller-row="true">
-                                  <span className="font-bold">Biller Contact:</span>
-                                  <span className="font-bold text-right">
-                                    {activeTenant.phone || branches.find(b => b.id === selectedInv.storeBranchId)?.phone || currentBranch?.phone || "N/A"}
-                                  </span>
-                                </div>
-                                <div className="flex justify-between gap-2" data-receipt-biller-row="true">
-                                  <span className="font-bold">GSTIN:</span>
-                                  <span className="font-black uppercase text-right">
-                                    {activeTenant.gstinRegNumber || (selectedInv.storeBranchId ? branches.find(b => b.id === selectedInv.storeBranchId)?.gstin : "") || "07AAAAA1111A1Z1"}
-                                  </span>
-                                </div>
-                              </div>
-
                               {/* MRP Savings */}
                               {(() => {
                                 const totalMrp = selectedInv.items.reduce((acc, it) => {
@@ -8289,6 +10607,7 @@ Payment Mode:   ${selectedInv.paymentMode}
                   const cred = credentialsList.find(c => c.email.toLowerCase() === profile.email.toLowerCase()) || (profile as any);
                   handleQuickLogin(cred);
                 }}
+                onSeedSectorWorkspace={handleSeedSectorWorkspace}
                 printerConfig={printerConfig}
                 onUpdatePrinterConfig={updatePrinterConfig}
                 labelPrinterConfig={labelPrinterConfig}
@@ -8378,8 +10697,285 @@ Payment Mode:   ${selectedInv.paymentMode}
                 onDeleteBranch={handleDeleteBranch}
                 currentBranch={currentBranch}
                 onSwitchBranch={handleBranchChange}
+                isDemoClient={isDemoClient}
+                onSwitchDemoSector={handleSwitchDemoSector}
               />
             </div>
+          )}
+
+          {activeTab === "sector-kds" && (activeSectorModules.kdsTableManagement || activeSectorModules.kotPrinting) && (
+            <KdsTableModuleView
+              selectedTable={restaurantTableNo}
+              orderMode={restaurantOrderMode}
+              kotTickets={kotTickets}
+              products={sectorScopedProducts}
+              onSelectTableForPos={(table, mode) => {
+                setRestaurantTableNo(table);
+                setRestaurantOrderMode(mode);
+                triggerNotification(`Active POS counter linked to ${table} (${mode.replace("_", "-")})`, "success");
+              }}
+              onToggleKotStatus={(kotId) => {
+                setKotTickets((prev) =>
+                  prev.map((k) =>
+                    k.id === kotId ? { ...k, status: k.status === "PREPARING" ? "READY" : "PREPARING" } : k
+                  )
+                );
+              }}
+              onQuickAddAndSpoolKot={(table, product) => {
+                handleAddToCart(product);
+                const kotId = `KOT-${String(kotTickets.length + 1).padStart(3, "0")}`;
+                setKotTickets((prev) => [
+                  {
+                    id: kotId,
+                    table,
+                    mode: restaurantOrderMode,
+                    itemsSummary: `1x ${product.name}`,
+                    note: restaurantKotNote || "Fresh kitchen order",
+                    time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+                    status: "PREPARING"
+                  },
+                  ...prev
+                ]);
+                triggerNotification(`Spooled ${kotId} for ${table}: ${product.name}`, "success");
+              }}
+              onClearTableKot={(table) => {
+                setKotTickets((prev) => prev.filter((k) => k.table !== table));
+                triggerNotification(`Cleared kitchen tickets for ${table}`, "success");
+              }}
+              onOpenPos={() => setActiveTab("pos")}
+            />
+          )}
+
+          {activeTab === "sector-rx" && activeSectorModules.batchExpiryRx && (
+            <RxBatchModuleView
+              sector={activeSectorKey}
+              products={sectorScopedProducts}
+              invoices={invoices}
+              rxNumber={rxNumber}
+              rxDoctorName={rxDoctorName}
+              rxScheduleHVerified={rxScheduleHVerified}
+              onUpdateRxDraft={(patch) => {
+                if (typeof patch.rxNumber === "string") setRxNumber(patch.rxNumber);
+                if (typeof patch.rxDoctorName === "string") setRxDoctorName(patch.rxDoctorName);
+                if (typeof patch.rxScheduleHVerified === "boolean") setRxScheduleHVerified(patch.rxScheduleHVerified);
+              }}
+              onAddProductToPos={(prod) => {
+                handleAddToCart(prod);
+                triggerNotification(`Added ${prod.name} (Batch: ${prod.batchNumber}) to POS cart`, "success");
+              }}
+              onOpenPos={() => setActiveTab("pos")}
+            />
+          )}
+
+          {activeTab === "sector-appointments" && activeSectorModules.appointmentsBooking && (
+            <AppointmentsModuleView
+              products={sectorScopedProducts}
+              appointments={serviceAppointments}
+              onCreateAppointment={(apt) => {
+                setServiceAppointments((prev) => [apt, ...prev]);
+                triggerNotification(`Booked ${apt.serviceName} for ${apt.customerName} at ${apt.timeSlot}`, "success");
+              }}
+              onUpdateStatus={(id, status) => {
+                setServiceAppointments((prev) => prev.map((a) => (a.id === id ? { ...a, status } : a)));
+              }}
+              onBillAppointmentInPos={(apt) => {
+                const svc = sectorScopedProducts.find((p) => p.id === apt.serviceId) || sectorScopedProducts[0];
+                if (svc) handleAddToCart(svc);
+                setBillingCustomerName(apt.customerName);
+                setBillingCustomerPhone(apt.customerPhone);
+                setServiceTimeSlot(apt.timeSlot);
+                setServiceStylist(apt.stylistName);
+                setServiceDuration(apt.duration);
+                setServiceAppointments((prev) =>
+                  prev.map((a) => (a.id === apt.id ? { ...a, status: "COMPLETED" } : a))
+                );
+                setActiveTab("pos");
+                triggerNotification(`Loaded ${apt.customerName}'s appointment (${apt.timeSlot}) into POS!`, "success");
+              }}
+            />
+          )}
+
+          {activeTab === "sector-variants" && activeSectorModules.variantMatrix && (
+            <VariantMatrixModuleView
+              products={sectorScopedProducts}
+              selectedSize={retailVariantSize}
+              selectedColor={retailVariantColor}
+              onSelectSize={setRetailVariantSize}
+              onSelectColor={setRetailVariantColor}
+              onAddVariantToPos={(prod, sz, clr) => {
+                setRetailVariantSize(sz);
+                setRetailVariantColor(clr);
+                handleAddToCart(prod);
+                setActiveTab("pos");
+                triggerNotification(`Added ${prod.name} [${sz} / ${clr}] to POS cart`, "success");
+              }}
+              onPrintLabel={(prod) => openLabelGeneratorModal(prod)}
+              canPrintLabels={activeSectorModules.barcodeLabelPrinting}
+            />
+          )}
+
+          {activeTab === "sector-pg-hostel" && activeSectorModules.roomBedManagement && (
+            <PgHostelModuleView
+              selectedRoomNo={pgRoomNo}
+              selectedBedNo={pgBedNo}
+              billingMonth={pgBillingMonth}
+              messPlan={pgMessPlan}
+              residents={pgResidents}
+              products={sectorScopedProducts}
+              onSelectBedForPos={(roomNo, bedNo, occupancyType) => {
+                setPgRoomNo(roomNo);
+                setPgBedNo(bedNo);
+                setPgOccupancyType(occupancyType);
+                const resident = pgResidents.find((r) => r.roomNo === roomNo && r.bedNo === bedNo);
+                if (resident) {
+                  setBillingCustomerName(resident.name);
+                  setBillingCustomerPhone(resident.phone);
+                  setPgMessPlan(resident.messPlan);
+                  triggerNotification(`Selected ${resident.name} (${roomNo} / ${bedNo}) for POS rent billing`, "success");
+                } else {
+                  triggerNotification(`Selected vacant slot ${roomNo} / ${bedNo} (${occupancyType})`, "success");
+                }
+              }}
+              onUpdateBillingMonth={setPgBillingMonth}
+              onUpdateMessPlan={setPgMessPlan}
+              onCheckInResident={(resident) => {
+                setPgResidents((prev) => [resident, ...prev]);
+                setPgRoomNo(resident.roomNo);
+                setPgBedNo(resident.bedNo);
+                setPgOccupancyType(resident.occupancyType);
+                setPgMessPlan(resident.messPlan);
+                triggerNotification(`Checked in ${resident.name} to ${resident.roomNo} (${resident.bedNo})`, "success");
+              }}
+              onCheckOutResident={(residentId) => {
+                const target = pgResidents.find((r) => r.id === residentId);
+                setPgResidents((prev) => prev.filter((r) => r.id !== residentId));
+                if (target) {
+                  triggerNotification(`Checked out ${target.name} from ${target.roomNo} / ${target.bedNo} — bed is now vacant`, "success");
+                }
+              }}
+              onToggleRentStatus={(residentId) => {
+                setPgResidents((prev) =>
+                  prev.map((r) =>
+                    r.id === residentId ? { ...r, rentStatus: r.rentStatus === "PAID" ? "DUE" : "PAID" } : r
+                  )
+                );
+              }}
+              onBillResidentInPos={(resident, includeMess) => {
+                const occLower = resident.occupancyType.toLowerCase();
+                const preferredSku = occLower.includes("single")
+                  ? "PG-RNT-1AC"
+                  : occLower.includes("3-sharing") || occLower.includes("dorm")
+                  ? "PG-RNT-3NA"
+                  : "PG-RNT-2AC";
+                const rentItem =
+                  sectorScopedProducts.find((p) => p.sku === preferredSku) ||
+                  sectorScopedProducts.find((p) => p.sku.startsWith("PG-RNT")) ||
+                  sectorScopedProducts[0];
+                if (rentItem) {
+                  handleAddToCart({
+                    ...rentItem,
+                    price: resident.monthlyRent,
+                    mrp: resident.monthlyRent,
+                    name: `${resident.roomNo} (${resident.bedNo}) Monthly Rent — ${resident.occupancyType}`
+                  });
+                }
+                if (includeMess) {
+                  const messItem = sectorScopedProducts.find(
+                    (p) => p.sku.includes("MES") || p.category.toLowerCase().includes("mess")
+                  );
+                  if (messItem) {
+                    handleAddToCart(messItem);
+                  }
+                }
+                setBillingCustomerName(resident.name);
+                setBillingCustomerPhone(resident.phone);
+                setPgRoomNo(resident.roomNo);
+                setPgBedNo(resident.bedNo);
+                setPgOccupancyType(resident.occupancyType);
+                setPgMessPlan(resident.messPlan);
+                setActiveTab("pos");
+                triggerNotification(
+                  `Loaded ${resident.name} (${resident.roomNo} / ${resident.bedNo}) rent${includeMess ? " + mess plan" : ""} into POS!`,
+                  "success"
+                );
+              }}
+              onOpenPos={() => setActiveTab("pos")}
+            />
+          )}
+
+          {activeTab === "sector-fashion" && activeSectorModules.garmentTailoring && (
+            <FashionTailoringModuleView
+              products={sectorScopedProducts}
+              selectedSize={retailVariantSize}
+              selectedColor={retailVariantColor}
+              selectedFit={fashionFit}
+              selectedSeason={fashionSeason}
+              alterations={garmentAlterations}
+              onSelectSize={setRetailVariantSize}
+              onSelectColor={setRetailVariantColor}
+              onSelectFit={setFashionFit}
+              onSelectSeason={setFashionSeason}
+              onAddGarmentToPos={(prod, sz, clr, fit, season) => {
+                setRetailVariantSize(sz);
+                setRetailVariantColor(clr);
+                setFashionFit(fit);
+                setFashionSeason(season);
+                handleAddToCart({
+                  ...prod,
+                  name: `${prod.name} [${sz} • ${clr}]`
+                });
+                setActiveTab("pos");
+                triggerNotification(`Added ${prod.name} (${sz} / ${clr} / ${fit}) to POS cart`, "success");
+              }}
+              onCreateAlterationSlip={(slip) => {
+                setGarmentAlterations((prev) => [slip, ...prev]);
+                triggerNotification(`Created alteration slip ${slip.id} for ${slip.customerName}`, "success");
+              }}
+              onAdvanceAlterationStatus={(slipId) => {
+                const order: GarmentAlterationSlip["status"][] = ["PENDING", "IN_TAILORING", "READY", "DELIVERED"];
+                setGarmentAlterations((prev) =>
+                  prev.map((s) => {
+                    if (s.id !== slipId) return s;
+                    const nextIdx = (order.indexOf(s.status) + 1) % order.length;
+                    return { ...s, status: order[nextIdx] };
+                  })
+                );
+              }}
+              onBillAlterationInPos={(slip) => {
+                const garmentProd =
+                  sectorScopedProducts.find((p) => p.id === slip.productId) ||
+                  sectorScopedProducts[0];
+                if (garmentProd) {
+                  handleAddToCart({
+                    ...garmentProd,
+                    name: `${slip.garmentName} [${slip.size} • ${slip.color}]`
+                  });
+                }
+                const tailorProd = sectorScopedProducts.find(
+                  (p) => p.sku === "FSH-TLR-06" || p.category.toLowerCase().includes("tailor")
+                );
+                if (tailorProd && slip.feeAmount > 0) {
+                  handleAddToCart({
+                    ...tailorProd,
+                    price: slip.feeAmount,
+                    mrp: slip.feeAmount,
+                    name: `Alteration (${slip.id}): ${slip.alterationTask}`
+                  });
+                }
+                setBillingCustomerName(slip.customerName);
+                setBillingCustomerPhone(slip.customerPhone);
+                setRetailVariantSize(slip.size);
+                setRetailVariantColor(slip.color);
+                setFashionFit(slip.fit);
+                setFashionAlterationNote(`${slip.alterationTask} (${slip.id})`);
+                setFashionAlterationDate(slip.readyDate);
+                setActiveTab("pos");
+                triggerNotification(`Loaded ${slip.customerName}'s garment & alteration slip (${slip.id}) into POS`, "success");
+              }}
+              onPrintLabel={(prod) => openLabelGeneratorModal(prod)}
+              canPrintLabels={activeSectorModules.barcodeLabelPrinting}
+              onOpenPos={() => setActiveTab("pos")}
+            />
           )}
 
         </div>
@@ -8749,6 +11345,59 @@ Payment Mode:   ${selectedInv.paymentMode}
                     <span className="font-black">{showInvoicePrintPreview.customerPhone}</span>
                   </div>
                 )}
+                {showInvoicePrintPreview.sectorMetadata?.tableNo && (
+                  <div className="flex justify-between border-t border-dashed border-slate-400 pt-1" data-receipt-meta-row="true">
+                    <span className="font-bold">Order / Table:</span>
+                    <span className="font-black">{showInvoicePrintPreview.sectorMetadata.orderMode?.replace("_", "-")} • {showInvoicePrintPreview.sectorMetadata.tableNo}</span>
+                  </div>
+                )}
+                {showInvoicePrintPreview.sectorMetadata?.rxNumber && (
+                  <div className="flex justify-between border-t border-dashed border-slate-400 pt-1" data-receipt-meta-row="true">
+                    <span className="font-bold">Rx / Doctor:</span>
+                    <span className="font-black text-right">{showInvoicePrintPreview.sectorMetadata.rxNumber} {showInvoicePrintPreview.sectorMetadata.rxDoctorName ? `(${showInvoicePrintPreview.sectorMetadata.rxDoctorName})` : ""}</span>
+                  </div>
+                )}
+                {showInvoicePrintPreview.sectorMetadata?.appointmentSlot && (
+                  <div className="flex justify-between border-t border-dashed border-slate-400 pt-1" data-receipt-meta-row="true">
+                    <span className="font-bold">Appointment:</span>
+                    <span className="font-black text-right">{showInvoicePrintPreview.sectorMetadata.appointmentSlot} • {showInvoicePrintPreview.sectorMetadata.stylistName}</span>
+                  </div>
+                )}
+                {showInvoicePrintPreview.sectorMetadata?.roomNo && (
+                  <>
+                    <div className="flex justify-between border-t border-dashed border-slate-400 pt-1" data-receipt-meta-row="true">
+                      <span className="font-bold">Room / Bed:</span>
+                      <span className="font-black text-right">
+                        {showInvoicePrintPreview.sectorMetadata.roomNo} ({showInvoicePrintPreview.sectorMetadata.bedNo || "Bed A"})
+                      </span>
+                    </div>
+                    <div className="flex justify-between" data-receipt-meta-row="true">
+                      <span className="font-bold">Rent Month / Mess:</span>
+                      <span className="font-black text-right">
+                        {showInvoicePrintPreview.sectorMetadata.billingMonth || "Monthly"}
+                        {showInvoicePrintPreview.sectorMetadata.messPlan ? ` • ${showInvoicePrintPreview.sectorMetadata.messPlan}` : ""}
+                      </span>
+                    </div>
+                  </>
+                )}
+                {showInvoicePrintPreview.sectorMetadata?.variantSize && (
+                  <div className="flex justify-between border-t border-dashed border-slate-400 pt-1" data-receipt-meta-row="true">
+                    <span className="font-bold">Garment Spec:</span>
+                    <span className="font-black text-right">
+                      {showInvoicePrintPreview.sectorMetadata.variantSize} • {showInvoicePrintPreview.sectorMetadata.variantColor}
+                      {showInvoicePrintPreview.sectorMetadata.garmentFit ? ` • ${showInvoicePrintPreview.sectorMetadata.garmentFit}` : ""}
+                    </span>
+                  </div>
+                )}
+                {showInvoicePrintPreview.sectorMetadata?.alterationNote && (
+                  <div className="flex justify-between" data-receipt-meta-row="true">
+                    <span className="font-bold">Alteration / Ready:</span>
+                    <span className="font-black text-right">
+                      {showInvoicePrintPreview.sectorMetadata.alterationNote}
+                      {showInvoicePrintPreview.sectorMetadata.alterationDeliveryDate ? ` (${showInvoicePrintPreview.sectorMetadata.alterationDeliveryDate})` : ""}
+                    </span>
+                  </div>
+                )}
               </div>
 
               {/* Items Table with MRP, Rate & dedicated Qty column */}
@@ -8782,35 +11431,6 @@ Payment Mode:   ${selectedInv.paymentMode}
                     </div>
                   );
                 })}
-              </div>
-
-              {/* Biller Details directly under the product section */}
-              <div data-receipt-biller="true" className="border-t border-dashed border-slate-400 pt-2 space-y-0.5 text-[0.88em] font-bold text-slate-950">
-                <p className="font-black uppercase tracking-wide text-[0.92em] text-slate-950">
-                  Biller Details
-                </p>
-                <div className="flex justify-between gap-2" data-receipt-biller-row="true">
-                  <span className="font-bold">Biller / Cashier:</span>
-                  <span className="font-black text-right">{showInvoicePrintPreview.cashierName || currentCashierName}</span>
-                </div>
-                <div className="flex justify-between gap-2" data-receipt-biller-row="true">
-                  <span className="font-bold">Billed By:</span>
-                  <span className="font-bold text-right">
-                    {activeTenant.name} ({branches.find(b => b.id === showInvoicePrintPreview.storeBranchId)?.name || currentBranch?.name || showInvoicePrintPreview.storeBranchId})
-                  </span>
-                </div>
-                <div className="flex justify-between gap-2" data-receipt-biller-row="true">
-                  <span className="font-bold">Biller Contact:</span>
-                  <span className="font-bold text-right">
-                    {activeTenant.phone || currentBranch?.phone || "N/A"}
-                  </span>
-                </div>
-                <div className="flex justify-between gap-2" data-receipt-biller-row="true">
-                  <span className="font-bold">GSTIN:</span>
-                  <span className="font-black uppercase text-right">
-                    {activeTenant.gstinRegNumber || (currentBranch?.id ? branches.find(b => b.id === currentBranch.id)?.gstin : "") || "07AAAAA1111A1Z1"}
-                  </span>
-                </div>
               </div>
 
               {/* MRP Savings Banner */}

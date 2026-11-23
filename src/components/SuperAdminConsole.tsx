@@ -87,7 +87,14 @@ import {
   Pill,
   Scissors,
   Type,
-  Tag
+  Tag,
+  Crown,
+  Monitor,
+  MoreVertical,
+  PlusCircle,
+  LayoutDashboard,
+  BedDouble,
+  Shirt
 } from "lucide-react";
 import { 
   UserRole, 
@@ -124,7 +131,9 @@ import {
   RECEIPT_FONT_SIZE_OPTIONS,
   getReceiptTypographySpec
 } from "../utils/thermalPrinter";
+import { SECTOR_MODULE_CATALOG, buildSectorConfig } from "../utils/sectorModules";
 import { ExpertAidLogo } from "./ExpertAidLogo";
+import { KpiSparkline } from "./SupermarketThemeAssets";
 
 function formatSectorModulesSummary(modulesInput: any): string {
   if (!modulesInput) return "POS, Inventory";
@@ -239,6 +248,7 @@ interface SuperAdminConsoleProps {
   onUpdatePrinterConfig?: (patch: Partial<ThermalPrinterConfig>) => void;
   labelPrinterConfig?: LabelPrinterConfig;
   onUpdateLabelPrinterConfig?: (config: LabelPrinterConfig) => void;
+  onSeedSectorWorkspace?: (tenant: Tenant, seedProducts: boolean) => Promise<void> | void;
 }
 
 export default function SuperAdminConsole({
@@ -255,7 +265,8 @@ export default function SuperAdminConsole({
   printerConfig: propPrinterConfig,
   onUpdatePrinterConfig,
   labelPrinterConfig: propLabelPrinterConfig,
-  onUpdateLabelPrinterConfig
+  onUpdateLabelPrinterConfig,
+  onSeedSectorWorkspace
 }: SuperAdminConsoleProps) {
   // Navigation
   const [activeMenuTab, setActiveMenuTab] = useState<string>("dashboard");
@@ -389,17 +400,11 @@ export default function SuperAdminConsole({
   const [forcePasswordReset, setForcePasswordReset] = useState<boolean>(false);
   const [tenantMaxStaff, setTenantMaxStaff] = useState<number>(10);
   const [tenantCurrencySymbol, setTenantCurrencySymbol] = useState<string>("₹");
-  const [hardwareAllocated, setHardwareAllocated] = useState<string[]>([
-    "80mm Thermal Receipt Printer",
-    "Heavy Duty Cash Drawer",
-    "Wireless Laser Barcode Scanner"
-  ]);
+  const [hardwareAllocated, setHardwareAllocated] = useState<string[]>(
+    [...BUSINESS_SECTORS_CATALOG.SUPERMARKET.recommendedHardware]
+  );
   const [featureModulesEnabled, setFeatureModulesEnabled] = useState<Record<string, boolean>>({
-    posAnalytics: true,
-    expiryTracking: true,
-    loyaltyPoints: true,
-    branchTransfers: true,
-    barcodeGenerator: true
+    ...BUSINESS_SECTORS_CATALOG.SUPERMARKET.defaultModules
   });
   const [seedSampleProducts, setSeedSampleProducts] = useState<boolean>(true);
 
@@ -915,8 +920,10 @@ export default function SuperAdminConsole({
   const [subscriptionSearch, setSubscriptionSearch] = useState<string>("");
   const [subscriptionFilterTier, setSubscriptionFilterTier] = useState<string>("ALL");
 
-  // Interactive Chart Hover Index
+  // Interactive Chart Hover Index & Platform Analytics Timeframe
   const [hoveredChartIndex, setHoveredChartIndex] = useState<number>(3); // Default to date "15" (index 3)
+  const [analyticsRange, setAnalyticsRange] = useState<"7D" | "30D" | "90D" | "1Y">("30D");
+  const [openTenantActionId, setOpenTenantActionId] = useState<string | null>(null);
 
   // Roles & System Settings states
   const [selectedRoleTab, setSelectedRoleTab] = useState<string>("SUPER_ADMIN");
@@ -1029,14 +1036,57 @@ export default function SuperAdminConsole({
     { date: "30", revenue: 29400, expenses: 12900 }
   ];
 
+  const platformAnalyticsSeries = useMemo(() => {
+    const presets: Record<
+      "7D" | "30D" | "90D" | "1Y",
+      {
+        labels: string[];
+        growthPoints: number[];
+        revenueBars: number[];
+        revenueScaleMax: number;
+      }
+    > = {
+      "7D": {
+        labels: ["Mon", "Tue", "Wed", "Thu", "Fri"],
+        growthPoints: [24, 28, 31, 35, 39],
+        revenueBars: [6.5, 8.1, 7.4, 9.2, 8.6, 10.4, 9.8, 11.2, 10.7, 12.1],
+        revenueScaleMax: 15
+      },
+      "30D": {
+        labels: ["Nov 01", "Nov 08", "Nov 15", "Nov 22", "Nov 30"],
+        growthPoints: [18, 20, 21, 27, 24, 33, 31, 39, 37],
+        revenueBars: [7.2, 8.6, 6.8, 7.9, 9.4, 10.5, 9.1, 8.2, 9.6, 11.5, 10.1, 11.2, 13.0, 11.4],
+        revenueScaleMax: 15
+      },
+      "90D": {
+        labels: ["Sep", "Oct", "Nov", "Dec", "Jan"],
+        growthPoints: [14, 19, 25, 32, 41],
+        revenueBars: [8.4, 9.2, 10.1, 9.7, 11.3, 12.2, 11.8, 13.1, 12.5, 14.0, 13.6, 14.6],
+        revenueScaleMax: 15
+      },
+      "1Y": {
+        labels: ["Q1", "Q2", "Q3", "Q4", "YTD"],
+        growthPoints: [12, 22, 29, 36, 48],
+        revenueBars: [6.2, 7.8, 8.9, 9.5, 10.4, 11.2, 12.1, 12.8, 13.4, 14.2, 14.5, 14.9],
+        revenueScaleMax: 15
+      }
+    };
+    return presets[analyticsRange];
+  }, [analyticsRange]);
+
   // Dynamic calculations based strictly on stored database records
   const totalOnboardingFeeSourced = useMemo(() => {
     return tenantsList.reduce((acc, t) => acc + (t.onboardingFeePaid || 0), 0);
   }, [tenantsList]);
 
+  const totalMonthlySubscriptionSourced = useMemo(() => {
+    return tenantsList.reduce((acc, t) => acc + (t.monthlySubscriptionFee || 0), 0);
+  }, [tenantsList]);
+
   const kpiTotalClients = tenantsList.length;
   const kpiActiveClients = tenantsList.filter(t => t.status === "ACTIVE").length;
   const kpiTotalRevenue = totalOnboardingFeeSourced;
+  const kpiMonthlyRecurringRevenue = totalMonthlySubscriptionSourced > 0 ? totalMonthlySubscriptionSourced : totalOnboardingFeeSourced;
   const kpiInvoicesCount = invoicesList.length;
 
   // Copy to clipboard helper
@@ -1155,18 +1205,10 @@ export default function SuperAdminConsole({
     }
 
     const sectorCatalog = BUSINESS_SECTORS_CATALOG[tenantBusinessSector] || BUSINESS_SECTORS_CATALOG.SUPERMARKET;
-    const normalizedSectorConfig: TenantSectorConfig = {
-      sector: tenantBusinessSector,
-      sectorName: sectorCatalog.label,
-      enabledModules: {
-        ...sectorCatalog.defaultModules,
-        ...(featureModulesEnabled as Partial<TenantSectorConfig["enabledModules"]>)
-      },
-      posMode: sectorCatalog.posMode,
-      defaultCategories: sectorCatalog.defaultCategories,
-      unitPresets: sectorCatalog.unitPresets,
-      quickActions: sectorCatalog.quickActions
-    };
+    const normalizedSectorConfig: TenantSectorConfig = buildSectorConfig(
+      tenantBusinessSector,
+      featureModulesEnabled
+    );
     const generatedDomainUrl = `https://${subdomain}.expertbilling.in`;
     const newTenantId = `TENANT-${Date.now().toString().slice(-6)}`;
 
@@ -1236,6 +1278,9 @@ export default function SuperAdminConsole({
 
     onUpdateTenants([...tenantsList, newTenant]);
     onUpdateCredentials([...credentialsList, newProfile]);
+    if (onSeedSectorWorkspace) {
+      void onSeedSectorWorkspace(newTenant, seedSampleProducts);
+    }
 
     // Automatically provision seed invoice & audit transaction in corresponding states
     const generatedInvoiceId = `INV-2026-${Math.floor(100 + Math.random() * 900)}`;
@@ -1269,7 +1314,7 @@ export default function SuperAdminConsole({
     setPaymentsList(prev => [...prev, newOnboardingPayment]);
     
     setShowOnboardingSuccessModal(newTenant);
-    triggerNotification(`SaaS Slice for '${name}' saved to database with Admin Login ID: ${loginId}!`, "success");
+    triggerNotification(`SaaS Slice for '${name}' (${sectorCatalog.label}) saved to database with Admin Login ID: ${loginId}!`, "success");
 
     // Reset Form while keeping user on the same console view with updated client state
     setTenantName("");
@@ -1282,6 +1327,9 @@ export default function SuperAdminConsole({
     setTenantGstin("");
     setTenantNotes("");
     setTenantLogo("");
+    setTenantBusinessSector("SUPERMARKET");
+    setFeatureModulesEnabled({ ...BUSINESS_SECTORS_CATALOG.SUPERMARKET.defaultModules });
+    setHardwareAllocated([...BUSINESS_SECTORS_CATALOG.SUPERMARKET.recommendedHardware]);
     setOnboardingWizardStep(1);
   };
 
@@ -1438,16 +1486,7 @@ export default function SuperAdminConsole({
 
     const updatedList = tenantsList.map(t => {
       if (t.id === editingTenant.id) {
-        const sectorMeta = BUSINESS_SECTORS_CATALOG[editTenantBusinessSector] || BUSINESS_SECTORS_CATALOG.SUPERMARKET;
-        const normalizedEditedSectorConfig: TenantSectorConfig = {
-          sector: editTenantBusinessSector,
-          sectorName: sectorMeta.label,
-          enabledModules: sectorMeta.defaultModules,
-          posMode: sectorMeta.posMode,
-          defaultCategories: sectorMeta.defaultCategories,
-          unitPresets: sectorMeta.unitPresets,
-          quickActions: sectorMeta.quickActions
-        };
+        const normalizedEditedSectorConfig = buildSectorConfig(editTenantBusinessSector);
         return {
           ...t,
           name: editTenantName.trim() || t.name,
@@ -1905,7 +1944,7 @@ export default function SuperAdminConsole({
   };
 
   return (
-    <div className="flex h-screen w-screen bg-[#f4f7fe] text-slate-800 font-sans overflow-hidden" id="super-admin-layout">
+    <div className="flex h-screen w-screen bg-[#eef4fc] text-slate-800 font-sans overflow-hidden" id="super-admin-layout">
       
       {/* Mobile Backdrop Overlay */}
       {isSuperMobileMenuOpen && (
@@ -1915,32 +1954,66 @@ export default function SuperAdminConsole({
         />
       )}
 
-      {/* 1. Left Navigation panel (Dark Navy) */}
-      <aside className={`fixed inset-y-0 left-0 z-50 w-64 bg-[#0b1437] text-slate-300 flex flex-col shrink-0 border-r border-[#152055] shadow-2xl transition-transform duration-300 transform lg:static lg:translate-x-0 ${isSuperMobileMenuOpen ? "translate-x-0" : "-translate-x-full"}`} id="super-sidebar">
+      {/* 1. Left Navigation panel (Royal Navy to Azure Gradient with Bottom Flowing Waves) */}
+      <aside className={`fixed inset-y-0 left-0 z-50 w-64 bg-gradient-to-b from-[#061538] via-[#092052] to-[#0a2f76] text-slate-200 flex flex-col shrink-0 border-r border-[#12367c] shadow-2xl relative overflow-hidden transition-transform duration-300 transform lg:static lg:translate-x-0 ${isSuperMobileMenuOpen ? "translate-x-0" : "-translate-x-full"}`} id="super-sidebar">
         
+        {/* Subtle Bottom Decorative Blue Wave Vectors */}
+        <svg
+          viewBox="0 0 260 150"
+          className="absolute bottom-0 left-0 w-full h-36 pointer-events-none select-none z-0 opacity-85"
+          preserveAspectRatio="none"
+          aria-hidden="true"
+        >
+          <defs>
+            <linearGradient id="sidebarWave1" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0%" stopColor="#0f53ba" stopOpacity="0.45" />
+              <stop offset="100%" stopColor="#1e88ff" stopOpacity="0.85" />
+            </linearGradient>
+            <linearGradient id="sidebarWave2" x1="0" y1="1" x2="1" y2="0">
+              <stop offset="0%" stopColor="#082b6e" stopOpacity="0.6" />
+              <stop offset="100%" stopColor="#1268db" stopOpacity="0.7" />
+            </linearGradient>
+          </defs>
+          <path d="M0 90 C65 40, 155 125, 260 65 L260 150 L0 150 Z" fill="url(#sidebarWave2)" />
+          <path d="M0 115 C75 68, 170 135, 260 88 L260 150 L0 150 Z" fill="url(#sidebarWave1)" />
+        </svg>
+
         {/* Brand Header */}
-        <div className="p-6 border-b border-[#1b2559] flex flex-col items-center gap-1 bg-[#080d26]">
-          <ExpertAidLogo showSubtitle={true} className="scale-95 origin-left text-white" />
-          <div className="mt-1 w-full flex items-center justify-center gap-1">
-            <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse"></span>
-            <span className="text-[10px] font-bold text-slate-400 font-mono tracking-widest uppercase">Global Sovereign Slice</span>
+        <div className="relative z-10 px-5 py-5 border-b border-white/10 flex items-center justify-between">
+          <div className="flex items-center gap-2.5">
+            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-[#1d7dfa] to-[#0b3e96] flex items-center justify-center shadow-lg shadow-blue-900/40 border border-sky-300/30">
+              <svg viewBox="0 0 24 24" className="w-5 h-5" fill="none" aria-hidden="true">
+                <rect x="3" y="3" width="7.5" height="7.5" rx="2" fill="#38bdf8" />
+                <rect x="13.5" y="3" width="7.5" height="7.5" rx="2" fill="#0ea5e9" opacity="0.85" />
+                <rect x="3" y="13.5" width="7.5" height="7.5" rx="2" fill="#60a5fa" opacity="0.85" />
+                <rect x="13.5" y="13.5" width="7.5" height="7.5" rx="2" fill="#ffffff" />
+              </svg>
+            </div>
+            <div>
+              <span className="text-[19px] font-extrabold tracking-tight text-white leading-none block">
+                Expert<span className="text-[#38bdf8]">Billing</span>
+              </span>
+              <span className="text-[9.5px] font-semibold text-blue-200/75 tracking-wide block mt-0.5">
+                Super Admin Portal
+              </span>
+            </div>
           </div>
+          <span className="w-2 h-2 rounded-full bg-emerald-400 shadow-[0_0_8px_#34d399]" title="Platform Online" />
         </div>
 
         {/* Sidebar Nav items */}
-        <nav className="flex-1 px-4 py-6 space-y-1 overflow-y-auto" id="super-nav">
-          <p className="text-[9px] text-[#4b5b9f] font-extrabold font-mono tracking-widest uppercase px-3 mb-2">Core Command Control</p>
+        <nav className="relative z-10 flex-1 px-3.5 py-4 space-y-1 overflow-y-auto" id="super-nav">
           {[
-            { id: "dashboard", label: "Dashboard", icon: Activity },
+            { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
             { id: "multibranch", label: "Multi-Branch HQ", icon: GitBranch },
-            { id: "onboarding", label: "Client Onboarding", icon: Sparkles },
+            { id: "onboarding", label: "Client Onboarding", icon: PlusCircle },
             { id: "clients", label: "Clients Directory", icon: Building },
             { id: "users", label: "User Directory", icon: Users },
-            { id: "billing", label: "Billing & Ledger", icon: Coins },
+            { id: "billing", label: "Billing & Invoices", icon: FileText },
             { id: "invoices", label: "Invoices Center", icon: Receipt },
             { id: "payments", label: "Payments Audit", icon: CreditCard },
-            { id: "reports", label: "Analytics Reports", icon: TrendingUp },
-            { id: "subscriptions", label: "SaaS Subscriptions", icon: Layers }
+            { id: "reports", label: "Analytics Reports", icon: BarChart3 },
+            { id: "subscriptions", label: "SaaS Subscriptions", icon: Crown }
           ].map((item) => {
             const IconComponent = item.icon;
             const isActive = activeMenuTab === item.id;
@@ -1952,24 +2025,25 @@ export default function SuperAdminConsole({
                   setActiveMenuTab(item.id);
                   setIsSuperMobileMenuOpen(false);
                 }}
-                className={`w-full flex items-center gap-3.5 px-4 py-3 rounded-xl text-sm font-semibold tracking-wide transition-all ${
+                className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-[13px] font-semibold tracking-wide transition-all cursor-pointer ${
                   isActive 
-                    ? "bg-gradient-to-r from-blue-600 to-blue-500 text-white shadow-lg shadow-blue-500/20" 
-                    : "hover:bg-white/5 hover:text-white text-[#a3aed0]"
+                    ? "bg-gradient-to-r from-[#0e62dd] to-[#2381f7] text-white shadow-lg shadow-blue-950/35" 
+                    : "hover:bg-white/10 hover:text-white text-[#cbd8f6]"
                 }`}
               >
-                <IconComponent className={`w-4.5 h-4.5 shrink-0 ${isActive ? "text-white" : "text-[#a3aed0]"}`} />
-                <span>{item.label}</span>
+                <IconComponent className={`w-4 h-4 shrink-0 ${isActive ? "text-white" : item.id === "subscriptions" ? "text-amber-400" : "text-sky-200/80"}`} />
+                <span className="truncate">{item.label}</span>
               </button>
             );
           })}
 
-          <div className="pt-6">
-            <p className="text-[9px] text-[#4b5b9f] font-extrabold font-mono tracking-widest uppercase px-3 mb-2">Security & Settings</p>
+          <div className="my-3 mx-2 border-t border-white/12" />
+
+          <div className="space-y-1">
             {[
-              { id: "super-profile", label: "Super Profile", icon: User },
+              { id: "super-profile", label: "Super Profile", icon: Shield },
               { id: "roles", label: "Roles & Permissions", icon: Sliders },
-              { id: "audit", label: "Cyber Audit Logs", icon: FileText },
+              { id: "audit", label: "Cyber Audit Logs", icon: ShieldCheck },
               { id: "system-settings", label: "System Settings", icon: Settings },
               { id: "backup", label: "Backup & Restore", icon: DatabaseBackup }
             ].map((item) => {
@@ -1990,14 +2064,14 @@ export default function SuperAdminConsole({
                     }
                     setIsSuperMobileMenuOpen(false);
                   }}
-                  className={`w-full flex items-center gap-3.5 px-4 py-2.5 rounded-xl text-xs font-semibold tracking-wide transition-all ${
+                  className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-[13px] font-semibold tracking-wide transition-all cursor-pointer ${
                     isActive 
-                      ? "bg-gradient-to-r from-blue-600 to-blue-500 text-white shadow-lg shadow-blue-500/20" 
-                      : "hover:bg-white/5 hover:text-white text-[#a3aed0]"
+                      ? "bg-gradient-to-r from-[#0e62dd] to-[#2381f7] text-white shadow-lg shadow-blue-950/35" 
+                      : "hover:bg-white/10 hover:text-white text-[#cbd8f6]"
                   }`}
                 >
-                  <IconComponent className={`w-4 h-4 shrink-0 ${isActive ? "text-white" : "text-[#a3aed0]"}`} />
-                  <span>{item.label}</span>
+                  <IconComponent className={`w-4 h-4 shrink-0 ${isActive ? "text-white" : "text-sky-200/80"}`} />
+                  <span className="truncate">{item.label}</span>
                 </button>
               );
             })}
@@ -2005,23 +2079,23 @@ export default function SuperAdminConsole({
         </nav>
 
         {/* Sidebar Footer */}
-        <div className="p-4 border-t border-[#1b2559] bg-[#09102c] flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-purple-500 to-indigo-500 flex items-center justify-center text-white font-extrabold text-xs shadow-inner">
+        <div className="relative z-10 px-4 py-3.5 border-t border-white/15 bg-[#061842]/75 backdrop-blur-sm flex items-center justify-between">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-[#1d7dfa] to-[#38bdf8] flex items-center justify-center text-white font-extrabold text-xs shadow-inner shrink-0">
               SA
             </div>
             <div className="min-w-0">
               <p className="text-xs font-bold text-white truncate font-sans">Super Admin</p>
-              <p className="text-[9px] text-slate-400 font-mono truncate">superadmin@expertbilling.in</p>
+              <p className="text-[10px] text-blue-200/75 truncate">superadmin@expertbilling.in</p>
             </div>
           </div>
           <button
             onClick={onLogout}
             id="super-admin-logout"
-            className="p-1.5 text-slate-400 hover:text-white hover:bg-white/5 rounded-lg transition-all"
-            title="Sovereign Exit"
+            className="p-1.5 text-blue-200 hover:text-white hover:bg-white/10 rounded-lg transition-all cursor-pointer shrink-0"
+            title="Sign Out"
           >
-            <LogOut className="w-4 h-4 text-rose-450" />
+            <LogOut className="w-4 h-4 text-rose-300" />
           </button>
         </div>
       </aside>
@@ -2030,69 +2104,65 @@ export default function SuperAdminConsole({
       <div className="flex-1 flex flex-col min-w-0 h-full overflow-hidden" id="super-main-container">
         
         {/* Top Header */}
-        <header className="h-20 shrink-0 border-b border-slate-200/60 bg-white flex items-center justify-between px-4 md:px-8 relative z-10" id="super-header">
-          <div className="flex items-center gap-3">
+        <header className="h-[70px] shrink-0 border-b border-slate-200/80 bg-white/95 backdrop-blur-sm flex items-center justify-between px-4 md:px-7 relative z-20" id="super-header">
+          <div className="flex items-center gap-3 flex-1 max-w-xl">
             <button
               type="button"
               onClick={() => setIsSuperMobileMenuOpen(!isSuperMobileMenuOpen)}
               className="lg:hidden p-2 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-xl transition-all"
-              title="Toggle Mobile Sovereign Menu"
+              title="Toggle Navigation Menu"
             >
               {isSuperMobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
             </button>
 
-            <div>
-              <h1 className="text-base md:text-xl font-extrabold text-slate-900 tracking-tight capitalize font-sans">
-                {activeMenuTab === "dashboard" ? "Super Admin Command Dashboard" : activeMenuTab.replace("-", " ") + " Workspace"}
-              </h1>
-              <p className="text-[10px] md:text-xs text-slate-400 font-medium font-sans truncate">Sovereign multi-tenant SaaS licensing cockpit</p>
+            {activeMenuTab !== "dashboard" && (
+              <div className="hidden sm:block mr-2 shrink-0">
+                <h1 className="text-sm md:text-base font-extrabold text-slate-900 tracking-tight capitalize font-sans">
+                  {activeMenuTab.replace("-", " ")}
+                </h1>
+              </div>
+            )}
+
+            {/* Rounded Search Input matching ExpertBilling Super Admin bar */}
+            <div className="relative flex-1 max-w-md">
+              <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+              <input
+                type="text"
+                placeholder="Search clients, tenants, or features..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full bg-[#f5f8fe] border border-slate-200/80 text-slate-800 rounded-xl py-2.5 pl-10 pr-4 text-xs font-medium placeholder-slate-400 focus:outline-none focus:border-[#0f62da] focus:bg-white transition-all"
+              />
             </div>
           </div>
 
-          <div className="flex items-center gap-4">
-            
-            {/* Search inputs */}
-            <div className="relative w-80">
-              <input
-                type="text"
-                placeholder="Search clients, invoices, reports... (Ctrl + K)"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full bg-slate-50 border border-slate-200 text-slate-800 rounded-xl py-2 pl-9 pr-3 text-xs font-medium placeholder-slate-400 focus:outline-none focus:border-blue-500 focus:bg-white transition-all"
-              />
-              <Search className="w-4 h-4 absolute left-3 top-2.5 text-slate-400" />
-            </div>
-
+          <div className="flex items-center gap-3 md:gap-4">
             {/* Notification Badge Bell */}
             <div className="relative">
               <button
                 onClick={() => setShowNotificationCenter(!showNotificationCenter)}
-                className="p-2.5 text-slate-400 hover:text-slate-600 hover:bg-slate-50 rounded-xl transition-all relative"
+                className="p-2 text-slate-600 hover:text-[#0f62da] hover:bg-blue-50/70 rounded-xl transition-all relative cursor-pointer"
+                title="Platform Notifications"
               >
                 <Bell className="w-5 h-5" />
-                <span className="absolute top-1.5 right-1.5 w-4 h-4 bg-red-500 text-white text-[9px] font-black rounded-full flex items-center justify-center animate-pulse">
-                  6
+                <span className="absolute top-0.5 right-0.5 w-4 h-4 bg-red-500 text-white text-[9px] font-black rounded-full flex items-center justify-center shadow-sm">
+                  3
                 </span>
               </button>
 
-              {/* Mock Notification Dropdown */}
               {showNotificationCenter && (
                 <div className="absolute right-0 mt-2.5 w-80 bg-white border border-slate-200 shadow-2xl rounded-2xl p-4 z-50 text-slate-700">
                   <div className="flex items-center justify-between pb-3 border-b border-slate-100">
                     <p className="font-bold text-xs text-slate-900">Notifications Center</p>
-                    <span className="text-[9px] bg-blue-50 text-blue-600 px-2 py-0.5 rounded font-bold uppercase">6 Alerts</span>
+                    <span className="text-[9px] bg-blue-50 text-blue-600 px-2 py-0.5 rounded font-bold uppercase">Live Alerts</span>
                   </div>
                   <div className="py-2 space-y-3 max-h-60 overflow-y-auto">
-                    {[
-                      { text: "Tech Solutions Pvt. Ltd. processed license fee of ₹75,000", time: "2 mins ago" },
-                      { text: "ABC Retailers requested database scaling support", time: "1 hr ago" },
-                      { text: "Innovateech Systems sandbox deployed successfully", time: "2 hrs ago" },
-                      { text: "System daily backup generated successfully on cloud storage", time: "3 hrs ago" },
-                      { text: "New registration request received from Smart Infotech", time: "5 hrs ago" }
-                    ].map((n, i) => (
-                      <div key={i} className="text-[11px] leading-relaxed border-b border-slate-50 pb-2">
-                        <p className="font-semibold text-slate-800">{n.text}</p>
-                        <p className="text-[9px] text-slate-400 mt-0.5 font-mono">{n.time}</p>
+                    {tenantsList.slice(0, 4).map((t, i) => (
+                      <div key={t.id || i} className="text-[11px] leading-relaxed border-b border-slate-50 pb-2 last:border-b-0">
+                        <p className="font-semibold text-slate-800">Tenant active: {t.name}</p>
+                        <p className="text-[9.5px] text-slate-400 mt-0.5">
+                          {t.businessSector || "RETAIL"} • {t.tier} Plan
+                        </p>
                       </div>
                     ))}
                   </div>
@@ -2100,18 +2170,20 @@ export default function SuperAdminConsole({
               )}
             </div>
 
+            <div className="h-6 w-px bg-slate-200 hidden sm:block" />
+
             {/* User Profile */}
             <div className="relative">
               <button
                 onClick={() => setShowProfileDropdown(!showProfileDropdown)}
-                className="flex items-center gap-2.5 p-1.5 hover:bg-slate-50 rounded-xl transition-all"
+                className="flex items-center gap-2.5 p-1 pr-2 hover:bg-slate-50 rounded-xl transition-all cursor-pointer"
               >
-                <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-blue-600 to-indigo-600 text-white font-extrabold text-sm shadow-md flex items-center justify-center">
+                <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-[#0f62da] to-[#1e88ff] text-white font-extrabold text-xs shadow-sm flex items-center justify-center">
                   SA
                 </div>
                 <div className="text-left hidden sm:block">
-                  <p className="text-xs font-bold text-slate-800 leading-tight">Super Administrator</p>
-                  <p className="text-[9px] text-slate-400 font-bold uppercase tracking-widest font-mono">Master Role</p>
+                  <p className="text-xs font-bold text-slate-900 leading-tight">Super Administrator</p>
+                  <p className="text-[10px] text-slate-500 font-medium">superadmin@expertbilling.in</p>
                 </div>
                 <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
               </button>
@@ -2124,9 +2196,9 @@ export default function SuperAdminConsole({
                       setActiveMenuTab("system-settings");
                       setActiveSystemSettingsSubTab("profile");
                     }}
-                    className="w-full text-left px-3.5 py-2.5 text-xs font-bold text-purple-700 bg-purple-50/70 hover:bg-purple-100 rounded-xl flex items-center gap-2.5 transition-all"
+                    className="w-full text-left px-3.5 py-2.5 text-xs font-bold text-[#0f62da] bg-blue-50/70 hover:bg-blue-100 rounded-xl flex items-center gap-2.5 transition-all cursor-pointer"
                   >
-                    <User className="w-4 h-4 text-purple-600" />
+                    <User className="w-4 h-4 text-[#0f62da]" />
                     <span>Super Profile</span>
                   </button>
                   <button
@@ -2135,7 +2207,7 @@ export default function SuperAdminConsole({
                       setActiveMenuTab("system-settings");
                       setActiveSystemSettingsSubTab("enterprise");
                     }}
-                    className="w-full text-left px-3.5 py-2.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:text-slate-900 rounded-xl flex items-center gap-2.5"
+                    className="w-full text-left px-3.5 py-2.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:text-slate-900 rounded-xl flex items-center gap-2.5 cursor-pointer"
                   >
                     <Settings className="w-4 h-4 text-slate-400" />
                     <span>System Settings</span>
@@ -2145,7 +2217,7 @@ export default function SuperAdminConsole({
                       setShowProfileDropdown(false);
                       setActiveMenuTab("backup");
                     }}
-                    className="w-full text-left px-3.5 py-2.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:text-slate-900 rounded-xl flex items-center gap-2.5"
+                    className="w-full text-left px-3.5 py-2.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:text-slate-900 rounded-xl flex items-center gap-2.5 cursor-pointer"
                   >
                     <DatabaseBackup className="w-4 h-4 text-slate-400" />
                     <span>Backup Database</span>
@@ -2156,7 +2228,7 @@ export default function SuperAdminConsole({
                       setShowProfileDropdown(false);
                       if (onLogout) onLogout();
                     }}
-                    className="w-full text-left px-3.5 py-2.5 text-xs font-bold text-rose-500 hover:bg-rose-50 rounded-xl flex items-center gap-2.5"
+                    className="w-full text-left px-3.5 py-2.5 text-xs font-bold text-rose-500 hover:bg-rose-50 rounded-xl flex items-center gap-2.5 cursor-pointer"
                   >
                     <LogOut className="w-4 h-4 text-rose-500" />
                     <span>Log Out</span>
@@ -2164,516 +2236,698 @@ export default function SuperAdminConsole({
                 </div>
               )}
             </div>
-
           </div>
         </header>
 
         {/* Inner Panel layout (Scrollable content) */}
         {activeMenuTab === "dashboard" ? (
-          /* Dashboard Layout with Middle dashboard charts */
-          <div className="flex-1 p-8 space-y-8 overflow-y-auto min-w-0" id="super-dashboard-mid">
+          <div className="flex-1 p-5 md:p-6 space-y-5 overflow-y-auto min-w-0 bg-[#eef4fc]" id="super-dashboard-mid">
               
-              {/* Grid of 4 KPI Cards */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-6" id="kpi-grid">
-                
-                {/* 1. Total Clients */}
-                <div className="bg-white p-5 rounded-2xl border border-slate-200/50 shadow-sm flex items-center justify-between" id="kpi-card-clients">
-                  <div>
-                    <p className="text-xs text-slate-400 font-extrabold uppercase tracking-widest font-sans">Total Clients</p>
-                    <h2 className="text-3xl font-black text-slate-900 mt-1.5">{kpiTotalClients}</h2>
-                    <p className="text-[10px] text-emerald-500 font-extrabold flex items-center gap-1 mt-1">
-                      <TrendingUp className="w-3 h-3" /> ↑ 12.5% This Month
-                    </p>
+              {/* 1. Welcome Hero Banner */}
+              <div className="bg-gradient-to-r from-[#052159] via-[#0a499e] to-[#1772e5] rounded-2xl px-6 py-5 text-white shadow-md shadow-blue-900/10 relative overflow-hidden flex items-center justify-between">
+                <div className="flex items-center gap-4 relative z-10">
+                  <div className="w-12 h-12 rounded-2xl bg-white/15 backdrop-blur-sm border border-white/25 flex items-center justify-center shrink-0 shadow-inner">
+                    <svg viewBox="0 0 28 28" className="w-7 h-7" fill="none" aria-hidden="true">
+                      <path d="M14 2.5L4.5 6.5V13.2C4.5 19.1 8.55 24.45 14 26C19.45 24.45 23.5 19.1 23.5 13.2V6.5L14 2.5Z" fill="#ffffff" />
+                      <path d="M14 8.2L15.45 11.4L18.9 11.8L16.35 14.15L17.05 17.55L14 15.8L10.95 17.55L11.65 14.15L9.1 11.8L12.55 11.4L14 8.2Z" fill="#0b479e" />
+                    </svg>
                   </div>
-                  <div className="w-12 h-12 rounded-xl bg-blue-50 flex items-center justify-center text-blue-600 shadow-sm">
-                    <Building className="w-6 h-6" />
+                  <div>
+                    <h1 className="text-xl md:text-2xl font-extrabold tracking-tight text-white">
+                      Welcome to ExpertBilling
+                    </h1>
+                    <p className="text-xs md:text-sm text-blue-100/90 font-medium mt-0.5">
+                      Centralized Management for Your Multi-Tenant Platform
+                    </p>
                   </div>
                 </div>
 
-                {/* 2. Active Clients */}
-                <div className="bg-white p-5 rounded-2xl border border-slate-200/50 shadow-sm flex items-center justify-between" id="kpi-card-active">
-                  <div>
-                    <p className="text-xs text-slate-400 font-extrabold uppercase tracking-widest font-sans">Active Clients</p>
-                    <h2 className="text-3xl font-black text-slate-900 mt-1.5">{kpiActiveClients}</h2>
-                    <p className="text-[10px] text-emerald-500 font-extrabold flex items-center gap-1 mt-1">
-                      <TrendingUp className="w-3 h-3" /> ↑ 15.3% This Month
-                    </p>
-                  </div>
-                  <div className="w-12 h-12 rounded-xl bg-emerald-50 flex items-center justify-center text-emerald-600 shadow-sm">
-                    <UserCheck className="w-6 h-6" />
-                  </div>
-                </div>
-
-                {/* 3. Total Revenue */}
-                <div className="bg-white p-5 rounded-2xl border border-slate-200/50 shadow-sm flex items-center justify-between" id="kpi-card-revenue">
-                  <div>
-                    <p className="text-xs text-slate-400 font-extrabold uppercase tracking-widest font-sans">Total Revenue</p>
-                    <h2 className="text-3xl font-black text-slate-900 mt-1.5">₹ {kpiTotalRevenue.toLocaleString()}</h2>
-                    <p className="text-[10px] text-emerald-500 font-extrabold flex items-center gap-1 mt-1">
-                      <TrendingUp className="w-3 h-3" /> ↑ 18.6% This Month
-                    </p>
-                  </div>
-                  <div className="w-12 h-12 rounded-xl bg-purple-50 flex items-center justify-center text-purple-600 shadow-sm">
-                    <Coins className="w-6 h-6" />
-                  </div>
-                </div>
-
-                {/* 4. Invoices Generated */}
-                <div className="bg-white p-5 rounded-2xl border border-slate-200/50 shadow-sm flex items-center justify-between" id="kpi-card-invoices">
-                  <div>
-                    <p className="text-xs text-slate-400 font-extrabold uppercase tracking-widest font-sans">Invoices Generated</p>
-                    <h2 className="text-3xl font-black text-slate-900 mt-1.5">{kpiInvoicesCount.toLocaleString()}</h2>
-                    <p className="text-[10px] text-emerald-500 font-extrabold flex items-center gap-1 mt-1">
-                      <TrendingUp className="w-3 h-3" /> ↑ 10.2% This Month
-                    </p>
-                  </div>
-                  <div className="w-12 h-12 rounded-xl bg-amber-50 flex items-center justify-center text-amber-600 shadow-sm">
-                    <Receipt className="w-6 h-6" />
-                  </div>
-                </div>
-
+                {/* Decorative City Skyline Silhouette on Right */}
+                <svg
+                  viewBox="0 0 420 90"
+                  className="hidden md:block h-24 w-96 absolute right-0 bottom-0 pointer-events-none select-none opacity-35"
+                  preserveAspectRatio="xMaxYMax slice"
+                  aria-hidden="true"
+                >
+                  <g fill="#7dd3fc" fillOpacity="0.45">
+                    <rect x="20" y="42" width="22" height="48" rx="1.5" />
+                    <rect x="48" y="25" width="26" height="65" rx="1.5" />
+                    <rect x="80" y="48" width="18" height="42" rx="1.5" />
+                    <rect x="104" y="18" width="32" height="72" rx="1.5" />
+                    <rect x="142" y="34" width="24" height="56" rx="1.5" />
+                    <rect x="172" y="12" width="30" height="78" rx="1.5" />
+                    <rect x="208" y="30" width="26" height="60" rx="1.5" />
+                    <rect x="240" y="15" width="34" height="75" rx="1.5" />
+                    <rect x="280" y="28" width="24" height="62" rx="1.5" />
+                    <rect x="310" y="8" width="34" height="82" rx="1.5" />
+                    <rect x="350" y="24" width="28" height="66" rx="1.5" />
+                    <rect x="384" y="38" width="26" height="52" rx="1.5" />
+                  </g>
+                </svg>
               </div>
 
-              {/* Line Chart & Quick Actions Row */}
-              <div className="grid grid-cols-1 xl:grid-cols-12 gap-6" id="chart-quickactions-row">
-                
-                {/* 1. Business Overview interactive SVG Chart */}
-                <div className="bg-white p-6 rounded-2xl border border-slate-200/50 shadow-sm xl:col-span-8 flex flex-col" id="chart-card">
-                  <div className="flex items-center justify-between mb-4">
-                    <div>
-                      <h3 className="text-base font-bold text-slate-900 font-sans">Business Overview</h3>
-                      <p className="text-xs text-slate-400">Revenue (solid blue) vs Expenses (dashed red)</p>
-                    </div>
-                    <div className="flex items-center gap-4">
-                      <div className="flex items-center gap-1.5">
-                        <span className="w-3 h-3 bg-blue-600 rounded-full"></span>
-                        <span className="text-[11px] font-bold text-slate-500 font-sans">Revenue</span>
+              {/* 2. 5 KPI Summary Cards */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4" id="kpi-grid">
+                {/* 1. Total Clients */}
+                <div className="bg-white p-4 rounded-2xl border border-slate-200/75 shadow-sm flex flex-col justify-between gap-2" id="kpi-card-clients">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="w-11 h-11 rounded-full bg-blue-50 border border-blue-100 flex items-center justify-center text-[#0f62da] shrink-0">
+                        <Users className="w-5 h-5" />
                       </div>
-                      <div className="flex items-center gap-1.5">
-                        <span className="w-3 h-0.5 border-t-2 border-dashed border-rose-500"></span>
-                        <span className="text-[11px] font-bold text-slate-500 font-sans">Expenses</span>
+                      <div className="min-w-0">
+                        <p className="text-[11px] font-bold text-slate-600 truncate">Total Clients</p>
+                        <h2 className="text-2xl font-extrabold text-slate-900 leading-tight mt-0.5">{kpiTotalClients}</h2>
                       </div>
-                      <select className="bg-slate-50 border border-slate-200 rounded-lg text-[10.5px] font-bold text-slate-600 p-1.5 focus:outline-none">
-                        <option>This Month</option>
-                        <option>Last Quarter</option>
-                        <option>Financial Year 2024</option>
-                      </select>
                     </div>
                   </div>
+                  <div className="flex items-end justify-between gap-2 pt-1">
+                    <p className="text-[11px] font-bold text-emerald-600 whitespace-nowrap">↑ 12% vs last month</p>
+                    <KpiSparkline variant="wave-blue" />
+                  </div>
+                </div>
 
-                  {/* SVG Line Graph Area */}
-                  <div className="flex-1 min-h-[220px] relative mt-2" id="interactive-svg-graph">
-                    
-                    {/* SVG canvas */}
-                    <svg className="w-full h-full" viewBox="0 0 600 220" preserveAspectRatio="none">
-                      <defs>
-                        {/* Blue area gradient */}
-                        <linearGradient id="blueGradient" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="0%" stopColor="#3b82f6" stopOpacity="0.25" />
-                          <stop offset="100%" stopColor="#3b82f6" stopOpacity="0.0" />
-                        </linearGradient>
-                      </defs>
+                {/* 2. Active Tenants */}
+                <div className="bg-white p-4 rounded-2xl border border-slate-200/75 shadow-sm flex flex-col justify-between gap-2" id="kpi-card-active">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="w-11 h-11 rounded-full bg-emerald-50 border border-emerald-100 flex items-center justify-center text-emerald-600 shrink-0">
+                        <Building2 className="w-5 h-5" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-[11px] font-bold text-slate-600 truncate">Active Tenants</p>
+                        <h2 className="text-2xl font-extrabold text-slate-900 leading-tight mt-0.5">{kpiActiveClients}</h2>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex items-end justify-between gap-2 pt-1">
+                    <p className="text-[11px] font-bold text-emerald-600 whitespace-nowrap">↑ 10% vs last month</p>
+                    <KpiSparkline variant="wave-green" />
+                  </div>
+                </div>
 
-                      {/* Grid Horizontal Lines */}
-                      {[0, 1, 2, 3, 4].map((i) => {
-                        const y = 20 + i * 42;
-                        return (
-                          <line
-                            key={i}
-                            x1="30"
-                            y1={y}
-                            x2="580"
-                            y2={y}
-                            stroke="#f1f5f9"
-                            strokeWidth="1.5"
-                          />
-                        );
-                      })}
+                {/* 3. Total Users */}
+                <div className="bg-white p-4 rounded-2xl border border-slate-200/75 shadow-sm flex flex-col justify-between gap-2" id="kpi-card-users">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="w-11 h-11 rounded-full bg-purple-50 border border-purple-100 flex items-center justify-center text-purple-600 shrink-0">
+                        <UserCheck className="w-5 h-5" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-[11px] font-bold text-slate-600 truncate">Total Users</p>
+                        <h2 className="text-2xl font-extrabold text-slate-900 leading-tight mt-0.5">{credentialsList.length.toLocaleString()}</h2>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex items-end justify-between gap-2 pt-1">
+                    <p className="text-[11px] font-bold text-emerald-600 whitespace-nowrap">↑ 15% vs last month</p>
+                    <KpiSparkline variant="wave-purple" />
+                  </div>
+                </div>
 
-                      {/* Revenue Fill Area (under blue line) */}
-                      <path
-                        d="M 40,200 L 40,140 L 130,110 L 220,130 L 310,115 L 400,90 L 490,100 L 580,60 L 580,200 Z"
-                        fill="url(#blueGradient)"
-                      />
+                {/* 4. Monthly Recurring Revenue */}
+                <div className="bg-white p-4 rounded-2xl border border-slate-200/75 shadow-sm flex flex-col justify-between gap-2" id="kpi-card-revenue">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="w-11 h-11 rounded-full bg-amber-50 border border-amber-100 flex items-center justify-center text-amber-600 font-black text-lg shrink-0">
+                        ₹
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-[11px] font-bold text-slate-600 truncate">Monthly Recurring Revenue</p>
+                        <h2 className="text-2xl font-extrabold text-slate-900 leading-tight mt-0.5 truncate">
+                          ₹{kpiMonthlyRecurringRevenue.toLocaleString("en-IN")}
+                        </h2>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex items-end justify-between gap-2 pt-1">
+                    <p className="text-[11px] font-bold text-emerald-600 whitespace-nowrap">↑ 18% vs last month</p>
+                    <KpiSparkline variant="wave-amber" />
+                  </div>
+                </div>
 
-                      {/* Grid Lines for dynamic interactive pointer */}
-                      {hoveredChartIndex !== null && (
-                        <line
-                          x1={40 + hoveredChartIndex * 90}
-                          y1="10"
-                          x2={40 + hoveredChartIndex * 90}
-                          y2="200"
-                          stroke="#3b82f6"
-                          strokeWidth="1.5"
-                          strokeDasharray="4 4"
-                        />
-                      )}
+                {/* 5. System Health */}
+                <div className="bg-white p-4 rounded-2xl border border-slate-200/75 shadow-sm flex flex-col justify-between gap-2" id="kpi-card-health">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="w-11 h-11 rounded-full bg-emerald-50 border border-emerald-100 flex items-center justify-center text-emerald-600 shrink-0">
+                        <ShieldCheck className="w-5 h-5" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-[11px] font-bold text-slate-600 truncate">System Health</p>
+                        <h2 className="text-2xl font-extrabold text-slate-900 leading-tight mt-0.5">99.9%</h2>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex items-end justify-between gap-2 pt-1">
+                    <div className="flex items-center gap-2">
+                      <svg viewBox="0 0 32 16" className="w-7 h-4 text-emerald-500 shrink-0" fill="none" aria-hidden="true">
+                        <path d="M1 9H8L11 3L15 14L19 6L22 9H31" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                      <span className="px-2.5 py-0.5 rounded-md bg-emerald-50 text-emerald-700 border border-emerald-200 text-[11px] font-bold">
+                        Healthy
+                      </span>
+                    </div>
+                    <KpiSparkline variant="wave-emerald" />
+                  </div>
+                </div>
+              </div>
 
-                      {/* Revenue Curve Line */}
-                      <path
-                        d="M 40,140 Q 85,120 130,110 T 220,130 T 310,115 T 400,90 T 490,100 T 580,60"
-                        fill="none"
-                        stroke="#2563eb"
-                        strokeWidth="3.5"
-                        strokeLinecap="round"
-                      />
+              {/* 3. Middle Row: Tenant & Branch Overview (8 cols) + System Monitoring (4 cols) */}
+              <div className="grid grid-cols-1 xl:grid-cols-12 gap-5" id="overview-monitoring-row">
+                {/* Tenant & Branch Overview Table */}
+                <div className="bg-white rounded-2xl border border-slate-200/75 shadow-sm xl:col-span-8 flex flex-col overflow-hidden" id="recent-clients-card">
+                  <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-8 h-8 rounded-lg bg-blue-50 text-[#0f62da] flex items-center justify-center shrink-0">
+                        <Database className="w-4 h-4" />
+                      </div>
+                      <h3 className="text-sm md:text-base font-extrabold text-slate-900 font-sans">Tenant &amp; Branch Overview</h3>
+                    </div>
+                    <button
+                      onClick={() => setActiveMenuTab("clients")}
+                      className="px-3.5 py-1.5 rounded-xl border border-blue-200 text-[#0f62da] hover:bg-blue-50 text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shrink-0"
+                    >
+                      <span>View All Clients</span>
+                      <ArrowRight className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
 
-                      {/* Expenses Curve Line */}
-                      <path
-                        d="M 40,180 Q 85,160 130,150 T 220,165 T 310,155 T 400,140 T 490,145 T 580,120"
-                        fill="none"
-                        stroke="#f43f5e"
-                        strokeWidth="2.5"
-                        strokeDasharray="5 4"
-                        strokeLinecap="round"
-                      />
+                  <div className="overflow-x-auto" id="recent-clients-table">
+                    <table className="w-full text-left border-collapse min-w-[680px]">
+                      <thead>
+                        <tr className="bg-[#f7fafe] border-b border-slate-200/70 text-slate-600 font-bold text-[11.5px]">
+                          <th className="py-3 px-4">Client / Organization</th>
+                          <th className="py-3 px-3">Business Type</th>
+                          <th className="py-3 px-3 text-center">Branches</th>
+                          <th className="py-3 px-3">Subscription Plan</th>
+                          <th className="py-3 px-3">Status</th>
+                          <th className="py-3 px-3">Renewal</th>
+                          <th className="py-3 px-4 text-right">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100 text-xs">
+                        {tenantsList
+                          .filter(
+                            (t) =>
+                              !searchQuery.trim() ||
+                              t.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                              t.subdomain.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                              (t.businessSector || "").toLowerCase().includes(searchQuery.toLowerCase())
+                          )
+                          .slice(0, 6)
+                          .map((t) => {
+                            const sector = t.businessSector || "RETAIL";
+                            const sectorLabel =
+                              sector === "SUPERMARKET"
+                                ? "Supermarket & Grocery"
+                                : sector === "PHARMACY"
+                                ? "Pharmacy & Healthcare"
+                                : sector === "RESTAURANT"
+                                ? "Restaurant & F&B"
+                                : sector === "SERVICES"
+                                ? "Services & Salon"
+                                : sector === "PG_HOSTEL"
+                                ? "PG & Hostel"
+                                : sector === "FASHION_GARMENT"
+                                ? "Fashion & Garment"
+                                : "Retail";
+                            const sectorPillClass =
+                              sector === "SUPERMARKET"
+                                ? "bg-emerald-50 text-emerald-700 border-emerald-200/70"
+                                : sector === "PHARMACY"
+                                ? "bg-sky-50 text-sky-700 border-sky-200/70"
+                                : sector === "RESTAURANT"
+                                ? "bg-amber-50 text-amber-700 border-amber-200/70"
+                                : sector === "SERVICES"
+                                ? "bg-purple-50 text-purple-700 border-purple-200/70"
+                                : sector === "PG_HOSTEL"
+                                ? "bg-teal-50 text-teal-700 border-teal-200/70"
+                                : sector === "FASHION_GARMENT"
+                                ? "bg-rose-50 text-rose-800 border-rose-200/70"
+                                : "bg-blue-50 text-blue-700 border-blue-200/70";
+                            const SectorIcon =
+                              sector === "RESTAURANT"
+                                ? Utensils
+                                : sector === "PHARMACY"
+                                ? Pill
+                                : sector === "SERVICES"
+                                ? Scissors
+                                : sector === "PG_HOSTEL"
+                                ? BedDouble
+                                : sector === "FASHION_GARMENT"
+                                ? Shirt
+                                : ShoppingCart;
+                            const planLabel =
+                              t.tier === "ENTERPRISE"
+                                ? "Enterprise Plan"
+                                : t.tier === "GROWTH"
+                                ? "Business Plan"
+                                : "Starter Plan";
+                            const renewalFormatted = t.subscriptionEndDate
+                              ? new Date(t.subscriptionEndDate).toLocaleDateString("en-US", {
+                                  month: "short",
+                                  day: "2-digit",
+                                  year: "numeric"
+                                })
+                              : "Dec 15, 2026";
 
-                      {/* Interactive Circles / Dots on Revenue path */}
-                      {chartData.map((d, idx) => {
-                        const x = 40 + idx * 90;
-                        // Approximate scaling for display
-                        const yRev = 200 - (d.revenue / 35000) * 160;
-                        const yExp = 200 - (d.expenses / 35000) * 160;
-                        return (
-                          <g key={idx} className="cursor-pointer">
-                            {/* Hitbox */}
-                            <rect
-                              x={x - 45}
-                              y="0"
-                              width="90"
-                              height="220"
-                              fill="transparent"
-                              onMouseEnter={() => setHoveredChartIndex(idx)}
-                            />
+                            return (
+                              <tr key={t.id} className="hover:bg-[#f8fbff] transition-colors">
+                                <td className="py-3.5 px-4">
+                                  <div className="flex items-center gap-3">
+                                    <div className="w-9 h-9 rounded-xl bg-blue-50 text-[#0f62da] flex items-center justify-center border border-blue-100 shrink-0">
+                                      {t.companyLogo ? (
+                                        <img src={t.companyLogo} alt="" className="w-full h-full rounded-xl object-contain" referrerPolicy="no-referrer" />
+                                      ) : (
+                                        <SectorIcon className="w-4 h-4" />
+                                      )}
+                                    </div>
+                                    <div className="min-w-0">
+                                      <p className="font-bold text-slate-900 truncate">{t.name}</p>
+                                      <p className="text-[11px] text-slate-500 truncate">
+                                        {t.subdomain}.expertbilling.in
+                                      </p>
+                                    </div>
+                                  </div>
+                                </td>
+                                <td className="py-3.5 px-3">
+                                  <span className={`inline-flex items-center px-2.5 py-0.5 rounded-md border text-[11px] font-bold ${sectorPillClass}`}>
+                                    {sectorLabel}
+                                  </span>
+                                </td>
+                                <td className="py-3.5 px-3 text-center font-bold text-slate-800">
+                                  {t.maxBranches || 1}
+                                </td>
+                                <td className="py-3.5 px-3 font-semibold text-slate-700">
+                                  {planLabel}
+                                </td>
+                                <td className="py-3.5 px-3">
+                                  <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold ${
+                                    t.status === "ACTIVE"
+                                      ? "bg-emerald-50 text-emerald-700"
+                                      : t.status === "SUSPENDED"
+                                      ? "bg-rose-50 text-rose-700"
+                                      : "bg-amber-50 text-amber-700"
+                                  }`}>
+                                    <span className={`w-1.5 h-1.5 rounded-full ${
+                                      t.status === "ACTIVE" ? "bg-emerald-500" : t.status === "SUSPENDED" ? "bg-rose-500" : "bg-amber-500"
+                                    }`} />
+                                    <span>{t.status === "ACTIVE" ? "Active" : t.status === "SUSPENDED" ? "Suspended" : "Trial"}</span>
+                                  </span>
+                                </td>
+                                <td className="py-3.5 px-3 font-medium text-slate-600 whitespace-nowrap">
+                                  {renewalFormatted}
+                                </td>
+                                <td className="py-3.5 px-4 text-right relative">
+                                  <div className="inline-flex items-center gap-1.5">
+                                    <button
+                                      onClick={() => setViewingTenant(t)}
+                                      className="px-3 py-1 rounded-lg border border-blue-200 text-[#0f62da] hover:bg-blue-50 text-xs font-bold transition-all cursor-pointer"
+                                    >
+                                      View
+                                    </button>
+                                    <button
+                                      onClick={() => setOpenTenantActionId(openTenantActionId === t.id ? null : t.id)}
+                                      className="p-1.5 rounded-lg border border-slate-200 text-slate-500 hover:text-slate-800 hover:bg-slate-50 transition-all cursor-pointer"
+                                      title="More Tenant Actions"
+                                    >
+                                      <MoreVertical className="w-3.5 h-3.5" />
+                                    </button>
+                                  </div>
 
-                            {/* Revenue Point */}
-                            <circle
-                              cx={x}
-                              cy={yRev}
-                              r={hoveredChartIndex === idx ? "7" : "4.5"}
-                              fill={hoveredChartIndex === idx ? "#1d4ed8" : "#2563eb"}
-                              stroke="white"
-                              strokeWidth="2"
-                              className="transition-all"
-                            />
+                                  {openTenantActionId === t.id && (
+                                    <div className="absolute right-4 top-12 w-48 bg-white border border-slate-200 rounded-xl shadow-xl p-1.5 z-30 text-left">
+                                      {onImpersonateClient && (
+                                        <button
+                                          onClick={() => {
+                                            setOpenTenantActionId(null);
+                                            const credMatch = credentialsList.find(c =>
+                                              c.email.toLowerCase() === t.adminEmail.toLowerCase() ||
+                                              c.title.toLowerCase().includes(t.name.toLowerCase()) ||
+                                              c.name.toLowerCase().includes(t.name.toLowerCase())
+                                            );
+                                            onImpersonateClient(credMatch ? credMatch.email : t.adminEmail);
+                                          }}
+                                          className="w-full text-left px-3 py-2 rounded-lg text-xs font-semibold text-emerald-700 hover:bg-emerald-50 flex items-center gap-2 cursor-pointer"
+                                        >
+                                          <UserCheck className="w-3.5 h-3.5" />
+                                          <span>Login as Client</span>
+                                        </button>
+                                      )}
+                                      <button
+                                        onClick={() => {
+                                          setOpenTenantActionId(null);
+                                          setEditingTenant(t);
+                                          setEditTenantName(t.name);
+                                          setEditTenantSubdomain(t.subdomain);
+                                          setEditTenantAdminEmail(t.adminEmail);
+                                          setEditTenantPhone(t.phone);
+                                          setEditTenantTier(t.tier);
+                                          setEditTenantStatus(t.status);
+                                          setEditTenantColorTheme(t.colorTheme);
+                                          setEditTenantMaxBranches(t.maxBranches);
+                                          setEditTenantMaxProducts(t.maxProducts);
+                                          setEditTenantOnboardingFee(t.onboardingFeePaid);
+                                          setEditTenantSubscriptionFee(t.monthlySubscriptionFee || 4500);
+                                          setEditTenantBillingCycle(t.billingCycle || "MONTHLY");
+                                          setEditTenantContractDuration(t.contractDurationMonths || 12);
+                                          setEditTenantGstin(t.gstinRegNumber || "");
+                                          setEditTenantNotes(t.onboardingNotes || "");
+                                          setEditTenantLogo(t.companyLogo || "");
+                                          setEditTenantBusinessSector(t.businessSector || "SUPERMARKET");
+                                          setEditTenantFontFamily(t.typography?.fontFamily || "Inter");
+                                          setEditTenantFontSizeScale(t.typography?.fontSizeScale || "standard");
+                                          setEditTenantBusinessLocation(t.businessLocation || "");
+                                          setEditTenantAddress(t.address || "");
+                                          setEditTenantCity(t.city || "");
+                                          setEditTenantState(t.state || "");
+                                          setEditTenantPincode(t.pincode || "");
+                                          setEditTenantCountry(t.country || "India");
+                                        }}
+                                        className="w-full text-left px-3 py-2 rounded-lg text-xs font-semibold text-slate-700 hover:bg-slate-50 flex items-center gap-2 cursor-pointer"
+                                      >
+                                        <Edit className="w-3.5 h-3.5 text-amber-600" />
+                                        <span>Edit Configuration</span>
+                                      </button>
+                                      <button
+                                        onClick={() => {
+                                          setOpenTenantActionId(null);
+                                          handleOpenTypographyModal(t);
+                                        }}
+                                        className="w-full text-left px-3 py-2 rounded-lg text-xs font-semibold text-slate-700 hover:bg-slate-50 flex items-center gap-2 cursor-pointer"
+                                      >
+                                        <Type className="w-3.5 h-3.5 text-purple-600" />
+                                        <span>Typography Studio</span>
+                                      </button>
+                                      <button
+                                        onClick={() => {
+                                          setOpenTenantActionId(null);
+                                          handleRemoveTenant(t.id, t.name);
+                                        }}
+                                        className="w-full text-left px-3 py-2 rounded-lg text-xs font-semibold text-rose-600 hover:bg-rose-50 flex items-center gap-2 cursor-pointer"
+                                      >
+                                        <Trash2 className="w-3.5 h-3.5" />
+                                        <span>Remove Tenant</span>
+                                      </button>
+                                    </div>
+                                  )}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
 
-                            {/* Expenses Point */}
-                            <circle
-                              cx={x}
-                              cy={yExp}
-                              r={hoveredChartIndex === idx ? "5" : "3.5"}
-                              fill="#f43f5e"
-                              stroke="white"
-                              strokeWidth="1.5"
-                              className="transition-all"
-                            />
-                          </g>
-                        );
-                      })}
-                    </svg>
-
-                    {/* X-Axis labels */}
-                    <div className="absolute left-1 bottom-0 right-1 flex justify-between px-7 text-[10px] font-bold text-slate-400 font-mono">
-                      {chartData.map((d, i) => (
-                        <span key={i} className={hoveredChartIndex === i ? "text-blue-600 font-black" : ""}>
-                          {d.date} May
-                        </span>
-                      ))}
+                {/* System Monitoring Card */}
+                <div className="bg-white rounded-2xl border border-slate-200/75 shadow-sm xl:col-span-4 p-5 flex flex-col justify-between" id="system-monitoring-card">
+                  <div>
+                    <div className="flex items-center gap-2.5 pb-4 border-b border-slate-100">
+                      <div className="w-8 h-8 rounded-lg bg-blue-50 text-[#0f62da] flex items-center justify-center shrink-0">
+                        <Monitor className="w-4 h-4" />
+                      </div>
+                      <h3 className="text-sm md:text-base font-extrabold text-slate-900">System Monitoring</h3>
                     </div>
 
-                    {/* FLOATING INTERACTIVE TOOLTIP MATCHING SCREENSHOT */}
-                    {hoveredChartIndex !== null && (
-                      <div 
-                        className="absolute bg-slate-900/95 text-white p-2.5 rounded-xl shadow-xl border border-slate-800 pointer-events-none transition-all z-20"
-                        style={{
-                          left: `${8 + hoveredChartIndex * 14.8}%`,
-                          top: "20px"
-                        }}
-                      >
-                        <p className="text-[9px] text-slate-400 font-extrabold uppercase font-mono">
-                          {chartData[hoveredChartIndex].date} May 2024
-                        </p>
-                        <div className="mt-1 space-y-0.5 text-xs">
-                          <p className="flex items-center gap-1.5 font-sans">
-                            <span className="w-1.5 h-1.5 bg-blue-500 rounded-full"></span>
-                            <span>Rev: </span>
-                            <span className="font-extrabold font-mono text-emerald-400">
-                              ₹ {chartData[hoveredChartIndex].revenue.toLocaleString()}
-                            </span>
-                          </p>
-                          <p className="flex items-center gap-1.5 font-sans">
-                            <span className="w-1.5 h-1.5 bg-rose-500 rounded-full"></span>
-                            <span>Exp: </span>
-                            <span className="font-extrabold font-mono text-rose-300">
-                              ₹ {chartData[hoveredChartIndex].expenses.toLocaleString()}
-                            </span>
-                          </p>
+                    <div className="py-4 space-y-3.5 border-b border-slate-100">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2.5">
+                          <span className="w-5 h-5 rounded-full bg-emerald-500 text-white flex items-center justify-center">
+                            <Check className="w-3 h-3" />
+                          </span>
+                          <span className="text-xs font-bold text-slate-800">API Services</span>
+                        </div>
+                        <span className="px-2.5 py-0.5 rounded-md bg-emerald-50 text-emerald-700 text-[11px] font-bold">
+                          Operational
+                        </span>
+                      </div>
+
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2.5">
+                          <span className="w-5 h-5 rounded-full bg-emerald-500 text-white flex items-center justify-center">
+                            <Check className="w-3 h-3" />
+                          </span>
+                          <span className="text-xs font-bold text-slate-800">Database</span>
+                        </div>
+                        <span className="px-2.5 py-0.5 rounded-md bg-emerald-50 text-emerald-700 text-[11px] font-bold">
+                          {dbMode === "MYSQL_LIVE" ? "MySQL Live" : "Operational"}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="pt-4 space-y-4">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2.5">
+                          <Clock className="w-4 h-4 text-slate-600" />
+                          <span className="text-xs font-bold text-slate-800">Server Uptime</span>
+                        </div>
+                        <span className="text-sm font-extrabold text-slate-900">99.98%</span>
+                      </div>
+
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2.5">
+                            <Database className="w-4 h-4 text-slate-600" />
+                            <span className="text-xs font-bold text-slate-800">Storage Usage</span>
+                          </div>
+                          <span className="text-sm font-extrabold text-slate-900">68%</span>
+                        </div>
+                        <div className="w-full h-2.5 rounded-full bg-slate-200/80 overflow-hidden">
+                          <div className="h-full w-[68%] rounded-full bg-gradient-to-r from-[#0f62da] to-[#1e88ff]" />
                         </div>
                       </div>
-                    )}
-
+                    </div>
                   </div>
                 </div>
-
-                {/* 2. Quick Actions Panel */}
-                <div className="bg-white p-6 rounded-2xl border border-slate-200/50 shadow-sm xl:col-span-4 flex flex-col" id="quickactions-card">
-                  <h3 className="text-base font-bold text-slate-900 font-sans mb-4">Sovereign Quick Actions</h3>
-                  <div className="flex-1 grid grid-cols-1 gap-3" id="quickactions-grid">
-                    {[
-                      { 
-                        title: "Add New Client", 
-                        desc: "Focus onboarding form", 
-                        icon: Building, 
-                        color: "bg-blue-50 text-blue-600",
-                        action: () => {
-                          setActiveMenuTab("clients");
-                          setTimeout(() => {
-                            const nameInput = document.getElementById("client-onboard-name");
-                            if (nameInput) {
-                              nameInput.focus();
-                              nameInput.scrollIntoView({ behavior: "smooth" });
-                            }
-                            triggerNotification("Onboarding form focused! Add client specifications.", "success");
-                          }, 150);
-                        }
-                      },
-                      { 
-                        title: "Create System Invoice", 
-                        desc: "Generate license invoice", 
-                        icon: Receipt, 
-                        color: "bg-amber-50 text-amber-600",
-                        action: () => {
-                          setActiveMenuTab("invoices");
-                          setTimeout(() => {
-                            const selectEl = document.getElementById("invoice-creator-tenant-select");
-                            if (selectEl) {
-                              selectEl.focus();
-                              selectEl.scrollIntoView({ behavior: "smooth" });
-                            }
-                            triggerNotification("Invoice generator form focused! Configure system billing details.", "success");
-                          }, 150);
-                        }
-                      },
-                      { 
-                        title: "Register Admin User", 
-                        desc: "Create operator profile", 
-                        icon: Users, 
-                        color: "bg-purple-50 text-purple-600",
-                        action: () => {
-                          setActiveMenuTab("users");
-                          setTimeout(() => {
-                            const userInput = document.getElementById("register-operator-name");
-                            if (userInput) {
-                              userInput.focus();
-                              userInput.scrollIntoView({ behavior: "smooth" });
-                            }
-                            triggerNotification("Operator registration form focused! Input personnel profile details.", "success");
-                          }, 150);
-                        }
-                      },
-                      { 
-                        title: "Download DB Backup", 
-                        desc: "Export absolute JSON state", 
-                        icon: Download, 
-                        color: "bg-emerald-50 text-emerald-600",
-                        action: handleExportBackup
-                      }
-                    ].map((act, i) => {
-                      const ActIcon = act.icon;
-                      return (
-                        <button
-                          key={i}
-                          onClick={act.action}
-                          className="flex items-center justify-between p-3 rounded-xl border border-slate-100 hover:border-blue-200 hover:bg-slate-50 transition-all text-left cursor-pointer group"
-                        >
-                          <div className="flex items-center gap-3">
-                            <div className={`w-10 h-10 rounded-xl ${act.color} flex items-center justify-center`}>
-                              <ActIcon className="w-5 h-5" />
-                            </div>
-                            <div>
-                              <p className="text-xs font-bold text-slate-800">{act.title}</p>
-                              <p className="text-[10px] text-slate-400 font-medium">{act.desc}</p>
-                            </div>
-                          </div>
-                          <ChevronRight className="w-4 h-4 text-slate-300 group-hover:text-blue-500 group-hover:translate-x-1 transition-all" />
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-
               </div>
 
-              {/* Recent Clients Table */}
-              <div className="bg-white rounded-2xl border border-slate-200/50 shadow-sm overflow-hidden" id="recent-clients-card">
-                <div className="p-6 border-b border-slate-100 flex items-center justify-between">
-                  <div>
-                    <h3 className="text-base font-bold text-slate-900 font-sans">Recent Clients</h3>
-                    <p className="text-xs text-slate-400">Corporate clients registered in SaaS system</p>
+              {/* 4. Bottom Row: Platform Analytics (6 cols) + Recent Admin Activity (3 cols) + Quick Actions (3 cols) */}
+              <div className="grid grid-cols-1 xl:grid-cols-12 gap-5" id="analytics-activity-actions-row">
+                
+                {/* Platform Analytics */}
+                <div className="bg-white rounded-2xl border border-slate-200/75 shadow-sm xl:col-span-6 p-5 flex flex-col" id="chart-card">
+                  <div className="flex flex-wrap items-center justify-between gap-2 pb-4 border-b border-slate-100">
+                    <div className="flex items-center gap-2">
+                      <BarChart3 className="w-4 h-4 text-[#0f62da]" />
+                      <h3 className="text-sm md:text-base font-extrabold text-slate-900">Platform Analytics</h3>
+                    </div>
+                    <div className="flex items-center gap-1 bg-[#f4f7fc] p-1 rounded-xl border border-slate-200/70">
+                      {(["7D", "30D", "90D", "1Y"] as const).map((range) => (
+                        <button
+                          key={range}
+                          onClick={() => setAnalyticsRange(range)}
+                          className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all cursor-pointer ${
+                            analyticsRange === range
+                              ? "bg-[#0f62da] text-white shadow-sm"
+                              : "text-slate-600 hover:text-slate-900"
+                          }`}
+                        >
+                          {range}
+                        </button>
+                      ))}
+                    </div>
                   </div>
-                  <button
-                    onClick={() => setActiveMenuTab("clients")}
-                    className="text-xs font-bold text-blue-600 hover:text-blue-800 flex items-center gap-1 transition-all"
-                  >
-                    View all clients <ArrowRight className="w-3.5 h-3.5" />
-                  </button>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4 flex-1">
+                    {/* Client Growth Line Chart */}
+                    <div className="border border-slate-200/75 rounded-xl p-3.5 bg-[#fcfdff] flex flex-col justify-between">
+                      <p className="text-xs font-extrabold text-slate-800 mb-2">Client Growth</p>
+                      <div className="relative h-36">
+                        <svg viewBox="0 0 260 125" className="w-full h-full" preserveAspectRatio="none">
+                          <defs>
+                            <linearGradient id="clientGrowthGrad" x1="0" y1="0" x2="0" y2="1">
+                              <stop offset="0%" stopColor="#1e7bf5" stopOpacity="0.22" />
+                              <stop offset="100%" stopColor="#1e7bf5" stopOpacity="0.01" />
+                            </linearGradient>
+                          </defs>
+                          {[20, 44, 68, 92].map((yVal, i) => (
+                            <line key={i} x1="26" y1={yVal} x2="250" y2={yVal} stroke="#e2e8f0" strokeWidth="1" strokeDasharray="3 3" />
+                          ))}
+                          {[
+                            { y: 20, t: "40" },
+                            { y: 44, t: "30" },
+                            { y: 68, t: "20" },
+                            { y: 92, t: "10" },
+                            { y: 114, t: "0" }
+                          ].map((lbl, idx) => (
+                            <text key={idx} x="4" y={lbl.y + 3} fontSize="8.5" fill="#64748b" fontWeight="600">
+                              {lbl.t}
+                            </text>
+                          ))}
+                          {(() => {
+                            const pts = platformAnalyticsSeries.growthPoints;
+                            const stepX = (244 - 30) / Math.max(pts.length - 1, 1);
+                            const coords = pts.map((v, idx) => {
+                              const x = 30 + idx * stepX;
+                              const y = 112 - Math.min(48, Math.max(0, v)) * 2.0;
+                              return { x, y };
+                            });
+                            const lineD = coords.map((c, idx) => `${idx === 0 ? "M" : "L"} ${c.x.toFixed(1)},${c.y.toFixed(1)}`).join(" ");
+                            const areaD = `${lineD} L ${coords[coords.length - 1].x.toFixed(1)},112 L ${coords[0].x.toFixed(1)},112 Z`;
+                            return (
+                              <>
+                                <path d={areaD} fill="url(#clientGrowthGrad)" />
+                                <path d={lineD} fill="none" stroke="#0f62da" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+                                {coords.map((c, idx) => (
+                                  <circle
+                                    key={idx}
+                                    cx={c.x}
+                                    cy={c.y}
+                                    r="3.2"
+                                    fill="#ffffff"
+                                    stroke="#0f62da"
+                                    strokeWidth="2"
+                                  />
+                                ))}
+                              </>
+                            );
+                          })()}
+                        </svg>
+                      </div>
+                      <div className="flex items-center justify-between pl-6 pr-1 text-[10px] font-semibold text-slate-500 mt-1">
+                        {platformAnalyticsSeries.labels.map((lbl, idx) => (
+                          <span key={idx}>{lbl}</span>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Revenue Trend Bar Chart */}
+                    <div className="border border-slate-200/75 rounded-xl p-3.5 bg-[#fcfdff] flex flex-col justify-between">
+                      <p className="text-xs font-extrabold text-slate-800 mb-2">Revenue Trend</p>
+                      <div className="relative h-36">
+                        <svg viewBox="0 0 260 125" className="w-full h-full" preserveAspectRatio="none">
+                          {[20, 50, 80, 110].map((yVal, i) => (
+                            <line key={i} x1="28" y1={yVal} x2="252" y2={yVal} stroke="#e2e8f0" strokeWidth="1" strokeDasharray="3 3" />
+                          ))}
+                          {[
+                            { y: 20, t: "15K" },
+                            { y: 50, t: "10K" },
+                            { y: 80, t: "5K" },
+                            { y: 110, t: "0K" }
+                          ].map((lbl, idx) => (
+                            <text key={idx} x="2" y={lbl.y + 3} fontSize="8.5" fill="#64748b" fontWeight="600">
+                              {lbl.t}
+                            </text>
+                          ))}
+                          {(() => {
+                            const bars = platformAnalyticsSeries.revenueBars;
+                            const totalW = 216;
+                            const slotW = totalW / bars.length;
+                            const barW = Math.max(6, slotW * 0.62);
+                            return bars.map((val, idx) => {
+                              const h = (val / platformAnalyticsSeries.revenueScaleMax) * 90;
+                              const x = 32 + idx * slotW;
+                              const y = 110 - h;
+                              return (
+                                <rect
+                                  key={idx}
+                                  x={x}
+                                  y={y}
+                                  width={barW}
+                                  height={h}
+                                  rx="2.5"
+                                  fill="#10b981"
+                                />
+                              );
+                            });
+                          })()}
+                        </svg>
+                      </div>
+                      <div className="flex items-center justify-between pl-6 pr-1 text-[10px] font-semibold text-slate-500 mt-1">
+                        {platformAnalyticsSeries.labels.map((lbl, idx) => (
+                          <span key={idx}>{lbl}</span>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
                 </div>
 
-                <div className="overflow-x-auto max-h-[400px] overflow-y-auto relative" id="recent-clients-table">
-                  <table className="w-full text-left border-collapse">
-                    <thead className="sticky top-0 z-10 shadow-[0_1px_0_0_rgba(226,232,240,1)] bg-slate-50">
-                      <tr className="bg-slate-50 border-b border-slate-100 text-slate-400 font-bold uppercase tracking-wider text-[10px]">
-                        <th className="p-4 bg-slate-50 text-[10px] font-extrabold text-slate-400 uppercase tracking-widest font-mono">Company Name</th>
-                        <th className="p-4 bg-slate-50 text-[10px] font-extrabold text-slate-400 uppercase tracking-widest font-mono">Email Address</th>
-                        <th className="p-4 bg-slate-50 text-[10px] font-extrabold text-slate-400 uppercase tracking-widest font-mono">Plan / Tier</th>
-                        <th className="p-4 bg-slate-50 text-[10px] font-extrabold text-slate-400 uppercase tracking-widest font-mono">Status</th>
-                        <th className="p-4 bg-slate-50 text-[10px] font-extrabold text-slate-400 uppercase tracking-widest font-mono">Onboarded On</th>
-                        <th className="p-4 bg-slate-50 text-[10px] font-extrabold text-slate-400 uppercase tracking-widest font-mono text-right">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100">
-                      {tenantsList.slice(-5).reverse().map((t) => (
-                        <tr key={t.id} className="hover:bg-slate-50/50 transition-all">
-                          <td className="p-4">
-                            <div className="flex items-center gap-3">
-                              <div className="w-9 h-9 rounded-xl bg-slate-100 flex items-center justify-center font-black text-xs text-slate-600 border border-slate-200 uppercase">
-                                {t.companyLogo ? (
-                                  <img src={t.companyLogo} alt="" className="w-full h-full rounded-xl object-contain" referrerPolicy="no-referrer" />
-                                ) : (
-                                  t.name.substring(0, 2)
-                                )}
-                              </div>
-                              <div>
-                                <div className="flex items-center gap-2">
-                                  <p className="text-xs font-bold text-slate-800 leading-snug">{t.name}</p>
-                                  {t.businessSector && (
-                                    <span className="px-1.5 py-0.5 rounded text-[9px] font-black uppercase tracking-wider bg-indigo-50 text-indigo-700 border border-indigo-200/50">
-                                      {t.businessSector}
-                                    </span>
-                                  )}
-                                </div>
-                                <div className="flex items-center gap-2 mt-0.5">
-                                  <span className="text-[10px] text-blue-600 font-semibold font-mono tracking-tight flex items-center gap-1">
-                                    <Globe className="w-2.5 h-2.5" />
-                                    https://{t.subdomain}.expertbilling.in
-                                  </span>
-                                  <span className="text-[8px] font-mono font-bold text-emerald-600 bg-emerald-50 px-1 py-0.2 rounded border border-emerald-200">
-                                    ACTIVE
-                                  </span>
-                                  {t.typography && (
-                                    <span className="text-[8.5px] font-mono text-purple-600 bg-purple-50 px-1 py-0.2 rounded border border-purple-200">
-                                      {t.typography.fontFamily} ({t.typography.fontSizeScale})
-                                    </span>
-                                  )}
-                                </div>
-                              </div>
-                            </div>
-                          </td>
-                          <td className="p-4 text-xs font-medium text-slate-600 font-mono">{t.adminEmail}</td>
-                          <td className="p-4">
-                            <span className={`px-2.5 py-1 rounded-full text-[9.5px] font-bold uppercase tracking-wider ${
-                              t.tier === "ENTERPRISE" ? "bg-purple-50 text-purple-600 border border-purple-100" :
-                              t.tier === "GROWTH" ? "bg-blue-50 text-blue-600 border border-blue-100" :
-                              "bg-slate-50 text-slate-600 border border-slate-100"
-                            }`}>
-                              {t.tier === "ENTERPRISE" ? "Premium" : t.tier === "GROWTH" ? "Standard" : "Basic"}
-                            </span>
-                          </td>
-                          <td className="p-4">
-                            <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold flex items-center gap-1 w-max ${
-                              t.status === "ACTIVE" ? "bg-emerald-50 text-emerald-600" : "bg-amber-50 text-amber-600"
-                            }`}>
-                              <span className={`w-1.5 h-1.5 rounded-full ${t.status === "ACTIVE" ? "bg-emerald-500" : "bg-amber-500"}`} />
-                              <span>{t.status === "ACTIVE" ? "Active" : "Trial/Pending"}</span>
-                            </span>
-                          </td>
-                          <td className="p-4 text-xs font-semibold text-slate-500 font-mono">
-                            {new Date(t.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
-                          </td>
-                          <td className="p-4 text-right">
-                            <div className="flex items-center justify-end gap-1.5">
-                              {onImpersonateClient && (
-                                <button
-                                  onClick={() => {
-                                    const credMatch = credentialsList.find(c => 
-                                      c.email.toLowerCase() === t.adminEmail.toLowerCase() ||
-                                      c.title.toLowerCase().includes(t.name.toLowerCase()) ||
-                                      c.name.toLowerCase().includes(t.name.toLowerCase())
-                                    );
-                                    if (credMatch) {
-                                      onImpersonateClient(credMatch.email);
-                                    } else {
-                                      onImpersonateClient(t.adminEmail);
-                                    }
-                                  }}
-                                  className="p-1.5 hover:bg-emerald-50 text-slate-400 hover:text-emerald-600 rounded-lg transition-all"
-                                  title="Login as Client Admin"
-                                >
-                                  <UserCheck className="w-4 h-4" />
-                                </button>
-                              )}
-                              <button
-                                onClick={() => handleOpenTypographyModal(t)}
-                                className="p-1.5 hover:bg-purple-50 text-slate-400 hover:text-purple-600 rounded-lg transition-all"
-                                title={`Customize Font & Typography (${t.typography?.fontFamily || 'Inter'})`}
-                              >
-                                <Type className="w-4 h-4" />
-                              </button>
-                              <button
-                                onClick={() => setViewingTenant(t)}
-                                className="p-1.5 hover:bg-slate-100 text-slate-400 hover:text-blue-600 rounded-lg transition-all"
-                                title="View detailed specs"
-                              >
-                                <Eye className="w-4 h-4" />
-                              </button>
-                              <button
-                                onClick={() => {
-                                  setEditingTenant(t);
-                                  setEditTenantName(t.name);
-                                  setEditTenantSubdomain(t.subdomain);
-                                  setEditTenantAdminEmail(t.adminEmail);
-                                  setEditTenantPhone(t.phone);
-                                  setEditTenantTier(t.tier);
-                                  setEditTenantStatus(t.status);
-                                  setEditTenantColorTheme(t.colorTheme);
-                                  setEditTenantMaxBranches(t.maxBranches);
-                                  setEditTenantMaxProducts(t.maxProducts);
-                                  setEditTenantOnboardingFee(t.onboardingFeePaid);
-                                  setEditTenantSubscriptionFee(t.monthlySubscriptionFee || 4500);
-                                  setEditTenantBillingCycle(t.billingCycle || "MONTHLY");
-                                  setEditTenantContractDuration(t.contractDurationMonths || 12);
-                                  setEditTenantGstin(t.gstinRegNumber || "");
-                                  setEditTenantNotes(t.onboardingNotes || "");
-                                  setEditTenantLogo(t.companyLogo || "");
-                                  setEditTenantBusinessSector(t.businessSector || "SUPERMARKET");
-                                  setEditTenantFontFamily(t.typography?.fontFamily || "Inter");
-                                  setEditTenantFontSizeScale(t.typography?.fontSizeScale || "standard");
-                                  setEditTenantBusinessLocation(t.businessLocation || "");
-                                  setEditTenantAddress(t.address || "");
-                                  setEditTenantCity(t.city || "");
-                                  setEditTenantState(t.state || "");
-                                  setEditTenantPincode(t.pincode || "");
-                                  setEditTenantCountry(t.country || "India");
-                                }}
-                                className="p-1.5 hover:bg-slate-100 text-slate-400 hover:text-amber-600 rounded-lg transition-all"
-                                title="Edit specs"
-                              >
-                                <Edit className="w-4 h-4" />
-                              </button>
-                              <button
-                                onClick={() => handleRemoveTenant(t.id, t.name)}
-                                className="p-1.5 hover:bg-rose-50 text-slate-400 hover:text-rose-600 rounded-lg transition-all"
-                                title="Erase tenant isolation"
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                {/* Recent Admin Activity */}
+                <div className="bg-white rounded-2xl border border-slate-200/75 shadow-sm xl:col-span-3 p-5 flex flex-col">
+                  <div className="flex items-center justify-between pb-3.5 border-b border-slate-100">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <History className="w-4 h-4 text-[#0f62da] shrink-0" />
+                      <h3 className="text-sm font-extrabold text-slate-900 truncate">Recent Admin Activity</h3>
+                    </div>
+                    <button
+                      onClick={() => setActiveMenuTab("audit")}
+                      className="text-[11px] font-bold text-[#0f62da] hover:text-blue-800 flex items-center gap-0.5 shrink-0 cursor-pointer"
+                    >
+                      <span>View All</span>
+                      <ArrowRight className="w-3 h-3" />
+                    </button>
+                  </div>
+
+                  <div className="mt-4 relative space-y-4 flex-1">
+                    <div className="absolute left-[5px] top-2 bottom-2 w-px bg-slate-200" aria-hidden="true" />
+                    {[
+                      {
+                        text: `Active client synced: ${tenantsList[0]?.name || "FreshMart Supermarket"}`,
+                        time: "Today, 11:24 AM"
+                      },
+                      {
+                        text: `Subscription verified for ${tenantsList[1]?.name || "Demo Enterprise"}`,
+                        time: "Today, 09:15 AM"
+                      },
+                      {
+                        text: `Operator profile active: ${credentialsList[1]?.name || "Aarav Sharma"}`,
+                        time: "Yesterday, 05:32 PM"
+                      },
+                      {
+                        text: "Multi-tenant sector templates updated",
+                        time: "Yesterday, 02:18 PM"
+                      }
+                    ].map((act, idx) => (
+                      <div key={idx} className="relative pl-5">
+                        <span className="absolute left-0 top-1.5 w-2.5 h-2.5 rounded-full bg-[#0f62da] ring-4 ring-white" />
+                        <p className="text-xs font-bold text-slate-800 leading-snug">{act.text}</p>
+                        <p className="text-[11px] text-slate-500 mt-0.5">{act.time}</p>
+                      </div>
+                    ))}
+                  </div>
                 </div>
+
+                {/* Quick Actions */}
+                <div className="bg-white rounded-2xl border border-slate-200/75 shadow-sm xl:col-span-3 p-5 flex flex-col justify-between" id="quickactions-card">
+                  <div>
+                    <div className="flex items-center gap-2 pb-3.5 border-b border-slate-100">
+                      <Zap className="w-4 h-4 text-[#0f62da]" />
+                      <h3 className="text-sm font-extrabold text-slate-900">Quick Actions</h3>
+                    </div>
+
+                    <div className="mt-4 space-y-3" id="quickactions-grid">
+                      <button
+                        onClick={() => {
+                          setActiveMenuTab("onboarding");
+                          triggerNotification("Opened Client Onboarding Wizard.", "success");
+                        }}
+                        className="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-[#0e62dd] to-[#1e7bf5] hover:from-[#0b52be] hover:to-[#1769d8] text-white font-bold text-xs shadow-md shadow-blue-500/20 flex items-center justify-center gap-2 transition-all cursor-pointer"
+                      >
+                        <PlusCircle className="w-4 h-4" />
+                        <span>Onboard Client</span>
+                      </button>
+
+                      <button
+                        onClick={() => setActiveMenuTab("users")}
+                        className="w-full py-3 px-4 rounded-xl border border-blue-200 text-[#0f62da] hover:bg-blue-50/80 font-bold text-xs flex items-center justify-center gap-2 transition-all cursor-pointer"
+                      >
+                        <Users className="w-4 h-4" />
+                        <span>Manage Users</span>
+                      </button>
+
+                      <button
+                        onClick={() => setActiveMenuTab("invoices")}
+                        className="w-full py-3 px-4 rounded-xl border border-blue-200 text-[#0f62da] hover:bg-blue-50/80 font-bold text-xs flex items-center justify-center gap-2 transition-all cursor-pointer"
+                      >
+                        <FileText className="w-4 h-4" />
+                        <span>View Invoices</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
               </div>
 
             </div>
@@ -3521,7 +3775,9 @@ export default function SuperAdminConsole({
                             const isSelected = tenantBusinessSector === sectorKey;
                             const SectorIcon = sectorKey === "RESTAURANT" ? Utensils :
                                               sectorKey === "RETAIL" ? ShoppingBag :
+                                              sectorKey === "FASHION_GARMENT" ? Shirt :
                                               sectorKey === "PHARMACY" ? Pill :
+                                              sectorKey === "PG_HOSTEL" ? BedDouble :
                                               sectorKey === "SERVICES" ? Scissors : ShoppingCart;
                             return (
                               <button
@@ -3544,7 +3800,9 @@ export default function SuperAdminConsole({
                                     <div className={`p-2 rounded-xl text-white ${
                                       sectorKey === "RESTAURANT" ? "bg-amber-600" :
                                       sectorKey === "RETAIL" ? "bg-blue-600" :
+                                      sectorKey === "FASHION_GARMENT" ? "bg-rose-700" :
                                       sectorKey === "PHARMACY" ? "bg-rose-600" :
+                                      sectorKey === "PG_HOSTEL" ? "bg-teal-600" :
                                       sectorKey === "SERVICES" ? "bg-purple-600" : "bg-emerald-600"
                                     }`}>
                                       <SectorIcon className="w-4 h-4" />
@@ -3570,6 +3828,31 @@ export default function SuperAdminConsole({
                             );
                           })}
                         </div>
+
+                        {/* Live Preview of Sector-Configured Modules & POS Mode */}
+                        {(() => {
+                          const activeSec = BUSINESS_SECTORS_CATALOG[tenantBusinessSector] || BUSINESS_SECTORS_CATALOG.SUPERMARKET;
+                          const activeModMetas = SECTOR_MODULE_CATALOG.filter((m) => !!featureModulesEnabled?.[m.key]);
+                          return (
+                            <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-2">
+                              <div className="flex flex-wrap items-center justify-between gap-2 text-[11px]">
+                                <span className="font-extrabold text-slate-800">
+                                  {activeSec.icon} {activeSec.label} — Auto-Configured Modules ({activeModMetas.length} Active)
+                                </span>
+                                <span className="px-2 py-0.5 bg-blue-100 text-blue-700 rounded font-mono text-[9.5px] font-bold">
+                                  POS Mode: {activeSec.posMode}
+                                </span>
+                              </div>
+                              <div className="flex flex-wrap gap-1.5">
+                                {activeModMetas.map((m) => (
+                                  <span key={m.key} className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                    ✓ {m.shortLabel}
+                                  </span>
+                                ))}
+                              </div>
+                            </div>
+                          );
+                        })()}
                       </div>
 
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
@@ -3698,18 +3981,20 @@ export default function SuperAdminConsole({
                         </div>
 
                         <div className="space-y-1.5">
-                          <label className="text-[11px] font-extrabold text-slate-700 uppercase tracking-wider block">Business Category / Vertical</label>
+                          <label className="text-[11px] font-extrabold text-slate-700 uppercase tracking-wider block">Business Sector</label>
                           <select
                             value={tenantCategory}
                             onChange={(e) => setTenantCategory(e.target.value)}
                             className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs font-bold text-slate-800 focus:bg-white focus:border-blue-500 focus:outline-none transition-all cursor-pointer"
                           >
                             <option value="Supermarket & Grocery">Supermarket & Grocery</option>
+                            <option value="Fashion & Garment">Fashion & Garment</option>
                             <option value="Pharmacy & Healthcare">Pharmacy & Healthcare</option>
                             <option value="Apparel & Fashion">Apparel & Fashion</option>
                             <option value="Electronics & Mobile">Electronics & Mobile</option>
                             <option value="Hardware & Tools">Hardware & Tools</option>
                             <option value="Restaurant & Cafe">Restaurant & Cafe</option>
+                            <option value="PG & Hostel Management">PG & Hostel Management</option>
                             <option value="Wholesale Distribution">Wholesale Distribution</option>
                             <option value="Specialty Retail">Specialty Retail</option>
                           </select>
@@ -4056,12 +4341,13 @@ export default function SuperAdminConsole({
                       <div className="space-y-2 pt-2">
                         <label className="text-[11px] font-extrabold text-slate-700 uppercase tracking-wider block">Provisioned Hardware Bundle</label>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                          {[
+                          {Array.from(new Set([
+                            ...(BUSINESS_SECTORS_CATALOG[tenantBusinessSector]?.recommendedHardware || []),
                             "80mm Thermal Receipt Printer",
                             "Heavy Duty Cash Drawer",
                             "Wireless Laser Barcode Scanner",
                             "Touch POS Terminal Display"
-                          ].map((hw) => {
+                          ])).map((hw) => {
                             const isSelected = hardwareAllocated?.includes(hw);
                             return (
                               <label key={hw} className="flex items-center gap-2.5 p-2.5 bg-slate-50 rounded-xl border border-slate-200/60 text-xs font-bold text-slate-700 cursor-pointer hover:bg-slate-100">
@@ -4084,35 +4370,56 @@ export default function SuperAdminConsole({
                         </div>
                       </div>
 
-                      {/* Feature Module Toggles */}
+                      {/* Real Sector-Specific Feature Module Toggles */}
                       <div className="space-y-2 pt-2">
-                        <label className="text-[11px] font-extrabold text-slate-700 uppercase tracking-wider block">Enabled Feature Modules</label>
-                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
-                          {[
-                            { key: "posAnalytics", label: "POS Sales Analytics" },
-                            { key: "expiryTracking", label: "Expiry & Batch Tracking" },
-                            { key: "loyaltyPoints", label: "Customer Loyalty System" },
-                            { key: "branchTransfers", label: "Inter-Branch Stock Transfers" },
-                            { key: "barcodeGenerator", label: "Custom Barcode Generator" }
-                          ].map((mod) => (
-                            <label key={mod.key} className="flex items-center gap-2 p-2.5 bg-slate-50 rounded-xl border border-slate-200/60 text-xs font-bold text-slate-700 cursor-pointer hover:bg-slate-100">
-                              <input
-                                type="checkbox"
-                                checked={!!(featureModulesEnabled && featureModulesEnabled[mod.key])}
-                                onChange={(e) => setFeatureModulesEnabled(prev => ({ ...(prev || {}), [mod.key]: e.target.checked }))}
-                                className="w-4 h-4 text-blue-600 rounded border-slate-300 focus:ring-blue-500"
-                              />
-                              <span>{mod.label}</span>
-                            </label>
-                          ))}
+                        <div className="flex items-center justify-between">
+                          <label className="text-[11px] font-extrabold text-slate-700 uppercase tracking-wider block">
+                            Sector Business Modules &amp; Features
+                          </label>
+                          <span className="text-[10px] font-mono text-purple-600 font-bold">
+                            {SECTOR_MODULE_CATALOG.filter(m => !!(featureModulesEnabled && featureModulesEnabled[m.key])).length} / {SECTOR_MODULE_CATALOG.length} Enabled
+                          </span>
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                          {SECTOR_MODULE_CATALOG.map((mod) => {
+                            const isChecked = !!(featureModulesEnabled && featureModulesEnabled[mod.key]);
+                            return (
+                              <label
+                                key={mod.key}
+                                className={`flex items-start gap-2.5 p-2.5 rounded-xl border text-xs cursor-pointer transition-all ${
+                                  isChecked
+                                    ? "bg-blue-50/70 border-blue-300 text-slate-900"
+                                    : "bg-slate-50 border-slate-200/60 text-slate-500 hover:bg-slate-100"
+                                }`}
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={isChecked}
+                                  onChange={(e) => setFeatureModulesEnabled(prev => ({ ...(prev || {}), [mod.key]: e.target.checked }))}
+                                  className="w-4 h-4 mt-0.5 text-blue-600 rounded border-slate-300 focus:ring-blue-500 shrink-0"
+                                />
+                                <div className="min-w-0">
+                                  <div className="flex items-center gap-1.5 flex-wrap">
+                                    <span className="font-extrabold">{mod.label}</span>
+                                    <span className="text-[9px] font-mono px-1.5 py-0.2 rounded bg-white border border-slate-200 text-slate-500">
+                                      {mod.categoryTag}
+                                    </span>
+                                  </div>
+                                  <p className="text-[10px] text-slate-500 mt-0.5 leading-snug">{mod.description}</p>
+                                </div>
+                              </label>
+                            );
+                          })}
                         </div>
                       </div>
 
                       {/* Seed Sample Products Checkbox */}
                       <div className="bg-emerald-50/60 p-4 rounded-2xl border border-emerald-200/60 flex items-center justify-between">
                         <div>
-                          <p className="text-xs font-extrabold text-emerald-950">Pre-populate Sample Product Catalog</p>
-                          <p className="text-[11px] text-emerald-700 font-medium mt-0.5">Automatically seed store inventory tailored to category "{tenantCategory}".</p>
+                          <p className="text-xs font-extrabold text-emerald-950">Pre-populate Sector Categories &amp; Sample Catalog</p>
+                          <p className="text-[11px] text-emerald-700 font-medium mt-0.5">
+                            Automatically seed categories and sample items tailored to "{BUSINESS_SECTORS_CATALOG[tenantBusinessSector]?.label || tenantCategory}".
+                          </p>
                         </div>
                         <input
                           type="checkbox"
@@ -4187,7 +4494,7 @@ export default function SuperAdminConsole({
                       <p className="font-extrabold text-amber-400 mt-0.5">{tenantTier} PLAN</p>
                     </div>
                     <div className="bg-slate-800/50 p-2.5 rounded-xl border border-slate-800">
-                      <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Category</p>
+                      <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Business Sector</p>
                       <p className="font-bold text-slate-200 mt-0.5 truncate">{tenantCategory}</p>
                     </div>
                   </div>
@@ -4230,27 +4537,15 @@ export default function SuperAdminConsole({
             </div>
           </div>
         ) : activeMenuTab === "clients" ? (
-          /* Clients page layout with split columns: Directory list (Column 1) and Onboarding panel (Column 2) */
-          <div className="flex-1 flex flex-col lg:flex-row min-h-0 overflow-hidden" id="super-clients-split">
-            {/* Left Clients Directory Panel */}
+          /* Clients Directory view: display only existing client directory details */
+          <div className="flex-1 flex flex-col min-h-0 overflow-hidden" id="super-clients-split">
+            {/* Clients Directory Panel */}
             <div className="flex-1 p-8 overflow-y-auto space-y-6" id="clients-panel">
             <div className="flex items-center justify-between">
               <div>
                 <h2 className="text-lg font-bold text-slate-900">Corporate Clients</h2>
                 <p className="text-xs text-slate-400">Total of {tenantsList.length} isolated database sandbox environments</p>
               </div>
-              <button 
-                onClick={() => {
-                  const el = document.getElementById("client-onboard-name");
-                  if (el) {
-                    el.focus();
-                    el.scrollIntoView({ behavior: "smooth" });
-                  }
-                }}
-                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold shadow-md flex items-center gap-1.5"
-              >
-                <Plus className="w-4 h-4" /> Add Corporate Client
-              </button>
             </div>
 
             {/* Full Clients Directory Table */}
@@ -4426,163 +4721,6 @@ export default function SuperAdminConsole({
                 </tbody>
               </table>
             </div>
-          </div>
-
-          {/* Right Onboarding Panel (Column 2) */}
-          <div className="w-full lg:w-96 shrink-0 border-t lg:border-t-0 lg:border-l border-slate-200 bg-white p-6 overflow-y-auto space-y-6" id="super-onboarding-panel">
-            
-            {/* Form header */}
-            <div className="pb-4 border-b border-slate-100">
-              <h3 className="text-base font-extrabold text-slate-900 font-sans">Onboard New Client</h3>
-              <p className="text-xs text-slate-400">Provision a custom sandbox slice on the fly</p>
-            </div>
-
-            {/* Onboarding form */}
-            <form onSubmit={handleOnboardTenant} className="space-y-4" id="onboard-client-form">
-              
-              <div>
-                <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1.5 font-sans">Client Name *</label>
-                <input
-                  type="text"
-                  required
-                  id="client-onboard-name"
-                  placeholder="Enter corporate client name"
-                  value={tenantName}
-                  onChange={(e) => setTenantName(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-200 text-slate-800 rounded-xl py-2 px-3 text-xs font-semibold placeholder-slate-400 focus:outline-none focus:border-blue-500 focus:bg-white transition-all"
-                />
-              </div>
-
-              <div>
-                <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1.5 font-sans">Admin Email *</label>
-                <input
-                  type="email"
-                  required
-                  placeholder="admin@corporate.com"
-                  value={tenantAdminEmail}
-                  onChange={(e) => setTenantAdminEmail(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-200 text-slate-800 rounded-xl py-2 px-3 text-xs font-semibold placeholder-slate-400 focus:outline-none focus:border-blue-500 focus:bg-white transition-all"
-                />
-              </div>
-
-              <div>
-                <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1.5 font-sans">Phone Number</label>
-                <input
-                  type="text"
-                  placeholder="+91 9900990099"
-                  value={tenantPhone}
-                  onChange={(e) => setTenantPhone(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-200 text-slate-800 rounded-xl py-2 px-3 text-xs font-semibold placeholder-slate-400 focus:outline-none focus:border-blue-500 focus:bg-white transition-all"
-                />
-              </div>
-
-              <div>
-                <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1.5 font-sans">Admin Login ID (UID) *</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="Enter admin login ID / UID"
-                  value={tenantAdminLoginId}
-                  onChange={(e) => setTenantAdminLoginId(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-200 text-slate-800 rounded-xl py-2 px-3 text-xs font-semibold placeholder-slate-400 focus:outline-none focus:border-blue-500 focus:bg-white transition-all"
-                />
-              </div>
-
-              <div>
-                <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1.5 font-sans">Admin Password *</label>
-                <input
-                  type="password"
-                  required
-                  placeholder="Enter admin password"
-                  value={tenantAdminPassword}
-                  onChange={(e) => setTenantAdminPassword(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-200 text-slate-800 rounded-xl py-2 px-3 text-xs font-semibold placeholder-slate-400 focus:outline-none focus:border-blue-500 focus:bg-white transition-all"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1.5 font-sans">Subscription Plan</label>
-                  <select
-                    value={tenantTier}
-                    onChange={(e) => setTenantTier(e.target.value as any)}
-                    className="w-full bg-slate-50 border border-slate-200 text-slate-700 rounded-xl py-2 px-3 text-xs font-bold focus:outline-none focus:border-blue-500 focus:bg-white"
-                  >
-                    <option value="STARTER">Starter Plan</option>
-                    <option value="GROWTH">Growth Plan</option>
-                    <option value="ENTERPRISE">Enterprise Plan</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1.5 font-sans">Setup Fee (₹)</label>
-                  <input
-                    type="number"
-                    value={tenantOnboardingFee}
-                    onChange={(e) => setTenantOnboardingFee(Number(e.target.value))}
-                    className="w-full bg-slate-50 border border-slate-200 text-slate-800 rounded-xl py-2 px-3 text-xs font-mono font-bold focus:outline-none focus:border-blue-500 focus:bg-white"
-                  />
-                </div>
-              </div>
-
-              <button
-                type="submit"
-                id="submit-onboard-client"
-                className="w-full py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-md shadow-blue-500/10 flex items-center justify-center gap-2 transition-all cursor-pointer mt-4"
-              >
-                <CheckCircle className="w-4 h-4" />
-                <span>Onboard Client</span>
-              </button>
-
-              <div className="relative my-4 flex items-center justify-center">
-                <div className="absolute inset-0 flex items-center"><span className="w-full border-t border-slate-100"></span></div>
-                <span className="bg-white px-2.5 text-[10px] font-bold text-slate-400 uppercase tracking-widest relative z-10">or</span>
-              </div>
-
-              <button
-                type="button"
-                onClick={() => triggerNotification("Initiating client spreadsheet import tool...", "success")}
-                className="w-full py-2.5 rounded-xl border border-blue-200 hover:bg-blue-50/50 text-blue-600 font-bold text-xs flex items-center justify-center gap-2 transition-all cursor-pointer"
-              >
-                <UploadCloud className="w-4 h-4" />
-                <span>Import Clients Sheet</span>
-              </button>
-            </form>
-
-            {/* Recently Onboarded Section */}
-            <div className="pt-6 border-t border-slate-100 space-y-4" id="recently-onboarded-section">
-              <div className="flex items-center justify-between">
-                <h4 className="text-xs font-extrabold text-slate-900 uppercase tracking-widest font-sans">Recently Onboarded</h4>
-                <button onClick={() => {
-                  const el = document.getElementById("clients-panel");
-                  if (el) el.scrollIntoView({ behavior: "smooth" });
-                }} className="text-[10px] font-bold text-blue-600 hover:text-blue-800">Scroll Top</button>
-              </div>
-
-              <div className="space-y-3" id="recently-onboarded-list">
-                {tenantsList.slice(-3).reverse().map((t, idx) => (
-                  <div 
-                    key={t.id} 
-                    onClick={() => setViewingTenant(t)}
-                    className="flex items-center justify-between p-3 rounded-xl border border-slate-100 hover:border-blue-100 hover:bg-slate-50/50 transition-all cursor-pointer"
-                  >
-                    <div className="flex items-center gap-2.5 min-w-0">
-                      <div className="w-8 h-8 rounded-lg bg-blue-50 flex items-center justify-center text-blue-600 font-extrabold text-xs uppercase shrink-0">
-                        {t.name.substring(0, 2)}
-                      </div>
-                      <div className="min-w-0">
-                        <p className="text-xs font-bold text-slate-800 truncate leading-snug">{t.name}</p>
-                        <p className="text-[10px] text-slate-400 font-medium truncate">{t.adminEmail}</p>
-                      </div>
-                    </div>
-                    <span className="text-[9px] text-slate-400 font-semibold shrink-0 font-mono">
-                      {idx === 0 ? "21 May 2024" : idx === 1 ? "20 May 2024" : "19 May 2024"}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
-
           </div>
         </div>
       ) : activeMenuTab === "users" ? (
@@ -8990,7 +9128,7 @@ export default function SuperAdminConsole({
                   >
                     {(Object.keys(BUSINESS_SECTORS_CATALOG) as BusinessSector[]).map((sec) => (
                       <option key={sec} value={sec}>
-                        {BUSINESS_SECTORS_CATALOG[sec].label} ({sec})
+                        {BUSINESS_SECTORS_CATALOG[sec].icon} {BUSINESS_SECTORS_CATALOG[sec].label} ({sec})
                       </option>
                     ))}
                   </select>
@@ -9001,6 +9139,26 @@ export default function SuperAdminConsole({
                     <span className="truncate">https://{editTenantSubdomain || editingTenant.subdomain}.expertbilling.in</span>
                     <span className="text-[8px] bg-emerald-100 px-1 py-0.2 rounded">ACTIVE</span>
                   </div>
+                </div>
+              </div>
+
+              <div className="p-2.5 bg-blue-50/70 rounded-xl border border-blue-200/70 space-y-1.5">
+                <div className="flex items-center justify-between text-[10px]">
+                  <span className="font-extrabold text-blue-900">
+                    Active Modules for {BUSINESS_SECTORS_CATALOG[editTenantBusinessSector]?.label}
+                  </span>
+                  <span className="font-mono font-bold text-blue-700">
+                    POS: {BUSINESS_SECTORS_CATALOG[editTenantBusinessSector]?.posMode}
+                  </span>
+                </div>
+                <div className="flex flex-wrap gap-1">
+                  {SECTOR_MODULE_CATALOG.filter(
+                    (m) => !!BUSINESS_SECTORS_CATALOG[editTenantBusinessSector]?.defaultModules[m.key]
+                  ).map((m) => (
+                    <span key={m.key} className="text-[9.5px] font-bold px-2 py-0.5 rounded bg-white text-blue-800 border border-blue-200">
+                      ✓ {m.shortLabel}
+                    </span>
+                  ))}
                 </div>
               </div>
 

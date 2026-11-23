@@ -687,9 +687,35 @@ class MySqlDatabaseEngine {
   }
 
   private async seedIfEmpty(pool: Pool) {
-    // Only Super Admin account (password 123456) & global settings are seeded; everything else starts empty
+    // Seed Super Admin + Demo Client account & initial workspace data when database is fresh
     if ((await this.countRows(pool, "users")) === 0) {
       await this.replaceUsersMysql(pool, DEFAULT_CREDENTIALS);
+    }
+    if ((await this.countRows(pool, "tenants")) === 0 && DEFAULT_TENANTS.length > 0) {
+      await this.upsertTenantsMysql(pool, DEFAULT_TENANTS);
+    }
+    if ((await this.countRows(pool, "store_branches")) === 0) {
+      for (const b of DEFAULT_BRANCHES) {
+        await this.upsertBranchMysql(pool, b);
+      }
+    }
+    if ((await this.countRows(pool, "categories")) === 0 && DEFAULT_CATEGORIES.length > 0) {
+      await this.replaceCategoriesMysql(pool, DEFAULT_CATEGORIES);
+    }
+    if ((await this.countRows(pool, "suppliers")) === 0) {
+      for (const s of DEFAULT_SUPPLIERS) {
+        await this.upsertSupplierMysql(pool, s);
+      }
+    }
+    if ((await this.countRows(pool, "products")) === 0) {
+      for (const p of DEFAULT_PRODUCTS) {
+        await this.upsertProductMysql(pool, p);
+      }
+    }
+    if ((await this.countRows(pool, "customers")) === 0) {
+      for (const c of DEFAULT_CUSTOMERS) {
+        await this.upsertCustomerMysql(pool, c);
+      }
     }
     if ((await this.countRows(pool, "app_settings")) === 0) {
       await this.upsertSettingsMysql(pool, DEFAULT_APP_SETTINGS);
@@ -734,8 +760,15 @@ class MySqlDatabaseEngine {
     }
     await pool.query("SET FOREIGN_KEY_CHECKS = 1");
 
-    await this.replaceUsersMysql(pool, DEFAULT_CREDENTIALS);
-    await this.upsertSettingsMysql(pool, DEFAULT_APP_SETTINGS);
+    const superAdminOnly = DEFAULT_CREDENTIALS.filter(
+      (c) => c.email.toLowerCase() === "superadmin@expertbilling.in"
+    );
+    await this.replaceUsersMysql(pool, superAdminOnly.length > 0 ? superAdminOnly : DEFAULT_CREDENTIALS.slice(0, 1));
+    await this.upsertSettingsMysql(pool, {
+      ...DEFAULT_APP_SETTINGS,
+      activeTenantId: "",
+      currentBranchId: "",
+    });
   }
 
   private async upsertTenantsMysql(conn: Pool | PoolConnection, tenants: Tenant[]) {
@@ -1993,7 +2026,28 @@ class MySqlDatabaseEngine {
       await this.cleanDatabaseExceptSuperAdminMysql(pool);
       return this.readFullStateFromMysql(pool);
     }
-    this.runtimeMemoryState = this.createDefaultState();
+    const superAdminOnly = DEFAULT_CREDENTIALS.filter(
+      (c) => c.email.toLowerCase() === "superadmin@expertbilling.in"
+    );
+    this.runtimeMemoryState = {
+      products: [],
+      suppliers: [],
+      customers: [],
+      invoices: [],
+      branches: [],
+      expenses: [],
+      adjustments: [],
+      cashSessions: [],
+      transfers: [],
+      tenants: [],
+      credentials: clone(superAdminOnly.length > 0 ? superAdminOnly : DEFAULT_CREDENTIALS.slice(0, 1)),
+      categories: [],
+      settings: {
+        ...clone(DEFAULT_APP_SETTINGS),
+        activeTenantId: "",
+        currentBranchId: "",
+      },
+    };
     return this.getFullState();
   }
 

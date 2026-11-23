@@ -21,8 +21,11 @@ import {
   TenantFontFamily,
   TenantFontSizeScale,
   TENANT_FONT_OPTIONS,
-  TENANT_FONT_SIZE_OPTIONS
+  TENANT_FONT_SIZE_OPTIONS,
+  BusinessSector,
+  BUSINESS_SECTORS_CATALOG
 } from "../types";
+import { SECTOR_MODULE_CATALOG } from "../utils/sectorModules";
 import {
   LABEL_SIZE_PRESETS,
   DUAL_ROLL_PRESETS,
@@ -83,6 +86,8 @@ interface SettingsPanelProps {
   currentBranch?: StoreBranch | null;
   onSwitchBranch?: (branchId: string) => void;
   isSuperAdmin?: boolean;
+  isDemoClient?: boolean;
+  onSwitchDemoSector?: (sector: BusinessSector, loadSampleItems?: boolean) => void | Promise<void>;
 }
 
 export default function SettingsPanel({
@@ -116,7 +121,9 @@ export default function SettingsPanel({
   onDeleteBranch,
   currentBranch,
   onSwitchBranch,
-  isSuperAdmin
+  isSuperAdmin,
+  isDemoClient,
+  onSwitchDemoSector
  }: SettingsPanelProps) {
   const [activeSubTab, setActiveSubTab] = useState<"profile" | "tenant" | "typography" | "categories" | "suppliers" | "branches" | "pos" | "system" | "enterprise">("profile");
 
@@ -1091,6 +1098,105 @@ export default function SettingsPanel({
               </button>
             )}
           </div>
+
+          {/* Business Sector & Active Modules (Interactive Switcher for Demo Client) */}
+          {(() => {
+            const curSector: BusinessSector = activeTenant.businessSector || "SUPERMARKET";
+            const curCatalog = BUSINESS_SECTORS_CATALOG[curSector] || BUSINESS_SECTORS_CATALOG.SUPERMARKET;
+            const curModules = activeTenant.sectorConfig?.enabledModules || curCatalog.defaultModules;
+            const canSwitchSector = Boolean(isDemoClient || isUserSuperAdmin);
+
+            return (
+              <div className={`p-5 rounded-2xl border space-y-4 ${canSwitchSector ? "bg-indigo-50/50 border-indigo-200" : "bg-slate-50 border-slate-200"}`}>
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-200/80 pb-3">
+                  <div>
+                    <h3 className="text-xs font-black text-slate-900 uppercase tracking-widest flex items-center gap-2 font-mono">
+                      <Briefcase className="w-4 h-4 text-indigo-600" />
+                      <span>Business Sector &amp; Active Feature Modules</span>
+                      {isDemoClient && (
+                        <span className="text-[9px] bg-indigo-600 text-white px-2 py-0.5 rounded-full font-bold tracking-normal">
+                          DEMO SWITCHER ENABLED
+                        </span>
+                      )}
+                    </h3>
+                    <p className="text-[11px] text-slate-600 mt-0.5">
+                      {canSwitchSector
+                        ? "Switch between business sectors anytime to test sector-specific POS workflows, hardware modules, and sample items."
+                        : "Business sector and enabled modules were assigned by Super Admin during client onboarding."}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <span className="text-xs font-extrabold px-2.5 py-1 rounded-lg bg-white border border-slate-200 text-slate-800">
+                      {curCatalog.icon} {curCatalog.label}
+                    </span>
+                  </div>
+                </div>
+
+                {canSwitchSector && onSwitchDemoSector && (
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <label className="text-[10.5px] font-extrabold text-slate-700 uppercase tracking-wider">
+                        Select Business Sector to Test
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => onSwitchDemoSector(curSector, true)}
+                        className="px-2.5 py-1 bg-white hover:bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-lg text-[10px] font-bold cursor-pointer transition-all"
+                      >
+                        + Sync {curCatalog.label} Sample Items
+                      </button>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-5 gap-2">
+                      {(Object.keys(BUSINESS_SECTORS_CATALOG) as BusinessSector[]).map((secKey) => {
+                        const sec = BUSINESS_SECTORS_CATALOG[secKey];
+                        const isSelected = curSector === secKey;
+                        return (
+                          <button
+                            key={secKey}
+                            type="button"
+                            onClick={() => onSwitchDemoSector(secKey, true)}
+                            className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer ${
+                              isSelected
+                                ? "bg-indigo-600 text-white border-indigo-700 shadow-md"
+                                : "bg-white text-slate-700 border-slate-200 hover:border-indigo-300 hover:bg-indigo-50/40"
+                            }`}
+                          >
+                            <div className="text-base leading-none mb-1">{sec.icon}</div>
+                            <div className="text-[11px] font-black leading-tight">{sec.label}</div>
+                            <div className={`text-[9px] font-mono mt-0.5 ${isSelected ? "text-indigo-100" : "text-slate-400"}`}>
+                              {sec.posMode}
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2 pt-1">
+                  {SECTOR_MODULE_CATALOG.map((mod) => {
+                    const enabled = Boolean(curModules[mod.key]);
+                    return (
+                      <div
+                        key={mod.key}
+                        className={`p-2 rounded-xl border text-[10px] flex items-center justify-between gap-1.5 ${
+                          enabled
+                            ? "bg-emerald-50 border-emerald-200 text-emerald-800 font-bold"
+                            : "bg-white border-slate-200 text-slate-400"
+                        }`}
+                        title={mod.description}
+                      >
+                        <span className="truncate">{mod.shortLabel}</span>
+                        <span className={`text-[8.5px] font-mono px-1 py-0.2 rounded shrink-0 ${enabled ? "bg-emerald-600 text-white" : "bg-slate-100 text-slate-400"}`}>
+                          {enabled ? "ON" : "OFF"}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })()}
 
           {/* Company Logo Section */}
           <div className="bg-slate-50 p-5 rounded-2xl border border-slate-200 space-y-4">

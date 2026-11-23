@@ -116,6 +116,31 @@ export interface InvoiceItem {
   subtotal: number; // quantity * price including GST
 }
 
+export interface InvoiceSectorMetadata {
+  sector?: BusinessSector;
+  orderMode?: string;
+  tableNo?: string;
+  kotNote?: string;
+  rxNumber?: string;
+  rxDoctorName?: string;
+  rxScheduleHVerified?: boolean;
+  variantSize?: string;
+  variantColor?: string;
+  garmentFit?: string;
+  seasonCollection?: string;
+  alterationNote?: string;
+  alterationDeliveryDate?: string;
+  appointmentSlot?: string;
+  stylistName?: string;
+  serviceDuration?: string;
+  roomNo?: string;
+  bedNo?: string;
+  residentId?: string;
+  billingMonth?: string;
+  occupancyType?: string;
+  messPlan?: string;
+}
+
 export interface Invoice {
   id: string; // e.g. EAS-20260522-0001
   date: string;
@@ -137,6 +162,7 @@ export interface Invoice {
   storeBranchId: string;
   status: "PAID" | "RETURNED" | "EXCHANGED";
   returnedReason?: string;
+  sectorMetadata?: InvoiceSectorMetadata;
 }
 
 export interface StoreBranch {
@@ -145,7 +171,7 @@ export interface StoreBranch {
   address: string;
   city: string;
   phone: string;
-  gstin?: string;
+  isMain: boolean;
 }
 
 export interface LabelPrinterConfig {
@@ -201,10 +227,12 @@ export interface StockAdjustment {
 
 export type BusinessSector = 
   | "RETAIL" 
+  | "FASHION_GARMENT"
   | "RESTAURANT" 
   | "SUPERMARKET" 
   | "PHARMACY" 
-  | "SERVICES";
+  | "SERVICES"
+  | "PG_HOSTEL";
 
 export type TenantFontFamily = 
   | "Inter" 
@@ -236,13 +264,15 @@ export interface TenantSectorConfig {
     batchExpiryRx: boolean;
     variantMatrix: boolean;
     appointmentsBooking: boolean;
+    roomBedManagement: boolean;
+    garmentTailoring: boolean;
     loyaltyPoints: boolean;
     stockTransfers: boolean;
     barcodeLabelPrinting: boolean;
     kotPrinting: boolean;
     discountRules: boolean;
   };
-  posMode: "RETAIL_QUICK" | "RESTAURANT_TABLES" | "SUPERMARKET_FAST_SCAN" | "PHARMACY_RX" | "SERVICES_BOOKING";
+  posMode: "RETAIL_QUICK" | "FASHION_BOUTIQUE" | "RESTAURANT_TABLES" | "SUPERMARKET_FAST_SCAN" | "PHARMACY_RX" | "SERVICES_BOOKING" | "PG_HOSTEL_BILLING";
   defaultCategories: string[];
   unitPresets: MeasurementUnit[];
   quickActions: string[];
@@ -345,6 +375,8 @@ export const BUSINESS_SECTORS_CATALOG: Record<BusinessSector, {
       batchExpiryRx: false,
       variantMatrix: true,
       appointmentsBooking: false,
+      roomBedManagement: false,
+      garmentTailoring: false,
       loyaltyPoints: true,
       stockTransfers: true,
       barcodeLabelPrinting: true,
@@ -373,6 +405,8 @@ export const BUSINESS_SECTORS_CATALOG: Record<BusinessSector, {
       batchExpiryRx: false,
       variantMatrix: false,
       appointmentsBooking: false,
+      roomBedManagement: false,
+      garmentTailoring: false,
       loyaltyPoints: true,
       stockTransfers: true,
       barcodeLabelPrinting: false,
@@ -401,6 +435,8 @@ export const BUSINESS_SECTORS_CATALOG: Record<BusinessSector, {
       batchExpiryRx: true,
       variantMatrix: false,
       appointmentsBooking: false,
+      roomBedManagement: false,
+      garmentTailoring: false,
       loyaltyPoints: true,
       stockTransfers: true,
       barcodeLabelPrinting: true,
@@ -429,6 +465,8 @@ export const BUSINESS_SECTORS_CATALOG: Record<BusinessSector, {
       batchExpiryRx: true,
       variantMatrix: false,
       appointmentsBooking: false,
+      roomBedManagement: false,
+      garmentTailoring: false,
       loyaltyPoints: false,
       stockTransfers: true,
       barcodeLabelPrinting: true,
@@ -457,6 +495,8 @@ export const BUSINESS_SECTORS_CATALOG: Record<BusinessSector, {
       batchExpiryRx: false,
       variantMatrix: false,
       appointmentsBooking: true,
+      roomBedManagement: false,
+      garmentTailoring: false,
       loyaltyPoints: true,
       stockTransfers: false,
       barcodeLabelPrinting: false,
@@ -465,6 +505,66 @@ export const BUSINESS_SECTORS_CATALOG: Record<BusinessSector, {
     },
     posMode: "SERVICES_BOOKING",
     quickActions: ["Book Appointment", "Assign Stylist / Staff", "Service Duration Selector", "Membership Package"]
+  },
+  PG_HOSTEL: {
+    id: "PG_HOSTEL",
+    label: "PG & Hostel Management",
+    subtitle: "Paying Guest, Student Hostels, Co-Living & Mess Billing",
+    icon: "🛏️",
+    accentColor: "teal",
+    bgLight: "bg-teal-50",
+    borderLight: "border-teal-200",
+    badgeClass: "bg-teal-100 text-teal-800 border-teal-300",
+    description: "Built for PG accommodations, hostels, and co-living spaces with room & bed occupancy tracking, monthly rent dues, security deposits, mess plans, and electricity sub-meter billing.",
+    recommendedHardware: ["80mm Thermal Receipt Printer", "A4 Rent Receipt Laser Printer", "Biometric / RFID Gate Reader", "Cash Drawer"],
+    defaultCategories: ["Room Rent (AC / Non-AC)", "Security & Caution Deposit", "Mess & Meal Plans", "Electricity & Utility Charges", "Laundry & Housekeeping", "Late Fee & Add-ons"],
+    unitPresets: [MeasurementUnit.PIECE, MeasurementUnit.PACK],
+    defaultModules: {
+      kdsTableManagement: false,
+      weighingScaleScanning: false,
+      batchExpiryRx: false,
+      variantMatrix: false,
+      appointmentsBooking: false,
+      roomBedManagement: true,
+      garmentTailoring: false,
+      loyaltyPoints: true,
+      stockTransfers: false,
+      barcodeLabelPrinting: false,
+      kotPrinting: false,
+      discountRules: true
+    },
+    posMode: "PG_HOSTEL_BILLING",
+    quickActions: ["Assign Room & Bed", "Generate Monthly Rent", "Add Electricity Units", "Mess Plan Billing"]
+  },
+  FASHION_GARMENT: {
+    id: "FASHION_GARMENT",
+    label: "Fashion & Garment",
+    subtitle: "Apparel Boutiques, Ethnic Wear, Menswear, Footwear & Tailoring",
+    icon: "👗",
+    accentColor: "rose",
+    bgLight: "bg-rose-50",
+    borderLight: "border-rose-200",
+    badgeClass: "bg-rose-100 text-rose-800 border-rose-300",
+    description: "Designed for fashion showrooms, ethnic & bridal boutiques, and multi-brand garment stores with Size/Shade/Fit matrix billing, apparel hang-tag printing, tailoring/alteration slips, and seasonal discounts.",
+    recommendedHardware: ["Garment Hang-Tag Barcode Printer", "Wireless 2D Barcode Scanner", "80mm Thermal Receipt Printer", "Heavy Duty Cash Drawer"],
+    defaultCategories: ["Men's Fashion & Shirts", "Women's Ethnic & Kurtas", "Denim & Trousers", "Kids & Junior Wear", "Footwear & Bags", "Tailoring & Alterations"],
+    unitPresets: [MeasurementUnit.PIECE, MeasurementUnit.PACK],
+    defaultModules: {
+      kdsTableManagement: false,
+      weighingScaleScanning: false,
+      batchExpiryRx: false,
+      variantMatrix: true,
+      appointmentsBooking: false,
+      roomBedManagement: false,
+      garmentTailoring: true,
+      loyaltyPoints: true,
+      stockTransfers: true,
+      barcodeLabelPrinting: true,
+      kotPrinting: false,
+      discountRules: true
+    },
+    posMode: "FASHION_BOUTIQUE",
+    quickActions: ["Size / Fit / Shade Matrix", "Print Garment Hang Tag", "Log Alteration Slip", "Festive / Season Discount"]
   }
 };
 
@@ -668,27 +768,6 @@ export function buildReceiptUtilityStyles(
     }
     ${s}[data-receipt-items-grid="true"] > span:nth-child(4) {
       text-align: center !important;
-    }
-    ${s}[data-receipt-biller="true"] {
-      border-top: 1px dashed #64748b !important;
-      padding-top: 4px !important;
-      margin-top: 4px !important;
-      color: ${inkColor} !important;
-      font-weight: 700 !important;
-    }
-    ${s}[data-receipt-biller-row="true"] {
-      display: flex !important;
-      justify-content: space-between !important;
-      align-items: flex-start !important;
-      gap: 8px !important;
-      width: 100% !important;
-    }
-    ${s}[data-receipt-biller-row="true"] span:first-child {
-      flex-shrink: 0;
-    }
-    ${s}[data-receipt-biller-row="true"] span:last-child {
-      text-align: right;
-      word-break: break-word;
     }
     ${s}[data-receipt-savings="true"] {
       display: flex !important;

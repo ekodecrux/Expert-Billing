@@ -270,7 +270,6 @@ export interface ExtractedReceiptContent {
   contactText: string;
   metaLines: { key: string; val: string }[];
   items: { name: string; mrp: string; rate: string; qty: string; total: string }[];
-  billerLines: { key: string; val: string }[];
   savingsLabel: string;
   savingsValue: string;
   mathLines: { key: string; val: string }[];
@@ -330,18 +329,6 @@ export function extractReceiptDataFromElement(element: HTMLElement): ExtractedRe
     }
   });
 
-  const billerLines: { key: string; val: string }[] = [];
-  const billerRows = element.querySelectorAll("[data-receipt-biller-row='true']");
-  billerRows.forEach((row) => {
-    const spans = row.querySelectorAll("span");
-    if (spans.length >= 2) {
-      billerLines.push({
-        key: cleanEscPosText(spans[0].textContent || ""),
-        val: cleanEscPosText(spans[spans.length - 1].textContent || "")
-      });
-    }
-  });
-
   const savingsEl = element.querySelector("[data-receipt-savings='true']");
   let savingsLabel = "";
   let savingsValue = "";
@@ -376,7 +363,6 @@ export function extractReceiptDataFromElement(element: HTMLElement): ExtractedRe
     contactText,
     metaLines,
     items,
-    billerLines,
     savingsLabel,
     savingsValue,
     mathLines,
@@ -577,14 +563,6 @@ function buildSingleEscPosPayload(
   }
 
   pushLine("-".repeat(cols));
-
-  if (data.billerLines.length > 0) {
-    pushLine("BILLER DETAILS");
-    data.billerLines.forEach((b) => {
-      pushLine(twoColLine(b.key, b.val, cols));
-    });
-    pushLine("-".repeat(cols));
-  }
 
   if (data.savingsLabel && data.savingsValue) {
     pushLine(twoColLine(data.savingsLabel, data.savingsValue, cols));

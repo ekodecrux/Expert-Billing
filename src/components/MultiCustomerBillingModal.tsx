@@ -897,34 +897,6 @@ export const MultiCustomerBillingModal: React.FC<MultiCustomerBillingModalProps>
           })}
         </div>
 
-        {/* Biller Details directly under the product section */}
-        <div
-          data-receipt-biller="true"
-          className="border-t border-dashed border-slate-400 pt-2 space-y-0.5 text-[0.88em] font-bold text-slate-950"
-        >
-          <p className="font-black uppercase tracking-wide text-[0.92em] text-slate-950">
-            Biller Details
-          </p>
-          <div className="flex justify-between gap-2" data-receipt-biller-row="true">
-            <span className="font-bold">Biller / Cashier:</span>
-            <span className="font-black text-right">{inv.cashierName || currentCashierName}</span>
-          </div>
-          <div className="flex justify-between gap-2" data-receipt-biller-row="true">
-            <span className="font-bold">Billed By:</span>
-            <span className="font-bold text-right">
-              {activeTenant.name} ({billedByBranch})
-            </span>
-          </div>
-          <div className="flex justify-between gap-2" data-receipt-biller-row="true">
-            <span className="font-bold">Biller Contact:</span>
-            <span className="font-bold text-right">{billerPhone}</span>
-          </div>
-          <div className="flex justify-between gap-2" data-receipt-biller-row="true">
-            <span className="font-bold">GSTIN:</span>
-            <span className="font-black uppercase text-right">{gstinValue}</span>
-          </div>
-        </div>
-
         {totalSavings > 0 && (
           <div
             data-receipt-savings="true"
