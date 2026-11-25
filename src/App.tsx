@@ -415,6 +415,7 @@ export default function App() {
   const [activeTenantId, setActiveTenantId] = useState<string>("");
 
   const activeTenant = tenantsList.find(t => t.id === activeTenantId) || tenantsList[0] || EMPTY_WORKSPACE_TENANT;
+  const effectiveTenantId = activeTenant.id || activeTenantId;
 
   // Active Tenant Typography Classes
   const activeTenantFontClass = useMemo(() => {
@@ -431,7 +432,10 @@ export default function App() {
     return found ? found.className : "tenant-scale-standard";
   }, [activeTenant.typography?.fontSizeScale]);
 
-  const tenantProducts = products.filter(p => !p.tenantId || p.tenantId === activeTenantId);
+  const tenantProducts = useMemo(
+    () => products.filter(p => !effectiveTenantId || p.tenantId === effectiveTenantId),
+    [products, effectiveTenantId]
+  );
 
   // Map tenants color theme dynamically
   const getThemeColorClasses = (theme: string) => {
@@ -953,6 +957,11 @@ export default function App() {
 
   // Sector-specific interactive POS state (driven dynamically by activeSectorModules)
   const [sectorCatalogFilter, setSectorCatalogFilter] = useState<"sector" | "all">("sector");
+  // Scope catalog strictly to the tenant's assigned business sector for all logins
+  const sectorScopedProducts = useMemo(() => {
+    if (isDemoClient && sectorCatalogFilter === "all") return tenantProducts;
+    return tenantProducts.filter((p) => isProductMatchingSector(p, activeSectorKey));
+  }, [isDemoClient, sectorCatalogFilter, tenantProducts, activeSectorKey]);
   const [restaurantOrderMode, setRestaurantOrderMode] = useState<"DINE_IN" | "TAKEAWAY" | "DELIVERY">("DINE_IN");
   const [restaurantTableNo, setRestaurantTableNo] = useState<string>("Table 1");
   const [restaurantKotNote, setRestaurantKotNote] = useState<string>("");
@@ -1374,25 +1383,70 @@ export default function App() {
   const handleSeedSectorWorkspace = async (tenant: Tenant, seedProducts: boolean) => {
     const secKey: BusinessSector = tenant.businessSector || "SUPERMARKET";
     const secCatalog = BUSINESS_SECTORS_CATALOG[secKey] || BUSINESS_SECTORS_CATALOG.SUPERMARKET;
-    const mergedCats = Array.from(new Set([...productCategories, ...secCatalog.defaultCategories]));
+    const otherSectorCats = getOtherSectorDefaultCategories(secKey);
+    const customCategories = productCategories.filter(
+      cat => !otherSectorCats.has(cat.toLowerCase())
+    );
+    const mergedCats = Array.from(new Set([...secCatalog.defaultCategories, ...customCategories]));
     setProductCategories(mergedCats);
     await persistCategories(mergedCats);
 
     if (seedProducts) {
       const sampleItems = getSectorSampleProducts(secKey, tenant.id, currentBranch?.id || "B1");
-      try {
-        const res = await fetch("/api/products/bulk", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ products: sampleItems })
-        });
-        const data = await res.json();
-        if (data.success && Array.isArray(data.products)) {
-          setProducts(data.products);
+      const missingSamples = sampleItems.filter(
+        sample => !products.some(
+          p => (p.tenantId === tenant.id) && (p.sku === sample.sku || p.id === sample.id)
+        )
+      );
+      if (missingSamples.length > 0) {
+        try {
+          const res = await fetch("/api/products/bulk", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ products: missingSamples })
+          });
+          const data = await res.json();
+          if (data.success && Array.isArray(data.products)) {
+            setProducts(data.products);
+          }
+        } catch (e) {
+          console.error("Failed to seed sector sample products:", e);
         }
-      } catch (e) {
-        console.error("Failed to seed sector sample products:", e);
       }
+    }
+  };
+
+  const applyTenantWorkspaceOnLogin = (tenantMatch: Tenant) => {
+    const secKey: BusinessSector = tenantMatch.businessSector || "SUPERMARKET";
+    const secCatalog = BUSINESS_SECTORS_CATALOG[secKey] || BUSINESS_SECTORS_CATALOG.SUPERMARKET;
+
+    setActiveTenantId(tenantMatch.id);
+    persistSettings({ activeTenantId: tenantMatch.id });
+
+    // Always scope workspace cleanly to the logged-in tenant's assigned business sector
+    setSectorCatalogFilter("sector");
+    setCategoryFilter("All");
+    setSearchQuery("");
+    setSkuSearchInput("");
+    setInventorySearchQuery("");
+    setSelectedSkuProduct(null);
+    setCartItems([]);
+    setNewProduct(prev => ({
+      ...prev,
+      category: secCatalog.defaultCategories[0] || "General"
+    }));
+
+    const otherSectorCats = getOtherSectorDefaultCategories(secKey);
+    const customCategories = productCategories.filter(
+      cat => !otherSectorCats.has(cat.toLowerCase())
+    );
+    const nextCategories = Array.from(new Set([...secCatalog.defaultCategories, ...customCategories]));
+    setProductCategories(nextCategories);
+
+    const tenantExisting = products.filter(p => p.tenantId === tenantMatch.id);
+    const hasSectorItems = tenantExisting.some(p => isProductMatchingSector(p, secKey));
+    if (!hasSectorItems && (tenantMatch.id === "TENANT-DEMO-01" || tenantExisting.length > 0)) {
+      void handleSeedSectorWorkspace(tenantMatch, true);
     }
   };
 
@@ -1423,8 +1477,13 @@ export default function App() {
     setCategoryFilter("All");
     setSearchQuery("");
     setSkuSearchInput("");
+    setInventorySearchQuery("");
     setSelectedSkuProduct(null);
     setCartItems([]);
+    setNewProduct(prev => ({
+      ...prev,
+      category: sectorCatalog.defaultCategories[0] || "General"
+    }));
     setRestaurantKotNote("");
     setRxNumber("");
     setRxDoctorName("");
@@ -1698,6 +1757,18 @@ export default function App() {
           setActiveTab("pos");
         }
 
+        if (!match.email.toLowerCase().includes("superadmin")) {
+          const tenantMatch = (match.tenantId ? tenantsList.find((t) => t.id === match.tenantId) : undefined) ||
+            tenantsList.find(
+              (t) =>
+                t.adminEmail.toLowerCase() === match.email.toLowerCase() ||
+                (t.adminLoginId && t.adminLoginId.toLowerCase() === match.email.toLowerCase())
+            );
+          if (tenantMatch) {
+            applyTenantWorkspaceOnLogin(tenantMatch);
+          }
+        }
+
         triggerNotification(`Single-Link Direct Login: Welcome back, ${match.name}!`, "success");
       }
     }
@@ -1840,8 +1911,7 @@ export default function App() {
         }
 
         if (tenantMatch) {
-          setActiveTenantId(tenantMatch.id);
-          persistSettings({ activeTenantId: tenantMatch.id });
+          applyTenantWorkspaceOnLogin(tenantMatch);
         }
       }
 
@@ -1904,8 +1974,7 @@ export default function App() {
       }
 
       if (tenantMatch) {
-        setActiveTenantId(tenantMatch.id);
-        persistSettings({ activeTenantId: tenantMatch.id });
+        applyTenantWorkspaceOnLogin(tenantMatch);
       }
     }
 
@@ -2134,7 +2203,7 @@ export default function App() {
   const handleBarcodeSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!barcodeSearch.trim()) return;
-    const match = tenantProducts.find(
+    const match = sectorScopedProducts.find(
       (p) => p.barcode === barcodeSearch.trim() || p.sku.toLowerCase() === barcodeSearch.trim().toLowerCase()
     );
     if (match) {
@@ -2147,7 +2216,7 @@ export default function App() {
   };
 
   // Real-time matched products for SKU search
-  const skuMatchedProducts = tenantProducts.filter((p) => {
+  const skuMatchedProducts = sectorScopedProducts.filter((p) => {
     const q = skuSearchInput.trim().toLowerCase();
     if (!q) return false;
     return (
@@ -2159,7 +2228,7 @@ export default function App() {
 
   // Handle SKU direct lookup and addition to cart
   const handleSkuAddDirect = (productToBill?: Product) => {
-    const prod = productToBill || selectedSkuProduct || tenantProducts.find(
+    const prod = productToBill || selectedSkuProduct || sectorScopedProducts.find(
       (p) => p.sku.toLowerCase() === skuSearchInput.trim().toLowerCase() || (p.barcode && p.barcode.toLowerCase() === skuSearchInput.trim().toLowerCase())
     ) || (skuMatchedProducts.length === 1 ? skuMatchedProducts[0] : null);
 
@@ -2565,7 +2634,7 @@ export default function App() {
       batchNumber: newProduct.batchNumber || "B-NEW",
       expiryDate: newProduct.expiryDate || "2027-12-31",
       supplierName: newProduct.supplierName || "Apex Retail Supplies",
-      tenantId: activeTenantId
+      tenantId: effectiveTenantId
     };
 
     try {
@@ -2582,7 +2651,7 @@ export default function App() {
         setNewProduct({
           name: "",
           barcode: "",
-          category: "Grains & Grocery",
+          category: activeSectorCatalog.defaultCategories[0] || "General",
           sku: "",
           purchasePrice: 0,
           mrp: 0,
@@ -2607,7 +2676,7 @@ export default function App() {
     setNewProduct({
       name: "",
       barcode: "",
-      category: "Grains & Grocery",
+      category: activeSectorCatalog.defaultCategories[0] || "General",
       sku: "",
       purchasePrice: 0,
       mrp: 0,
@@ -2697,10 +2766,11 @@ export default function App() {
   // Scanner modal callbacks
   const handleSaveProductFromScanner = async (productToSave: Product): Promise<boolean> => {
     try {
+      const payload = { ...productToSave, tenantId: productToSave.tenantId || effectiveTenantId };
       const res = await fetch("/api/products", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(productToSave)
+        body: JSON.stringify(payload)
       });
       const data = await res.json();
       if (data.success) {
@@ -2716,10 +2786,11 @@ export default function App() {
 
   const handleBulkUploadFromScanner = async (productsToUpload: Product[]): Promise<boolean> => {
     try {
+      const payloads = productsToUpload.map((p) => ({ ...p, tenantId: p.tenantId || effectiveTenantId }));
       const res = await fetch("/api/products/bulk", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ products: productsToUpload })
+        body: JSON.stringify({ products: payloads })
       });
       const data = await res.json();
       if (data.success) {
@@ -2962,7 +3033,7 @@ export default function App() {
           batchNumber: batchNumber || "B-BULK",
           expiryDate: expiryDate || "2027-12-31",
           supplierName: supplierName || "Apex Retail Supplies",
-          tenantId: activeTenantId
+          tenantId: effectiveTenantId
         };
         return {
           ...p,
@@ -3269,16 +3340,9 @@ export default function App() {
   // Active product barcode generator UI view trigger
   const triggerBarcodeGenerator = (sku: string) => {
     setActiveBarcodeUrl(sku);
-    const prod = tenantProducts.find((p) => p.sku === sku) || null;
+    const prod = sectorScopedProducts.find((p) => p.sku === sku) || null;
     openLabelGeneratorModal(prod);
   };
-
-  // Scope catalog cleanly to active sector when in Demo Client sector view
-  const sectorScopedProducts = useMemo(() => {
-    if (!isDemoClient || sectorCatalogFilter === "all") return tenantProducts;
-    const matched = tenantProducts.filter((p) => isProductMatchingSector(p, activeSectorKey));
-    return matched.length > 0 ? matched : tenantProducts;
-  }, [isDemoClient, sectorCatalogFilter, tenantProducts, activeSectorKey]);
 
   // Active products filter categorization
   const filteredProductsBySearch = sectorScopedProducts.filter((p) => {
@@ -3293,12 +3357,12 @@ export default function App() {
 
   // Unique categories list prioritized by active sector
   const productCategoriesList = useMemo(() => {
-    if (isDemoClient && sectorCatalogFilter === "sector") {
-      const otherCats = getOtherSectorDefaultCategories(activeSectorKey);
-      const customCats = productCategories.filter((c) => !otherCats.has(c.toLowerCase()));
-      return ["All", ...Array.from(new Set([...activeSectorCatalog.defaultCategories, ...customCats]))];
+    if (isDemoClient && sectorCatalogFilter === "all") {
+      return ["All", ...Array.from(new Set([...activeSectorCatalog.defaultCategories, ...productCategories]))];
     }
-    return ["All", ...Array.from(new Set([...activeSectorCatalog.defaultCategories, ...productCategories]))];
+    const otherCats = getOtherSectorDefaultCategories(activeSectorKey);
+    const customCats = productCategories.filter((c) => !otherCats.has(c.toLowerCase()));
+    return ["All", ...Array.from(new Set([...activeSectorCatalog.defaultCategories, ...customCats]))];
   }, [isDemoClient, sectorCatalogFilter, activeSectorKey, activeSectorCatalog.defaultCategories, productCategories]);
 
   // Helper function to resolve stock of a product for the currently selected branch
@@ -3357,8 +3421,8 @@ export default function App() {
   const calculatedOperationalNetProfit = Math.max(0, (totalInvoicedRevenue - totalWarehouseCOGS - totalStoreExpenses));
 
   // Low stock counter alerts
-  const lowStockAlertProducts = tenantProducts.filter((p) => getProductStock(p) <= p.minStockAlert);
-  const nearExpiryProductsAlert = tenantProducts.filter((p) => {
+  const lowStockAlertProducts = sectorScopedProducts.filter((p) => getProductStock(p) <= p.minStockAlert);
+  const nearExpiryProductsAlert = sectorScopedProducts.filter((p) => {
     const expDate = new Date(p.expiryDate);
     const today = new Date();
     const diffTime = expDate.getTime() - today.getTime();
@@ -3499,7 +3563,7 @@ export default function App() {
 
   // Filtered stock for Stock and Stock Cost Reports
   const filteredReportStock = useMemo(() => {
-    return tenantProducts.filter((p) => {
+    return sectorScopedProducts.filter((p) => {
       if (reportCategoryFilter !== "ALL" && p.category !== reportCategoryFilter) {
         return false;
       }
@@ -3513,7 +3577,7 @@ export default function App() {
       }
       return true;
     });
-  }, [tenantProducts, reportCategoryFilter, reportSearchQuery]);
+  }, [sectorScopedProducts, reportCategoryFilter, reportSearchQuery]);
 
   // Stock and Stock Cost Metrics
   const stockReportMetrics = useMemo(() => {
@@ -6321,7 +6385,7 @@ export default function App() {
                           onChange={(e) => {
                             const val = e.target.value;
                             setSkuSearchInput(val);
-                            const exact = tenantProducts.find((p) => p.sku.toLowerCase() === val.trim().toLowerCase());
+                            const exact = sectorScopedProducts.find((p) => p.sku.toLowerCase() === val.trim().toLowerCase());
                             if (exact) {
                               setSelectedSkuProduct(exact);
                             } else if (selectedSkuProduct) {
@@ -7109,7 +7173,7 @@ export default function App() {
                         onChange={(e) => {
                           const val = e.target.value;
                           setSkuSearchInput(val);
-                          const exact = tenantProducts.find((p) => p.sku.toLowerCase() === val.trim().toLowerCase());
+                          const exact = sectorScopedProducts.find((p) => p.sku.toLowerCase() === val.trim().toLowerCase());
                           if (exact) setSelectedSkuProduct(exact);
                         }}
                         className={`w-full pl-7 pr-2 py-1.5 text-xs font-mono font-bold border rounded-lg ${bgMode.inputBg} ${bgMode.border} outline-none focus:ring-1 ${
@@ -7444,13 +7508,13 @@ export default function App() {
             <div className="space-y-6" id="inventory-module-layout">
               {/* Detailed Financial & Stock Valuation Summary Metrics */}
               {(() => {
-                const totalAvailableUnits = tenantProducts.reduce((acc, p) => acc + getProductStock(p), 0);
-                const totalPurchaseValuation = tenantProducts.reduce((acc, p) => acc + (p.purchasePrice * getProductStock(p)), 0);
-                const totalMrpValuation = tenantProducts.reduce((acc, p) => {
+                const totalAvailableUnits = sectorScopedProducts.reduce((acc, p) => acc + getProductStock(p), 0);
+                const totalPurchaseValuation = sectorScopedProducts.reduce((acc, p) => acc + (p.purchasePrice * getProductStock(p)), 0);
+                const totalMrpValuation = sectorScopedProducts.reduce((acc, p) => {
                   const itemMrp = p.mrp || (p.price > 0 ? Number((p.price * 1.15).toFixed(2)) : p.price);
                   return acc + (itemMrp * getProductStock(p));
                 }, 0);
-                const totalSellingValuation = tenantProducts.reduce((acc, p) => acc + (p.price * getProductStock(p)), 0);
+                const totalSellingValuation = sectorScopedProducts.reduce((acc, p) => acc + (p.price * getProductStock(p)), 0);
                 const totalGrossMarginSpread = Math.max(0, totalSellingValuation - totalPurchaseValuation);
                 const grossMarginPct = totalSellingValuation > 0 ? ((totalGrossMarginSpread / totalSellingValuation) * 100).toFixed(1) : "0.0";
 
@@ -7465,7 +7529,7 @@ export default function App() {
                       <p className="text-2xl font-black font-mono text-slate-900">
                         {totalAvailableUnits.toLocaleString()} <span className="text-xs font-sans text-slate-500 font-semibold">Units</span>
                       </p>
-                      <p className="text-[11px] text-slate-500 mt-1 font-mono">Tracking {tenantProducts.length} Catalogue SKUs</p>
+                      <p className="text-[11px] text-slate-500 mt-1 font-mono">Tracking {sectorScopedProducts.length} Catalogue SKUs</p>
                     </div>
 
                     {/* 2. Purchase Value */}
@@ -7530,7 +7594,7 @@ export default function App() {
                       <span>Warehouse Stock Management &amp; Detailed Valuation Matrix</span>
                     </h3>
                     <p className="text-xs text-slate-500 font-mono mt-0.5">
-                      Inspecting Available Stock, Purchase Value, MRP, and Selling Value across {tenantProducts.length} products
+                      Inspecting Available Stock, Purchase Value, MRP, and Selling Value across {sectorScopedProducts.length} products
                     </p>
                   </div>
                   <div className="flex items-center gap-2 w-full sm:w-auto">
@@ -7588,7 +7652,7 @@ export default function App() {
                     </thead>
                     <tbody className="divide-y divide-slate-100">
                       {(() => {
-                        const filtered = tenantProducts.filter((p) => {
+                        const filtered = sectorScopedProducts.filter((p) => {
                           const query = (inventorySearchQuery || "").trim().toLowerCase();
                           if (!query) return true;
                           return (
@@ -7802,7 +7866,7 @@ export default function App() {
                         className="w-full border border-slate-200 rounded p-2"
                       >
                         <option value="">-- Choose Product --</option>
-                        {tenantProducts.map((p) => (
+                        {sectorScopedProducts.map((p) => (
                           <option key={p.id} value={p.id}>
                             {p.name} (Current: {getProductStock(p)} {p.unit})
                           </option>
@@ -7896,7 +7960,7 @@ export default function App() {
                             className="w-full border border-slate-200 rounded p-2"
                           >
                             <option value="">-- Choose Product --</option>
-                            {tenantProducts.map((p) => (
+                            {sectorScopedProducts.map((p) => (
                               <option key={p.id} value={p.id}>
                                 {p.name} (Global SKU: {p.sku})
                               </option>
@@ -7971,7 +8035,7 @@ export default function App() {
                         {transfers.slice().reverse().map((t) => {
                           const fromName = branches.find((b) => b.id === t.fromBranchId)?.name || t.fromBranchId;
                           const toName = branches.find((b) => b.id === t.toBranchId)?.name || t.toBranchId;
-                          const pDetail = tenantProducts.find((p) => p.id === t.productId);
+                          const pDetail = sectorScopedProducts.find((p) => p.id === t.productId);
                           const fromBranchStock = pDetail && pDetail.branchStocks ? (pDetail.branchStocks[t.fromBranchId] ?? 0) : 0;
 
                           return (
@@ -8250,11 +8314,11 @@ export default function App() {
                     <div>
                       <label className="block text-slate-500 font-mono font-semibold mb-1">Category Bracket</label>
                       <select
-                        value={newProduct.category || (productCategories.length > 0 ? productCategories[0] : "")}
+                        value={newProduct.category || (productCategoriesList.find(c => c !== "All") || "")}
                         onChange={(e) => setNewProduct({ ...newProduct, category: e.target.value })}
                         className="w-full border border-slate-200 rounded p-2"
                       >
-                        {productCategories.map((cat) => (
+                        {productCategoriesList.filter(c => c !== "All").map((cat) => (
                           <option key={cat} value={cat}>{cat}</option>
                         ))}
                       </select>
@@ -8775,7 +8839,7 @@ export default function App() {
                   </div>
 
                   <div className="grid grid-cols-2 gap-4 max-h-[500px] overflow-y-auto pr-2">
-                    {tenantProducts.map((p) => (
+                    {sectorScopedProducts.map((p) => (
                       <div
                         key={p.id}
                         className="p-4 bg-slate-50 rounded-xl border border-slate-200/60 flex flex-col justify-between hover:border-slate-400 transition-colors"
@@ -10092,7 +10156,7 @@ Payment Mode:   ${selectedInv.paymentMode}
                         {Array.from(new Set(
                           activeReportType === "expenditure"
                             ? tenantAndBranchExpenses.map(e => e.category)
-                            : tenantProducts.map(p => p.category)
+                            : sectorScopedProducts.map(p => p.category)
                         )).filter(Boolean).map(cat => (
                           <option key={cat} value={cat}>{cat}</option>
                         ))}
@@ -10678,7 +10742,7 @@ Payment Mode:   ${selectedInv.paymentMode}
                   setLabelPrinterConfig(cfg);
                   persistSettings({ labelPrinterConfig: cfg });
                 }}
-                products={products}
+                products={sectorScopedProducts}
                 customers={customers}
                 invoices={invoices}
                 expenses={expenses}
@@ -11581,7 +11645,7 @@ Payment Mode:   ${selectedInv.paymentMode}
       <ProductLabelGeneratorModal
         isOpen={isLabelModalOpen}
         onClose={() => setIsLabelModalOpen(false)}
-        products={tenantProducts}
+        products={sectorScopedProducts}
         initialSelectedProduct={labelModalProduct}
         storeName={activeTenant.name}
         currencySymbol={activeTenant.currency || "₹"}
@@ -11598,7 +11662,7 @@ Payment Mode:   ${selectedInv.paymentMode}
       <MultiCustomerBillingModal
         isOpen={isMultiBillModalOpen}
         onClose={() => setIsMultiBillModalOpen(false)}
-        products={tenantProducts}
+        products={sectorScopedProducts}
         customers={customers}
         activeTenant={activeTenant}
         currentBranch={currentBranch}
@@ -11634,9 +11698,9 @@ Payment Mode:   ${selectedInv.paymentMode}
       <BarcodeScannerModal
         isOpen={isBarcodeScanModalOpen}
         onClose={() => setIsBarcodeScanModalOpen(false)}
-        products={tenantProducts}
-        activeTenantId={activeTenantId}
-        productCategories={productCategories}
+        products={sectorScopedProducts}
+        activeTenantId={effectiveTenantId}
+        productCategories={productCategoriesList.filter(c => c !== "All")}
         suppliers={suppliers}
         onSaveProduct={handleSaveProductFromScanner}
         onBulkUploadProducts={handleBulkUploadFromScanner}

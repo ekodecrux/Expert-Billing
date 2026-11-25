@@ -1484,10 +1484,13 @@ export default function SuperAdminConsole({
       return;
     }
 
+    let updatedTenantRecord: Tenant | null = null;
+    const sectorChanged = editTenantBusinessSector !== editingTenant.businessSector;
+
     const updatedList = tenantsList.map(t => {
       if (t.id === editingTenant.id) {
         const normalizedEditedSectorConfig = buildSectorConfig(editTenantBusinessSector);
-        return {
+        updatedTenantRecord = {
           ...t,
           name: editTenantName.trim() || t.name,
           subdomain,
@@ -1522,11 +1525,15 @@ export default function SuperAdminConsole({
           pincode: editTenantPincode.trim() || t.pincode,
           country: editTenantCountry.trim() || t.country || "India"
         };
+        return updatedTenantRecord;
       }
       return t;
     });
 
     onUpdateTenants(updatedList);
+    if (sectorChanged && updatedTenantRecord && onSeedSectorWorkspace) {
+      void onSeedSectorWorkspace(updatedTenantRecord, true);
+    }
     setEditingTenant(null);
     triggerNotification("Tenant specifications and typography updated successfully.", "success");
   };
